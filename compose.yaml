@@ -1,0 +1,44 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: dojiwick
+      POSTGRES_PASSWORD: dojiwick
+      POSTGRES_DB: dojiwick
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/initdb:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "dojiwick", "-d", "dojiwick"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      target: runtime
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["python", "-m", "dojiwick.interfaces.cli.runner", "--config", "config.toml"]
+    restart: unless-stopped
+
+  tooling:
+    build:
+      context: .
+      target: tooling
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DOJIWICK_DB_URL: ${DOJIWICK_DB_URL:-postgres://dojiwick:dojiwick@postgres:5432/dojiwick?sslmode=disable}
+      DOJIWICK_TEST_DB_URL: ${DOJIWICK_TEST_DB_URL:-postgres://dojiwick:dojiwick@postgres:5432/dojiwick_test?sslmode=disable}
+    volumes:
+      - .:/app
+
+volumes:
+  postgres_data:

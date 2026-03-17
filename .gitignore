@@ -1,0 +1,48 @@
+.DS_Store
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.db
+*.db-wal
+*.db-shm
+data/
+.env
+.cache/
+.pytest_cache/
+.ruff_cache/
+.basedpyright/
+dist/
+build/
+*.egg-info/
+.chief
+.hypothesis
+
+# Output artifacts
+*.csv
+*.log
+params.json
+
+# Coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# Type checker caches
+.mypy_cache/
+
+# IDE
+.idea/
+.vscode/
+
+# Editor temp files
+*.swp
+*.swo
+*~
+Thumbs.db
+
+# Claude Code local files
+.claude/plans/
+.claude/memory/
+.claude/settings.local.json

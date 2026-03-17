@@ -1,0 +1,21 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose build tooling
+      - run: docker compose up -d postgres
+      - name: Code quality (fmt, lint, typecheck, unit tests)
+        run: docker compose run --rm tooling make ci
+      - name: Database tests (mandatory)
+        run: docker compose run --rm tooling make ci-db
+      - if: always()
+        run: docker compose down --remove-orphans

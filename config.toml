@@ -1,0 +1,417 @@
+# Tick loop, error handling, reconciliation
+[system]
+tick_interval_sec = 90
+log_level = "INFO"
+shutdown_timeout_sec = 30
+max_ticks = 0
+max_consecutive_errors = 5
+missing_bar_policy = "skip"
+reconciliation_interval_ticks = 10
+recon_degraded_timeout_sec = 300
+recon_uncertain_timeout_sec = 900
+
+# Indicators and candle settings
+[trading]
+enabled_strategies = ["trend_follow", "volatility_revert", "mean_revert"]
+candle_interval = "1h"
+candle_lookback = 60
+rsi_period = 14
+ema_fast_period = 12
+ema_slow_period = 26
+ema_base_period = 50
+ema_trend_period = 200
+atr_period = 14
+adx_period = 14
+bb_period = 20
+bb_std = 2.0
+volume_ema_period = 20
+
+# Market regime classification thresholds
+[regime]
+adx_trend_min = 14.007155048240703
+adx_strong_trend_min = 35.0
+ema_spread_weak_bps = 4.6963797523079585
+ema_spread_strong_bps = 25.0
+atr_low_pct = 0.19287776545371318
+atr_high_pct = 1.168978994713656
+atr_extreme_pct = 2.10
+hysteresis_bars = 3
+min_confidence = 0.1412933194692014
+truth_trend_return_pct = 0.40
+truth_volatile_return_pct = 1.00
+trend_weight = 0.4
+spread_weight = 0.3
+vol_weight = 0.3
+volume_clip_lo = 0.8
+volume_clip_hi = 1.2
+
+# Signal generation, entries, exits, filters
+[strategy]
+default_variant = "baseline"
+# Core exit geometry
+stop_atr_mult = 2.994322363218299
+rr_ratio = 1.3183905690799977
+min_stop_distance_pct = 0.4907914975289629
+max_hold_bars = 22
+trailing_stop_activation_rr = 0.8569592971921505
+trailing_stop_atr_mult = 0.5000740771679599
+breakeven_after_rr = 1.4653675201741092
+# Trend follow
+trend_pullback_rsi_max = 62.25456330363318
+trend_overbought_rsi_min = 50.518194117208346
+trend_breakout_adx_min = 26.950066688830645
+trend_pullback_adx_min = 20.0
+trend_max_regime_confidence = 0.9388254351657971
+trend_volatile_ema_enabled = true
+# Mean revert
+mean_rsi_oversold = 27.48510823532189
+mean_rsi_overbought = 60.66748569707133
+mean_revert_use_bb_mid_tp = true
+mean_revert_disable_breakeven = true
+mean_revert_disable_ema_filter = true
+# Volatility revert
+vol_extreme_oversold = 30.80169386021896
+vol_extreme_overbought = 72.69265129174192
+# Partial take profit
+partial_tp_enabled = true
+partial_tp1_rr = 0.847426539720415
+partial_tp1_fraction = 0.3159237573982763
+partial_tp_stop_ratio = 0.5
+# Confluence scoring
+confluence_filter_enabled = true
+min_confluence_score = 40.21144907937109
+confluence_rsi_midpoint = 50.0
+confluence_rsi_range = 20.0
+confluence_volume_baseline = 1.0
+confluence_volume_multiplier = 40.0
+confluence_adx_baseline = 20.0
+confluence_adx_range = 20.0
+# MACD momentum filter
+macd_filter_enabled = true
+# Regime-adaptive exits
+regime_exit_profile = "adaptive"
+adaptive_volatile_stop_scale = 1.2158719891329548
+adaptive_volatile_rr_mult = 2.9674664462275904
+adaptive_trending_trail_scale = 0.8839526831889969
+adaptive_volatile_max_bars = 8
+adaptive_ranging_max_bars = 25
+# Volume filter
+min_volume_ratio = 0.17787250579910382
+
+# Position sizing, exposure limits, drawdown protection
+[risk]
+# Per-trade sizing
+risk_per_trade_pct = 3.154740842293359
+max_loss_per_trade_pct = 5.187466254326932
+# Portfolio limits
+max_portfolio_risk_pct = 10.088190569460956
+portfolio_risk_baseline_pairs = 2
+max_daily_loss_pct = 6.0
+max_open_positions = 5
+max_consecutive_losses = 10
+# Quality gates
+min_rr_ratio = 1.2
+# Notional limits
+min_notional_usd = 10.0
+max_notional_usd = 2000000.0
+max_notional_pct_of_equity = 200.0
+# Sector and pair controls
+max_sector_exposure = 3
+max_risk_inflation_mult = 2.0
+trade_cooldown_sec = 300
+pair_win_rate_floor = 0.0
+# Drawdown protection
+drawdown_halt_pct = 50.0
+drawdown_risk_scale_enabled = true
+drawdown_risk_scale_max_dd = 30.0
+drawdown_risk_scale_floor = 0.25
+equity_curve_filter_enabled = true
+equity_curve_filter_period = 50
+# Risk reason precedence and severity
+daily_loss_precedence = 10
+max_positions_precedence = 20
+zero_stop_precedence = 30
+min_rr_precedence = 40
+daily_loss_severity = 0.9
+max_positions_severity = 0.7
+zero_stop_severity = 0.6
+min_rr_severity = 0.5
+
+# LLM veto and regime classification
+[ai]
+# Veto
+enabled = true
+veto_enabled = true
+veto_model = "claude-sonnet-4-6"
+veto_confidence_threshold = 0.85
+fail_open_on_error = true
+# Regime
+regime_enabled = false
+regime_model = "claude-sonnet-4-6"
+regime_fail_open_on_error = true
+regime_agreement_boost = 1.25
+regime_disagreement_penalty = 0.6
+# Connection
+api_key_env = "ANTHROPIC_API_KEY"
+max_retries = 3
+timeout_sec = 10.0
+batch_timeout_sec = 30.0
+max_response_tokens = 200
+# Cost
+daily_budget_usd = 1.0
+input_cost_per_million = 3.0
+output_cost_per_million = 15.0
+
+# Cost model and simulation parameters
+[backtest]
+# Capital
+equity_usd = 10000.0
+leverage = 2.4890268599583525
+# Costs
+fee_bps = 4.0
+slippage_bps = 2.0
+fee_multiplier = 2.0
+funding_rate_per_bar = 0.00005
+impact_bps = 0.0
+# Simulation
+warmup_bars = 200
+entry_price_model = "next_open"
+max_volume_pct = 0.1
+maintenance_margin_rate = 0.0
+# Partial fills
+partial_fill_enabled = false
+partial_fill_threshold_pct = 0.05
+partial_fill_min_ratio = 0.1
+# Flags
+simulated_execution = false
+use_candle_cache = true
+
+# PostgreSQL connection
+[database]
+dsn = "postgresql://dojiwick:dojiwick@postgres:5432/dojiwick"
+app_name = "dojiwick"
+connect_timeout_sec = 5.0
+statement_timeout_ms = 5000
+min_connections = 2
+max_connections = 5
+
+# Optuna hyperparameter search
+[optimization]
+# Study
+enabled = false
+study_name = "dojiwick_v36"
+storage_url = ""
+trials = 10000
+trial_timeout_sec = 120.0
+# Mode
+objective_mode = "walk_forward"
+objective_cv_folds = 5
+train_fraction = 0.7
+# Objective weights
+objective_return_weight = 2.0
+objective_sharpe_weight = 1.5
+objective_win_rate_weight = 1.5
+objective_profit_factor_weight = 1.0
+objective_expectancy_weight = 2.0
+objective_pnl_weight = 3.0
+objective_pnl_cap = 1000.0
+objective_payoff_ratio_weight = 2.0
+objective_payoff_ratio_cap = 3.0
+objective_trade_freq_weight = 1.5
+# Penalties and thresholds
+objective_drawdown_penalty = 5.0
+objective_drawdown_cliff_penalty = 25.0
+objective_max_drawdown_threshold = 30.0
+objective_consecutive_loss_penalty = 0.5
+objective_consecutive_loss_threshold = 3
+objective_consistency_penalty = 0.5
+objective_regularization_strength = 0.05
+objective_min_trades = 80
+objective_min_trades_penalty = -20.0
+objective_min_trades_penalty_start = -2.0
+objective_min_density_threshold = 0.005
+objective_profit_factor_cap = 5.0
+# High win-rate bonus
+objective_high_winrate_bonus = 40.0
+objective_high_winrate_threshold = 0.70
+# TPE sampler
+multivariate_sampler = true
+constant_liar = true
+# Pruning
+pruning_enabled = true
+pruning_percentile = 25
+pruning_startup_trials = 30
+
+# Binance futures connection
+[exchange]
+api_key_env = "BINANCE_API_KEY"
+api_secret_env = "BINANCE_API_SECRET"
+venue = "binance"
+product = "usd_c"
+position_mode = "one_way"
+testnet = false
+ws_enabled = true
+rest_fallback_enabled = true
+recv_window_ms = 5000
+connect_timeout_sec = 10.0
+read_timeout_sec = 10.0
+retry_max_attempts = 3
+retry_base_delay_sec = 0.5
+backoff_factor = 2.0
+rate_limit_per_sec = 10
+
+# Trading universe and symbol mapping
+[universe]
+account = "default"
+quote_asset = "USDT"
+settle_asset = "USDT"
+symbol_separator = ""
+pair_separator = "/"
+
+[[universe.targets]]
+target_id = "btc_usdt"
+display_pair = "BTC/USDT"
+execution_instrument = "BTCUSDT"
+market_data_instrument = "BTCUSDT"
+
+[[universe.targets]]
+target_id = "eth_usdt"
+display_pair = "ETH/USDT"
+execution_instrument = "ETHUSDT"
+market_data_instrument = "ETHUSDT"
+
+[[universe.targets]]
+target_id = "sol_usdt"
+display_pair = "SOL/USDT"
+execution_instrument = "SOLUSDT"
+market_data_instrument = "SOLUSDT"
+
+[[universe.targets]]
+target_id = "xrp_usdt"
+display_pair = "XRP/USDT"
+execution_instrument = "XRPUSDT"
+market_data_instrument = "XRPUSDT"
+
+[[universe.targets]]
+target_id = "doge_usdt"
+display_pair = "DOGE/USDT"
+execution_instrument = "DOGEUSDT"
+market_data_instrument = "DOGEUSDT"
+
+[[universe.targets]]
+target_id = "bnb_usdt"
+display_pair = "BNB/USDT"
+execution_instrument = "BNBUSDT"
+market_data_instrument = "BNBUSDT"
+
+# Thompson-sampling arm selection
+[adaptive]
+mode = "disabled"
+exploration_rate = 0.1
+min_samples = 30
+
+# Anti-overfitting validation (CV, PBO, walk-forward)
+[research]
+enabled = true
+# Cross-validation
+cv_folds = 5
+purge_bars = 5
+embargo_bars = 3
+min_cv_sharpe = 0.50
+# PBO (probability of backtest overfitting)
+max_pbo = 0.40
+pbo_min_trade_returns = 8
+pbo_max_partitions = 16
+# Walk-forward
+min_oos_degradation_ratio = 0.50
+wf_train_size = 5000
+wf_test_size = 2500
+wf_expanding = false
+wf_mode = "oos_sharpe"
+min_wf_oos_sharpe = 0.20
+wf_min_trades = 8
+# Continuous backtest validation
+continuous_validation_enabled = true
+min_continuous_trades_per_1000_bars = 5
+max_continuous_drawdown_pct = 25.0
+# Shock test (TP/SL perturbation robustness)
+shock_test_enabled = true
+shock_test_tp_shift_pct = -10.0
+shock_test_sl_shift_pct = 10.0
+shock_test_min_pf = 1.05
+# Per-regime profit factor
+per_regime_pf_enabled = true
+per_regime_min_pf = 0.95
+per_regime_min_trades = 30
+# Concentration limits
+concentration_check_enabled = true
+concentration_max_month_pct = 40.0
+concentration_max_trade_pct = 15.0
+# Pair robustness
+pair_robustness_enabled = true
+pair_robustness_min_pairs = 3
+pair_robustness_min_pf_threshold = 1.0
+
+# Runtime feature flags
+[flags]
+ai_veto_shadow_mode = false
+ai_regime_shadow_mode = false
+exits_only_mode = false
+global_halt = false
+disable_llm = false
+halted_pairs = []
+
+# Per-regime risk overrides
+[[scope.risk]]
+id = "volatile_conservative"
+priority = 100
+regime = "volatile"
+risk_per_trade_pct = 1.5
+max_open_positions = 3
+
+[[scope.risk]]
+id = "trending_moderate"
+priority = 100
+regime = "trending_down"
+max_open_positions = 4
+
+# Per-regime strategy overrides (v34 best trial #8385)
+[[scope.strategy]]
+id = "auto_ranging"
+priority = 10
+regime = "ranging"
+stop_atr_mult = 2.3976798634896173
+rr_ratio = 1.4969116987528295
+max_hold_bars = 40
+trailing_stop_atr_mult = 0.3115550845656984
+breakeven_after_rr = 0.8601656411180443
+
+[[scope.strategy]]
+id = "auto_trending_up"
+priority = 10
+regime = "trending_up"
+stop_atr_mult = 2.26721875462848
+rr_ratio = 3.3105940475945124
+max_hold_bars = 165
+trailing_stop_atr_mult = 0.550259788804749
+breakeven_after_rr = 2.479003761571504
+
+[[scope.strategy]]
+id = "auto_trending_down"
+priority = 10
+regime = "trending_down"
+stop_atr_mult = 2.26721875462848
+rr_ratio = 3.3105940475945124
+max_hold_bars = 165
+trailing_stop_atr_mult = 0.550259788804749
+breakeven_after_rr = 2.479003761571504
+
+[[scope.strategy]]
+id = "auto_volatile"
+priority = 10
+regime = "volatile"
+stop_atr_mult = 1.5002532154463084
+rr_ratio = 2.89978157912221
+max_hold_bars = 41
+trailing_stop_atr_mult = 0.32358020006612764
+breakeven_after_rr = 1.5160004574588124

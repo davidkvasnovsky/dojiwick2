@@ -1,0 +1,73 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)", "Bash(cat:*)", "Bash(head:*)", "Bash(tail:*)",
+      "Bash(wc:*)", "Bash(echo:*)", "Bash(pwd:*)", "Bash(which:*)",
+      "Bash(type:*)", "Bash(file:*)", "Bash(test:*)", "Bash(basename:*)",
+      "Bash(dirname:*)", "Bash(tree:*)", "Bash(env:*)", "Bash(printenv:*)",
+      "Bash(date:*)", "Bash(seq:*)",
+      "Bash(mkdir:*)", "Bash(cp:*)", "Bash(mv:*)", "Bash(touch:*)",
+      "Bash(chmod:*)", "Bash(rm:*)", "Bash(ln:*)", "Bash(rmdir:*)",
+      "Bash(grep:*)", "Bash(find:*)", "Bash(sort:*)", "Bash(uniq:*)",
+      "Bash(diff:*)", "Bash(sed:*)", "Bash(awk:*)", "Bash(cut:*)",
+      "Bash(tr:*)", "Bash(xargs:*)", "Bash(tee:*)", "Bash(jq:*)",
+      "Bash(for:*)", "Bash(set:*)",
+      "Bash(git:*)", "Bash(gh:*)",
+      "Bash(python:*)", "Bash(python3:*)", "Bash(uv:*)",
+      "Bash(.venv/bin/python:*)", "Bash(PYTHONPATH=*:*)",
+      "Bash(make:*)",
+      "Bash(docker:*)", "Bash(docker compose:*)",
+      "Bash(psql:*)", "Bash(pg_isready:*)", "Bash(sqlite3:*)",
+      "Bash(curl:*)", "Bash(timeout:*)",
+      "Bash(dojiwick:*)", "Bash(atlas:*)",
+      "Bash(set -a && source .env && set +a &&:*)",
+      "WebFetch", "WebSearch",
+      "mcp__pal__*", "mcp__plugin_context7_context7__*"
+    ]
+  },
+  "enabledPlugins": {
+    "code-simplifier@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "pr-review-toolkit@claude-plugins-official": true,
+    "commit-commands@claude-plugins-official": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "case $TOOL_INPUT_file_path in *.env) echo 'BLOCKED: .env contains secrets - edit manually'; exit 2;; esac"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "case $TOOL_INPUT_file_path in *.py) uv run ruff format $TOOL_INPUT_file_path && uv run ruff check --fix $TOOL_INPUT_file_path;; esac; exit 0"
+          },
+          {
+            "type": "command",
+            "command": "FILE=$TOOL_INPUT_file_path; case $FILE in */tests/*) exit 0;; *.py) BASE=$(basename $FILE .py); TEST=$(dirname $FILE)/tests/test_${BASE}.py; test -f $TEST && cd $(dirname $FILE) && python -m pytest $TEST -x -q 2>&1 | tail -20;; esac; exit 0",
+            "timeout": 30000
+          },
+          {
+            "type": "command",
+            "command": "case $TOOL_INPUT_file_path in *.py) uv run basedpyright $TOOL_INPUT_file_path 2>&1 | tail -5;; esac; exit 0",
+            "timeout": 15000
+          },
+          {
+            "type": "command",
+            "command": "case $TOOL_INPUT_file_path in */src/*) uv run pytest tests/unit/test_architecture_rules.py -x -q 2>&1 | tail -10;; esac; exit 0",
+            "timeout": 15000
+          }
+        ]
+      }
+    ]
+  }
+}
