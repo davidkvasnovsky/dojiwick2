@@ -91,6 +91,7 @@ class StrategyOverrideValues:
     mean_revert_use_bb_mid_tp: bool | None = None
     mean_revert_disable_breakeven: bool | None = None
     mean_revert_disable_ema_filter: bool | None = None
+    mean_revert_max_bb_width: float | None = None
     macd_filter_enabled: bool | None = None
     confluence_filter_enabled: bool | None = None
     min_confluence_score: float | None = None

@@ -69,6 +69,7 @@ mean_rsi_overbought = 60.66748569707133
 mean_revert_use_bb_mid_tp = true
 mean_revert_disable_breakeven = true
 mean_revert_disable_ema_filter = true
+mean_revert_max_bb_width = 0.04
 # Volatility revert
 vol_extreme_oversold = 30.80169386021896
 vol_extreme_overbought = 72.69265129174192

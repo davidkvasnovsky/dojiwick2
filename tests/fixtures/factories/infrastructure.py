@@ -82,6 +82,7 @@ def default_strategy_params(**overrides: Any) -> StrategyParams:
         "mean_revert_use_bb_mid_tp": True,
         "mean_revert_disable_breakeven": True,
         "mean_revert_disable_ema_filter": False,
+        "mean_revert_max_bb_width": 0.0,
         "macd_filter_enabled": False,
         "confluence_filter_enabled": False,
         "min_confluence_score": 50.0,

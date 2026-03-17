@@ -37,11 +37,21 @@ def mean_revert_signal(
         oversold = settings.mean_rsi_oversold
         overbought = settings.mean_rsi_overbought
 
+    max_bb_width = settings.mean_revert_max_bb_width
+    if max_bb_width > 0.0:
+        narrow_range = (bb_upper - bb_lower) / prices <= max_bb_width
+    else:
+        narrow_range = None
+
     if settings.mean_revert_disable_ema_filter:
         buy_mask = ranging & (rsi <= oversold) & (prices <= bb_lower)
         short_mask = ranging & (rsi >= overbought) & (prices >= bb_upper)
     else:
         buy_mask = ranging & (rsi <= oversold) & (prices <= bb_lower) & (ema_slow > ema_trend)
         short_mask = ranging & (rsi >= overbought) & (prices >= bb_upper) & (ema_slow < ema_trend)
+
+    if narrow_range is not None:
+        buy_mask = buy_mask & narrow_range
+        short_mask = short_mask & narrow_range
 
     return apply_volume_filter(buy_mask, short_mask, volume_ema_ratio, settings, per_pair_settings, pre_extracted)

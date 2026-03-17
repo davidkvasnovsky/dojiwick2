@@ -87,6 +87,7 @@ class StrategyParams(BaseModel):
     mean_revert_use_bb_mid_tp: bool
     mean_revert_disable_breakeven: bool
     mean_revert_disable_ema_filter: bool
+    mean_revert_max_bb_width: float
     macd_filter_enabled: bool
     confluence_filter_enabled: bool
     min_confluence_score: float
@@ -134,6 +135,8 @@ class StrategyParams(BaseModel):
             raise ValueError("partial_tp1_rr must be > 0")
         if not 0 < self.partial_tp1_fraction < 1:
             raise ValueError("partial_tp1_fraction must be in (0, 1)")
+        if self.mean_revert_max_bb_width < 0:
+            raise ValueError("mean_revert_max_bb_width must be >= 0")
         if not 0 <= self.min_confluence_score <= 100:
             raise ValueError("min_confluence_score must be in [0, 100]")
         if self.adaptive_volatile_stop_scale <= 0:

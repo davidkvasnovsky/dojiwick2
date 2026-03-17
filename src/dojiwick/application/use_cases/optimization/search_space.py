@@ -63,6 +63,7 @@ _BASE_BOUNDS: dict[str, tuple[float, float]] = {
     "trend_breakout_adx_min": (25.0, 40.0),
     "mean_rsi_oversold": (25.0, 45.0),
     "mean_rsi_overbought": (55.0, 80.0),
+    "mean_revert_max_bb_width": (0.02, 0.08),
     "vol_extreme_oversold": (25.0, 45.0),
     "vol_extreme_overbought": (55.0, 80.0),
     "min_volume_ratio": (0.1, 1.2),
@@ -164,7 +165,7 @@ def extract_regularization_baseline(settings: PipelineSettings) -> dict[str, flo
 
 
 _STRATEGY_SIGNAL_PARAMS: dict[str, frozenset[str]] = {
-    STRATEGY_MEAN_REVERT: frozenset({"mean_rsi_oversold", "mean_rsi_overbought"}),
+    STRATEGY_MEAN_REVERT: frozenset({"mean_rsi_oversold", "mean_rsi_overbought", "mean_revert_max_bb_width"}),
     STRATEGY_TREND_FOLLOW: frozenset(
         {
             "trend_pullback_rsi_max",
@@ -190,6 +191,7 @@ _BASE_STRATEGY_PARAMS: frozenset[str] = frozenset(
         "trend_breakout_adx_min",
         "mean_rsi_oversold",
         "mean_rsi_overbought",
+        "mean_revert_max_bb_width",
         "vol_extreme_oversold",
         "vol_extreme_overbought",
         "min_volume_ratio",
