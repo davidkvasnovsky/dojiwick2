@@ -9,7 +9,7 @@ from dojiwick.domain.indicator_schema import INDICATOR_INDEX
 
 from dojiwick.domain.type_aliases import FloatVector, IntVector
 
-from dojiwick.compute.kernels.math import clamp01
+from dojiwick.compute.kernels.math import clamp01, safe_divide
 
 
 def classify_regime_batch(market: BatchMarketSnapshot, settings: RegimeParams) -> BatchRegimeProfile:
@@ -49,8 +49,8 @@ def classify_regime_batch(market: BatchMarketSnapshot, settings: RegimeParams) -
         & (bb_upper > bb_lower)
     )
 
-    ema_spread_bps = np.abs(ema_fast - ema_slow) / price * 10_000.0
-    atr_pct = atr / price * 100.0
+    ema_spread_bps = safe_divide(np.abs(ema_fast - ema_slow), price) * 10_000.0
+    atr_pct = safe_divide(atr, price) * 100.0
 
     trend_up = (ema_fast > ema_slow) & (ema_slow > ema_base) & (adx >= settings.adx_trend_min)
     trend_down = (ema_fast < ema_slow) & (ema_slow < ema_base) & (adx >= settings.adx_trend_min)

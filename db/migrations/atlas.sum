@@ -1,2 +1,6 @@
-h1:qRLgRgCDkrIgZZcG96RK/FwskFOzEYh3qVUau/bZZkQ=
-20260228_000001_v3_baseline.sql h1:gUT+VgYDZ2znovWm4kIC8VVYe47i9O5zITqNYlsj2oQ=
+h1:uOCEW94QuVJWaW6QJWY8mlRnqGGGI7RNHCOKqpwwBbk=
+20260228_000001_v3_baseline.sql h1:UyYljzkbLoryqKyB1FWdcfMRDVx7FH+/SSDsYgQKtuI=
+20260314_000001_add_cancelled_execution_status.sql h1:OdkqRXUksbrJm1geXYY/zx6WYAURqZPcml8wId8Uc+4=
+20260314_000002_add_realized_pnl_exchange.sql h1:Rr7xUtTZwm8DkGW6ctNvtIo2C+s3wxPs2tsDMD2ViWk=
+20260315_000001_remove_order_request_defaults.sql h1:eHYU/2QCeTKZXQcqDRt69sYOtFD+eh0R5/URcilwrF4=
+20260315_000002_add_native_fee_tracking.sql h1:PSqQFMV++2pmkbQftDWIl3ZdF5b+eLfFd897DWJyoWI=

@@ -12,11 +12,14 @@
 #   4. hcloud ssh-key create --name mykey --public-key-from-file ~/.ssh/id_ed25519.pub
 #
 # Usage:
-#   ./scripts/hetzner-optimize.sh --config config.toml --start 2025-01-01 --end 2025-06-01
-#   ./scripts/hetzner-optimize.sh --config config.toml --start 2025-01-01 --end 2025-06-01 --gate
-#   ./scripts/hetzner-optimize.sh --config config.toml --start 2025-01-01 --end 2025-06-01 --dry-run
+#   ./scripts/hetzner-optimize.sh --config config.toml --start 2019-09-08 --end 2026-03-17
+#   ./scripts/hetzner-optimize.sh --config config.toml --start 2019-09-08 --end 2026-03-17 --gate
+#   ./scripts/hetzner-optimize.sh --config config.toml --start 2019-09-08 --end 2026-03-17 --dry-run
 
 set -euo pipefail
+
+# Wrap hcloud with 1Password plugin (alias doesn't work in scripts)
+hcloud() { op plugin run -- hcloud "$@"; }
 
 # Defaults
 CONFIG_PATH=""
@@ -27,6 +30,8 @@ WORKERS=48
 TIMEOUT_HOURS=4
 LOCAL_PG_PORT=5432
 OP_DEPLOY_KEY_REF="op://Personal/Dojiwick Deploy Key/private key"
+OP_BINANCE_API_KEY_REF="op://Personal/Binance API/api_key"
+OP_BINANCE_API_SECRET_REF="op://Personal/Binance API/api_secret"
 SSH_KEY_NAME=""
 DRY_RUN=false
 
@@ -75,11 +80,12 @@ preflight_checks() {
 
     [[ -f "$CONFIG_PATH" ]] || die "Config file not found: $CONFIG_PATH"
 
-    [[ -n "${BINANCE_API_KEY:-}" ]]    || die "BINANCE_API_KEY not set in environment"
-    [[ -n "${BINANCE_API_SECRET:-}" ]] || die "BINANCE_API_SECRET not set in environment"
-
     command -v op >/dev/null 2>&1 || die "1Password CLI (op) not found. Install: brew install 1password-cli"
-    op read "$OP_DEPLOY_KEY_REF" --ssh-format openssh >/dev/null 2>&1 \
+    op read "$OP_BINANCE_API_KEY_REF" >/dev/null 2>&1 \
+        || die "Cannot read Binance API key from 1Password"
+    op read "$OP_BINANCE_API_SECRET_REF" >/dev/null 2>&1 \
+        || die "Cannot read Binance API secret from 1Password"
+    op read "${OP_DEPLOY_KEY_REF}?ssh-format=openssh" >/dev/null 2>&1 \
         || die "Cannot read deploy key from 1Password: $OP_DEPLOY_KEY_REF"
 
     # Auto-detect SSH key name if not provided
@@ -174,7 +180,7 @@ disable_root: false
 write_files:
   - path: /etc/ssh/sshd_config.d/99-hardening.conf
     content: |
-      MaxAuthTries 3
+      MaxAuthTries 6
       PermitRootLogin prohibit-password
   - path: /etc/sysctl.d/99-hardening.conf
     content: |
@@ -185,15 +191,25 @@ runcmd:
   - passwd -l root
 EOF
 
-    hcloud server create \
-        --name "$SERVER_NAME" \
-        --type ccx63 \
-        --image ubuntu-24.04 \
-        --ssh-key "$SSH_KEY_NAME" \
-        --firewall "$FW_NAME" \
-        --location fsn1 \
-        --user-data-from-file "$cloud_init_file"
+    local locations=("nbg1" "fsn1" "hel1")
+    local created=false
+    for loc in "${locations[@]}"; do
+        if hcloud server create \
+            --name "$SERVER_NAME" \
+            --type ccx63 \
+            --image ubuntu-24.04 \
+            --ssh-key "$SSH_KEY_NAME" \
+            --firewall "$FW_NAME" \
+            --location "$loc" \
+            --user-data-from-file "$cloud_init_file" 2>&1; then
+            created=true
+            info "Server created in $loc"
+            break
+        fi
+        info "Location $loc unavailable, trying next..."
+    done
     rm "$cloud_init_file"
+    [[ "$created" == true ]] || die "No available location for ccx63"
 
     SERVER_IP=$(hcloud server ip "$SERVER_NAME")
     info "Server IP: $SERVER_IP"
@@ -206,12 +222,26 @@ EOF
 
 # wait_ready
 wait_ready() {
-    info "Waiting for SSH"
+    # Ephemeral servers reuse IPs — remove stale host keys
+    ssh-keygen -R "$SERVER_IP" 2>/dev/null || true
+    info "Waiting for SSH on $SERVER_IP (may take 1-2 min)..."
+    local attempt=0
     until ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
         "root@$SERVER_IP" true 2>/dev/null; do
+        attempt=$((attempt + 1))
+        printf "  SSH attempt %d (${attempt}×3s elapsed)...\r" "$attempt"
         sleep 3
+        if [[ $attempt -ge 40 ]]; then
+            echo ""
+            info "SSH debug after 2min timeout:"
+            ssh -v -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new \
+                "root@$SERVER_IP" true 2>&1 | tail -5
+            die "SSH connection failed after 40 attempts"
+        fi
     done
-    info "SSH ready, waiting for cloud-init"
+    echo ""
+    info "SSH connected after $attempt attempts"
+    info "Waiting for cloud-init..."
     ssh -o StrictHostKeyChecking=accept-new "root@$SERVER_IP" 'cloud-init status --wait'
     info "Server ready"
 }
@@ -223,7 +253,7 @@ setup_project() {
 
     info "Fetching deploy key from 1Password and sending to server"
     # Key never touches local disk — piped directly from op to remote via SSH
-    op read "$OP_DEPLOY_KEY_REF" --ssh-format openssh \
+    op read "${OP_DEPLOY_KEY_REF}?ssh-format=openssh" \
         | ssh -o StrictHostKeyChecking=accept-new "root@$SERVER_IP" \
             'cat > /root/.ssh/deploy_key && chmod 600 /root/.ssh/deploy_key && \
              cat >> /root/.ssh/config <<SSHEOF
@@ -266,15 +296,13 @@ run_optimization() {
     # shellcheck disable=SC2029  # client-side expansion is intentional
     ssh "root@$SERVER_IP" "shutdown +$((TIMEOUT_HOURS * 60))" 2>/dev/null || true
 
-    info "Writing .env on remote (secrets not in /proc/cmdline)"
-    # Use set +x to avoid leaking secrets if debug mode is on
+    info "Writing .env on remote (secrets fetched from 1Password)"
     set +x
-    # shellcheck disable=SC2087  # client-side expansion is intentional — we want local env var values
     ssh "root@$SERVER_IP" "cat > /root/dojiwick/.env; chmod 600 /root/dojiwick/.env" <<EOF
-BINANCE_API_KEY=$BINANCE_API_KEY
-BINANCE_API_SECRET=$BINANCE_API_SECRET
+BINANCE_API_KEY=$(op read "$OP_BINANCE_API_KEY_REF")
+BINANCE_API_SECRET=$(op read "$OP_BINANCE_API_SECRET_REF")
 EOF
-    set -x 2>/dev/null || true
+    set +x 2>/dev/null || true
 
     info "Starting optimization (${WORKERS} workers, ${TIMEOUT_HOURS}h timeout)"
     info "Tunnel: remote 127.0.0.1:5432 → local localhost:${LOCAL_PG_PORT}"

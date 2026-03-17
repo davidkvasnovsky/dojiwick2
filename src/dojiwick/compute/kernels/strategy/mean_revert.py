@@ -6,6 +6,7 @@ from dojiwick.domain.enums import MarketState
 from dojiwick.domain.models.value_objects.params import StrategyParams, resolve_param_vector
 from dojiwick.domain.indicator_schema import INDICATOR_INDEX
 from dojiwick.domain.type_aliases import BoolVector, FloatMatrix, FloatVector, IntVector
+from dojiwick.compute.kernels.math import safe_divide
 from dojiwick.compute.kernels.strategy._filters import apply_volume_filter
 
 
@@ -39,7 +40,7 @@ def mean_revert_signal(
 
     max_bb_width = settings.mean_revert_max_bb_width
     if max_bb_width > 0.0:
-        narrow_range = (bb_upper - bb_lower) / prices <= max_bb_width
+        narrow_range = safe_divide(bb_upper - bb_lower, prices) <= max_bb_width
     else:
         narrow_range = None
 

@@ -44,10 +44,10 @@ db-hash:
 	atlas migrate hash --dir file://db/migrations
 
 run:
-	uv run dojiwick run $(ARGS)
+	op run --env-file=.env -- uv run dojiwick run $(ARGS)
 
 backtest:
-	uv run dojiwick backtest $(ARGS)
+	op run --env-file=.env -- uv run dojiwick backtest $(ARGS)
 
 optimize:
-	uv run dojiwick optimize $(ARGS)
+	op run --env-file=.env -- uv run dojiwick optimize $(ARGS)
