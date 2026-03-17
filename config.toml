@@ -204,7 +204,7 @@ max_connections = 5
 [optimization]
 # Study
 enabled = false
-study_name = "dojiwick_v36"
+study_name = "dojiwick_v37"
 storage_url = ""
 trials = 10000
 trial_timeout_sec = 120.0

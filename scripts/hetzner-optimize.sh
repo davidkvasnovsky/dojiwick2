@@ -6,8 +6,8 @@
 # and deletes the server on exit (including Ctrl+C).
 #
 # One-time setup:
-#   1. op item create --category ssh-key --title "Dojiwick Optuna" --vault Private
-#   2. Get public key: op read "op://Personal/Dojiwick Optuna/public key"
+#   1. op item create --category ssh-key --title "Dojiwick Deploy Key" --vault Personal --ssh-generate-key ed25519
+#   2. Get public key: op read "op://Personal/Dojiwick Deploy Key/public key"
 #   3. Add the PUBLIC key to GitHub repo → Settings → Deploy keys (read-only)
 #   4. hcloud ssh-key create --name mykey --public-key-from-file ~/.ssh/id_ed25519.pub
 #
@@ -26,7 +26,7 @@ GATE=false
 WORKERS=48
 TIMEOUT_HOURS=4
 LOCAL_PG_PORT=5432
-OP_DEPLOY_KEY_REF="op://Personal/Dojiwick Optuna/private key"
+OP_DEPLOY_KEY_REF="op://Personal/Dojiwick Deploy Key/private key"
 SSH_KEY_NAME=""
 DRY_RUN=false
 
