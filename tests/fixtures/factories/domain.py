@@ -207,6 +207,7 @@ class TimeSeriesBuilder:
         return BacktestTimeSeries(
             contexts=tuple(contexts),
             next_prices=tuple(next_prices),
+            active_mask=np.ones((self._n_bars, len(self._pairs)), dtype=np.bool_),
         )
 
 

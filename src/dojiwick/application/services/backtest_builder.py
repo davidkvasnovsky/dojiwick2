@@ -7,6 +7,7 @@ import numpy as np
 
 from dojiwick.application.use_cases.run_backtest import BacktestTimeSeries
 from dojiwick.compute.kernels.indicators.compute import compute_indicators
+from dojiwick.domain.enums import HistoryAlignment
 from dojiwick.domain.models.value_objects.batch_models import (
     BatchDecisionContext,
     BatchMarketSnapshot,
@@ -34,6 +35,7 @@ def build_backtest_time_series(
     bb_period: int = 20,
     bb_std: float = 2.0,
     volume_ema_period: int = 20,
+    history_alignment: HistoryAlignment = HistoryAlignment.INTERSECTION,
 ) -> BacktestTimeSeries:
     """Convert historical candles into a BacktestTimeSeries for replay.
 
@@ -95,39 +97,94 @@ def build_backtest_time_series(
 
     _warn_pair_count_mismatch(pairs, {p: len(candles_by_pair[p]) for p in pairs})
 
-    # Align pairs by timestamp intersection
-    if len(pairs) == 1:
-        # Single pair — no intersection needed
-        min_bars = len(pair_close[pairs[0]])
-        if min_bars < 2:
-            raise ValueError(f"need at least {warmup_bars + 2} candles per pair, got too few after warmup trim")
-    else:
-        first_set: set[datetime] = set(pair_times[pairs[0]])
-        common_set = first_set.intersection(*(set(pair_times[p]) for p in pairs[1:]))
-        common_times: list[datetime] = sorted(common_set)
-        if len(common_times) < 2:
-            raise ValueError("insufficient common timestamps after intersection")
-        max_bars = max(len(pair_times[p]) for p in pairs)
-        min_coverage = 0.5
-        if len(common_times) / max_bars < min_coverage:
-            raise ValueError(
-                f"timestamp coverage too low: {len(common_times)}/{max_bars} = "
-                f"{len(common_times) / max_bars:.1%} (need {min_coverage:.0%})"
-            )
-        # Re-index each pair to common timestamps
-        for pair in pairs:
-            time_to_idx = {t: i for i, t in enumerate(pair_times[pair])}
-            indices = np.array([time_to_idx[t] for t in common_times])
-            pair_close[pair] = pair_close[pair][indices]
-            pair_open[pair] = pair_open[pair][indices]
-            pair_high[pair] = pair_high[pair][indices]
-            pair_low[pair] = pair_low[pair][indices]
-            pair_indicators[pair] = pair_indicators[pair][indices]
-            pair_volume[pair] = pair_volume[pair][indices]
-            pair_times[pair] = list(common_times)
-        min_bars = len(common_times)
+    if history_alignment == HistoryAlignment.INTERSECTION:
+        # Align pairs by timestamp intersection (original behavior)
+        if len(pairs) == 1:
+            min_bars = len(pair_close[pairs[0]])
+            if min_bars < 2:
+                raise ValueError(f"need at least {warmup_bars + 2} candles per pair, got too few after warmup trim")
+        else:
+            first_set: set[datetime] = set(pair_times[pairs[0]])
+            common_set = first_set.intersection(*(set(pair_times[p]) for p in pairs[1:]))
+            common_times: list[datetime] = sorted(common_set)
+            if len(common_times) < 2:
+                raise ValueError("insufficient common timestamps after intersection")
+            max_bars = max(len(pair_times[p]) for p in pairs)
+            min_coverage = 0.5
+            if len(common_times) / max_bars < min_coverage:
+                raise ValueError(
+                    f"timestamp coverage too low: {len(common_times)}/{max_bars} = "
+                    f"{len(common_times) / max_bars:.1%} (need {min_coverage:.0%})"
+                )
+            for pair in pairs:
+                time_to_idx = {t: i for i, t in enumerate(pair_times[pair])}
+                indices = np.array([time_to_idx[t] for t in common_times])
+                pair_close[pair] = pair_close[pair][indices]
+                pair_open[pair] = pair_open[pair][indices]
+                pair_high[pair] = pair_high[pair][indices]
+                pair_low[pair] = pair_low[pair][indices]
+                pair_indicators[pair] = pair_indicators[pair][indices]
+                pair_volume[pair] = pair_volume[pair][indices]
+                pair_times[pair] = list(common_times)
+            min_bars = len(common_times)
+        n_bars = min_bars - 1
+        # All-true mask for intersection mode
+        has_data_mask = np.ones((min_bars, len(pairs)), dtype=np.bool_)
 
-    n_bars = min_bars - 1  # last bar used only for next_prices
+    else:
+        # Rolling joined: union of all timestamps, zero-pad missing pairs
+        all_times: set[datetime] = set()
+        for pair in pairs:
+            all_times.update(pair_times[pair])
+        union_times: list[datetime] = sorted(all_times)
+        if len(union_times) < 2:
+            raise ValueError("insufficient timestamps after union")
+
+        n_indicators = pair_indicators[pairs[0]].shape[1]
+        has_data_mask = np.zeros((len(union_times), len(pairs)), dtype=np.bool_)
+
+        for p_idx, pair in enumerate(pairs):
+            time_set = set(pair_times[pair])
+            time_to_idx = {t: i for i, t in enumerate(pair_times[pair])}
+            new_close = np.zeros(len(union_times), dtype=np.float64)
+            new_open = np.zeros(len(union_times), dtype=np.float64)
+            new_high = np.zeros(len(union_times), dtype=np.float64)
+            new_low = np.zeros(len(union_times), dtype=np.float64)
+            new_vol = np.zeros(len(union_times), dtype=np.float64)
+            new_ind = np.zeros((len(union_times), n_indicators), dtype=np.float64)
+
+            for u_idx, t in enumerate(union_times):
+                if t in time_set:
+                    src_idx = time_to_idx[t]
+                    new_close[u_idx] = pair_close[pair][src_idx]
+                    new_open[u_idx] = pair_open[pair][src_idx]
+                    new_high[u_idx] = pair_high[pair][src_idx]
+                    new_low[u_idx] = pair_low[pair][src_idx]
+                    new_vol[u_idx] = pair_volume[pair][src_idx]
+                    new_ind[u_idx] = pair_indicators[pair][src_idx]
+                    has_data_mask[u_idx, p_idx] = True
+
+            pair_close[pair] = new_close
+            pair_open[pair] = new_open
+            pair_high[pair] = new_high
+            pair_low[pair] = new_low
+            pair_volume[pair] = new_vol
+            pair_indicators[pair] = new_ind
+            pair_times[pair] = list(union_times)
+
+        min_bars = len(union_times)
+        n_bars = min_bars - 1
+
+        # Log per-pair activation
+        for p_idx, pair in enumerate(pairs):
+            first_active = np.where(has_data_mask[:, p_idx])[0]
+            if len(first_active) > 0:
+                log.info("rolling_joined: %s first active at bar %d / %d", pair, first_active[0], min_bars)
+            else:
+                log.warning("rolling_joined: %s has no active bars", pair)
+    # Derive active_mask: pair is tradeable on bar t if it has data on both t and t+1
+    active_mask = has_data_mask[:n_bars] & has_data_mask[1 : n_bars + 1]
+
     size = len(pairs)
 
     # Pre-build matrices for O(1) per-bar slicing
@@ -179,6 +236,7 @@ def build_backtest_time_series(
     return BacktestTimeSeries(
         contexts=tuple(contexts),
         next_prices=tuple(next_prices_list),
+        active_mask=active_mask,
         next_open=tuple(next_open_list),
         next_high=tuple(next_high_list),
         next_low=tuple(next_low_list),

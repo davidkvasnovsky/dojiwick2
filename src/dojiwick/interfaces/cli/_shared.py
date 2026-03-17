@@ -83,6 +83,7 @@ async def load_settings_and_series(
         bb_period=t.bb_period,
         bb_std=t.bb_std,
         volume_ema_period=t.volume_ema_period,
+        history_alignment=settings.backtest.history_alignment,
     )
     log.info("built time series: %d bars x %d pairs", series.n_bars, series.n_pairs)
 

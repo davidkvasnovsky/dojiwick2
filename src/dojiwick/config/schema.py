@@ -5,7 +5,17 @@ from typing import Annotated, Any, Self, cast
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
-from dojiwick.domain.enums import AdaptiveMode, EntryPriceModel, MissingBarPolicy, ObjectiveMode, PositionMode, WFMode
+from dojiwick.domain.enums import (
+    AdaptiveMode,
+    BacktestGapPolicy,
+    BenchmarkMode,
+    EntryPriceModel,
+    HistoryAlignment,
+    MissingBarPolicy,
+    ObjectiveMode,
+    PositionMode,
+    WFMode,
+)
 from dojiwick.domain.type_aliases import ProductCode, VenueCode
 from dojiwick.domain.errors import ConfigurationError
 from dojiwick.domain.models.value_objects.cost_model import CostModel
@@ -358,6 +368,9 @@ class BacktestSettings(BaseModel):
     maintenance_margin_rate: float
     simulated_execution: bool
     use_candle_cache: bool
+    history_alignment: HistoryAlignment
+    inactive_gap_policy: BacktestGapPolicy
+    benchmark_mode: BenchmarkMode
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
@@ -387,6 +400,14 @@ class BacktestSettings(BaseModel):
             raise ValueError("maintenance_margin_rate must be >= 0")
         if self.leverage > 1.0 and self.maintenance_margin_rate >= 1.0 / self.leverage:
             raise ValueError("maintenance_margin_rate must be < 1/leverage (initial margin rate)")
+        if (
+            self.history_alignment == HistoryAlignment.ROLLING_JOINED
+            and self.benchmark_mode == BenchmarkMode.STATIC_FULL_WINDOW
+        ):
+            raise ValueError(
+                "benchmark_mode must be 'rolling_joined' when history_alignment is 'rolling_joined' "
+                "(static benchmark is invalid with zero-padded initial prices)"
+            )
         return self
 
     @property

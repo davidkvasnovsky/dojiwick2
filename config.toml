@@ -186,6 +186,10 @@ partial_fill_min_ratio = 0.1
 # Flags
 simulated_execution = false
 use_candle_cache = true
+# Rolling universe
+history_alignment = "rolling_joined"
+inactive_gap_policy = "freeze"
+benchmark_mode = "rolling_joined"
 
 # PostgreSQL connection
 [database]

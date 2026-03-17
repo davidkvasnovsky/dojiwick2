@@ -21,7 +21,10 @@ from dojiwick.config.schema import (
 )
 from dojiwick.domain.enums import (
     AdaptiveMode,
+    BacktestGapPolicy,
+    BenchmarkMode,
     EntryPriceModel,
+    HistoryAlignment,
     MissingBarPolicy,
     ObjectiveMode,
     PositionMode,
@@ -274,6 +277,9 @@ def default_backtest_settings(**overrides: Any) -> BacktestSettings:
         "maintenance_margin_rate": 0.0,
         "simulated_execution": False,
         "use_candle_cache": True,
+        "history_alignment": HistoryAlignment.INTERSECTION,
+        "inactive_gap_policy": BacktestGapPolicy.FREEZE,
+        "benchmark_mode": BenchmarkMode.STATIC_FULL_WINDOW,
     }
     defaults.update(overrides)
     return BacktestSettings(**defaults)

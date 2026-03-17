@@ -367,6 +367,7 @@ def _run_core_pipeline(
     has_strategy_rules: bool | None = None,
     phase2_scope_cache: dict[tuple[str, int | None, str | None], StrategyParams] | None = None,
     hysteresis_bars_override: int | None = None,
+    hysteresis_eligibility_mask: np.ndarray | None = None,
 ) -> _CorePipelineResult:
     """Steps 1-6c: regime -> hysteresis -> halted -> confidence -> variants -> strategy -> exits.
 
@@ -382,7 +383,9 @@ def _run_core_pipeline(
         effective_bars = (
             hysteresis_bars_override if hysteresis_bars_override is not None else settings.regime.hysteresis_bars
         )
-        stable_state = hysteresis.apply(pairs, regimes.coarse_state, effective_bars)
+        stable_state = hysteresis.apply(
+            pairs, regimes.coarse_state, effective_bars, eligibility_mask=hysteresis_eligibility_mask
+        )
         regimes = BatchRegimeProfile(
             coarse_state=stable_state,
             confidence=regimes.confidence,
@@ -487,6 +490,7 @@ def run_decision_pipeline_sync(
     has_strategy_rules: bool | None = None,
     phase2_scope_cache: dict[tuple[str, int | None, str | None], StrategyParams] | None = None,
     hysteresis_bars_override: int | None = None,
+    hysteresis_eligibility_mask: np.ndarray | None = None,
 ) -> PipelineResult:
     """Synchronous fast-path for backtest mode (no AI services).
 
@@ -504,6 +508,7 @@ def run_decision_pipeline_sync(
         has_strategy_rules=has_strategy_rules,
         phase2_scope_cache=phase2_scope_cache,
         hysteresis_bars_override=hysteresis_bars_override,
+        hysteresis_eligibility_mask=hysteresis_eligibility_mask,
     )
 
     # No AI veto in sync path -- skip veto allocation entirely (candidates pass through)

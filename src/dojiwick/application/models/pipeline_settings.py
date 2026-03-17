@@ -9,7 +9,10 @@ from typing import Protocol
 
 from dojiwick.domain.enums import (
     AdaptiveMode,
+    BacktestGapPolicy,
+    BenchmarkMode,
     EntryPriceModel,
+    HistoryAlignment,
     MarketState,
     MissingBarPolicy,
     PositionMode,
@@ -194,6 +197,12 @@ class BacktestSettingsPort(Protocol):
     def impact_bps(self) -> float: ...
     @property
     def max_volume_pct(self) -> float: ...
+    @property
+    def history_alignment(self) -> HistoryAlignment: ...
+    @property
+    def inactive_gap_policy(self) -> BacktestGapPolicy: ...
+    @property
+    def benchmark_mode(self) -> BenchmarkMode: ...
 
 
 class ExchangeSettingsPort(Protocol):

@@ -167,6 +167,8 @@ class _OpenPosition:
     tp1_filled: bool = False
     entry_quantity: float = 0.0
     partial_tp_stop_ratio: float = 1.0
+    # Rolling universe: tradeable-bar counter (active bars only)
+    observed_bars: int = 0
 
 
 def _full_notional(pos: _OpenPosition) -> float:
@@ -197,6 +199,7 @@ class BacktestTimeSeries:
 
     contexts: tuple[BatchDecisionContext, ...]
     next_prices: tuple[np.ndarray, ...]
+    active_mask: np.ndarray  # shape (n_bars, n_pairs), dtype=bool
     next_open: tuple[np.ndarray, ...] | None = None
     next_high: tuple[np.ndarray, ...] | None = None
     next_low: tuple[np.ndarray, ...] | None = None
@@ -207,9 +210,14 @@ class BacktestTimeSeries:
         if len(self.contexts) != len(self.next_prices):
             raise ValueError("contexts and next_prices length mismatch")
         n_pairs = self.contexts[0].size
+        n_bars = len(self.contexts)
         for i, ctx in enumerate(self.contexts):
             if ctx.size != n_pairs:
                 raise ValueError(f"bar {i} has {ctx.size} pairs, expected {n_pairs}")
+        if self.active_mask.shape != (n_bars, n_pairs):
+            raise ValueError(f"active_mask shape {self.active_mask.shape} != expected ({n_bars}, {n_pairs})")
+        if self.active_mask.dtype != np.bool_:
+            raise ValueError(f"active_mask dtype must be bool, got {self.active_mask.dtype}")
         for name, arr_tuple in (
             ("next_open", self.next_open),
             ("next_high", self.next_high),
@@ -228,9 +236,11 @@ class BacktestTimeSeries:
 
     def slice_by_indices(self, indices: Sequence[int]) -> "BacktestTimeSeries":
         """Return a sub-series containing only the bars at *indices*."""
+        idx_arr = np.asarray(indices)
         return BacktestTimeSeries(
             contexts=tuple(self.contexts[i] for i in indices),
             next_prices=tuple(self.next_prices[i] for i in indices),
+            active_mask=self.active_mask[idx_arr],
             next_open=tuple(self.next_open[i] for i in indices) if self.next_open is not None else None,
             next_high=tuple(self.next_high[i] for i in indices) if self.next_high is not None else None,
             next_low=tuple(self.next_low[i] for i in indices) if self.next_low is not None else None,
@@ -422,8 +432,20 @@ class BacktestService:
         _pair_scale = max(1.0, n_pairs / _baseline_pairs)
         _max_portfolio_frac = settings.risk.max_portfolio_risk_pct / 100.0 * _pair_scale
 
+        # Rolling universe: joined_mask tracks which pairs have activated at least once
+        joined_mask = np.zeros(n_pairs, dtype=np.bool_)
+        _any_joined = False
+        _all_joined = False
+        _starting_equity = settings.backtest.equity_usd
+        # Precompute last active bar per pair for terminal closeout
+        last_active_bar = np.full(n_pairs, -1, dtype=np.int64)
+        for p in range(n_pairs):
+            active_indices = np.where(series.active_mask[:, p])[0]
+            if len(active_indices) > 0:
+                last_active_bar[p] = int(active_indices[-1])
+
         # Drawdown protection state + portfolio equity tracking
-        initial_equity: float = float(np.mean(portfolio.equity_usd))
+        initial_equity: float = _starting_equity
         peak_equity: float = initial_equity
         max_portfolio_dd: float = 0.0
         portfolio_equity = np.zeros(series.n_bars, dtype=np.float64) if collect_equity else np.empty(0)
@@ -441,6 +463,24 @@ class BacktestService:
         pending_risk_total: float = 0.0
 
         for bar_idx in range(series.n_bars):
+            # Rolling universe: seed equity for newly-joining pairs BEFORE context construction
+            bar_active = series.active_mask[bar_idx]
+            if not _all_joined:
+                newly_joined = bar_active & ~joined_mask
+                if np.any(newly_joined):
+                    if _any_joined:
+                        # Late join: seed to mean of already-joined pairs
+                        eq = portfolio.equity_usd.copy()
+                        day_eq = portfolio.day_start_equity_usd.copy()
+                        seed_val = float(np.mean(eq[joined_mask]))
+                        eq[newly_joined] = seed_val
+                        day_eq[newly_joined] = seed_val
+                        portfolio = replace(portfolio, equity_usd=eq, day_start_equity_usd=day_eq)
+                    # else: first batch of pairs — use existing equity from context (set by builder)
+                    joined_mask |= newly_joined
+                    _any_joined = True
+                    _all_joined = bool(np.all(joined_mask))
+
             # Fast context construction -- bypass __post_init__ validation.
             # Data is already validated at series construction time.
             _port = replace(portfolio, has_open_position=bar_has_open, open_positions_total=bar_open_count)
@@ -463,6 +503,7 @@ class BacktestService:
                     has_strategy_rules=has_strategy_rules,
                     phase2_scope_cache=phase2_scope_cache,
                     hysteresis_bars_override=hysteresis_bars,
+                    hysteresis_eligibility_mask=bar_active,
                 )
                 n = ctx.size
                 if pipeline.intents.action.shape[0] != n:
@@ -529,7 +570,7 @@ class BacktestService:
             else:
                 bar_highs = bar_lows = series.next_prices[bar_idx]
 
-            avg_equity = float(np.mean(portfolio.equity_usd))
+            avg_equity = float(np.mean(portfolio.equity_usd[joined_mask])) if _any_joined else _starting_equity
             # Always track portfolio drawdown (used by objective function)
             peak_equity = max(peak_equity, avg_equity)
             drawdown_pct = (peak_equity - avg_equity) / peak_equity * 100.0 if peak_equity > 0 else 0.0
@@ -553,9 +594,18 @@ class BacktestService:
             pending_entries.clear()
             pending_risk_total = 0.0
             for pair_idx in range(n_pairs):
+                pair_active = bar_active[pair_idx]
                 if pair_idx in positions:
-                    # Check exit for existing position
                     pos = positions[pair_idx]
+
+                    # Freeze position on inactive bars: no trailing/TP/SL/PnL/funding
+                    if not pair_active:
+                        continue
+
+                    # Increment observed_bars BEFORE exit checks
+                    pos.observed_bars += 1
+
+                    # Check exit for existing position
                     next_h = float(bar_highs[pair_idx])
                     next_l = float(bar_lows[pair_idx])
 
@@ -569,8 +619,7 @@ class BacktestService:
                         tp1_hit = (favorable >= pos.tp1_price) if is_long else (favorable <= pos.tp1_price)
                         if tp1_hit:
                             tp1_qty = pos.entry_quantity * pos.tp1_fraction
-                            hold_bars_tp1 = bar_idx - pos.entry_bar
-                            tp1_pnl = _realized_pnl(pos, pos.tp1_price, cost, hold_bars_tp1, quantity=tp1_qty)
+                            tp1_pnl = _realized_pnl(pos, pos.tp1_price, cost, pos.observed_bars, quantity=tp1_qty)
                             bar_pnl_buf[pair_idx] += tp1_pnl
                             bar_notional_buf[pair_idx] = _full_notional(pos)
                             if collect_details:
@@ -578,7 +627,7 @@ class BacktestService:
                                     TradeDetail(
                                         bar_index=pos.entry_bar,
                                         exit_bar_index=bar_idx,
-                                        hold_bars=bar_idx - pos.entry_bar,
+                                        hold_bars=pos.observed_bars,
                                         close_reason=CloseReason.PARTIAL_TP,
                                         pair=pos.pair,
                                         strategy_name=pos.strategy_name,
@@ -608,16 +657,23 @@ class BacktestService:
                                 consecutive_losses[pair_idx] = 0
                             continue  # Defer exit check to next bar -- protective stop at entry activates next bar
 
-                    result = _check_exit(pos, next_h, next_l, bar_idx)
+                    # Determine exit: normal exit or terminal per-pair closeout
+                    close_price: float | None = None
+                    close_reason: CloseReason | None = None
+                    result = _check_exit(pos, next_h, next_l)
                     if result is not None:
-                        exit_price, reason = result
-                        hold_bars = bar_idx - pos.entry_bar
-                        pnl = _realized_pnl(pos, exit_price, cost, hold_bars)
+                        close_price, close_reason = result
+                    elif bar_idx == last_active_bar[pair_idx]:
+                        close_price = float(series.next_prices[bar_idx][pair_idx])
+                        close_reason = CloseReason.END_OF_BACKTEST
+
+                    if close_price is not None:
+                        assert close_reason is not None
+                        pnl = _realized_pnl(pos, close_price, cost, pos.observed_bars)
                         bar_pnl_buf[pair_idx] += pnl
                         bar_notional_buf[pair_idx] = _full_notional(pos)
                         if collect_details:
-                            trade_details.append(_build_trade_detail(pos, bar_idx, exit_price, reason, pnl))
-                        # Track consecutive losses
+                            trade_details.append(_build_trade_detail(pos, bar_idx, close_price, close_reason, pnl))
                         if pnl < 0:
                             consecutive_losses[pair_idx] += 1
                         else:
@@ -626,7 +682,7 @@ class BacktestService:
                         bar_has_open[pair_idx] = False
                         bar_open_count[pair_idx] = 0
                     # else: position stays open, no PnL this bar
-                elif intents is not None:
+                elif intents is not None and pair_active:
                     # No open position -- collect candidate entry (pass 1 of fair allocation)
                     pair_params: StrategyParams = (
                         per_pair_strategy_params[pair_idx]
@@ -729,7 +785,9 @@ class BacktestService:
             )
             prev_time = current_time
             if collect_equity:
-                portfolio_equity[bar_idx] = float(np.mean(portfolio.equity_usd))
+                portfolio_equity[bar_idx] = (
+                    float(np.mean(portfolio.equity_usd[joined_mask])) if _any_joined else _starting_equity
+                )
 
             if bar_idx > 0 and bar_idx % 100 == 0 and log.isEnabledFor(logging.INFO):
                 log.info(
@@ -737,7 +795,7 @@ class BacktestService:
                     bar_idx,
                     series.n_bars,
                     len(positions),
-                    float(np.mean(portfolio.equity_usd)),
+                    avg_equity,
                 )
 
             # Pruning checkpoints: report intermediate value at 50%/70%/85%
@@ -752,20 +810,18 @@ class BacktestService:
                         if pruning.callback.should_prune():
                             raise PrunedError(f"trial pruned at bar {bar_idx}/{series.n_bars} (step {step})")
 
-        # Force-close remaining positions at last bar's next_prices
+        # Force-close remaining positions at their last active bar's next_prices
         if positions:
-            last_bar = series.n_bars - 1
             for pair_idx, pos in positions.items():
-                exit_price = float(series.next_prices[last_bar][pair_idx])
-                hold_bars = last_bar - pos.entry_bar  # exclusive semantics (Fix 5)
-                pnl = _realized_pnl(pos, exit_price, cost, hold_bars)
+                close_bar = int(last_active_bar[pair_idx]) if last_active_bar[pair_idx] >= 0 else series.n_bars - 1
+                exit_price = float(series.next_prices[close_bar][pair_idx])
+                pnl = _realized_pnl(pos, exit_price, cost, pos.observed_bars)
                 if collect_details:
                     trade_details.append(
-                        _build_trade_detail(pos, last_bar, exit_price, CloseReason.END_OF_BACKTEST, pnl)
+                        _build_trade_detail(pos, close_bar, exit_price, CloseReason.END_OF_BACKTEST, pnl)
                     )
-                # Add to last bar's PnL
-                bar_pnls[-1][pair_idx] += pnl
-                bar_notionals[-1][pair_idx] += _full_notional(pos)
+                bar_pnls[close_bar][pair_idx] += pnl
+                bar_notionals[close_bar][pair_idx] += _full_notional(pos)
 
         return _BarCollectionResult(
             trade_details=trade_details,
@@ -785,9 +841,10 @@ class BacktestService:
     ) -> BacktestSummary:
         initial_prices = series.contexts[0].market.price
         final_prices = series.next_prices[-1]
-        benchmark_returns = (final_prices / initial_prices) - 1.0
+        valid = initial_prices > 0
+        benchmark_returns = np.where(valid, (final_prices / np.where(valid, initial_prices, 1.0)) - 1.0, 0.0)
         equity_usd = float(series.contexts[0].portfolio.equity_usd[0])
-        benchmark_pnl = float(np.mean(benchmark_returns) * equity_usd)
+        benchmark_pnl = float(np.mean(benchmark_returns[valid]) * equity_usd) if np.any(valid) else 0.0
         return replace(
             summary,
             config_hash=config_hash,
@@ -842,11 +899,10 @@ def _check_exit(
     pos: _OpenPosition,
     bar_high: float,
     bar_low: float,
-    current_bar: int,
 ) -> tuple[float, CloseReason] | None:
     """Return (exit_price, reason) if stop/TP/time hit, else None. Time exit checked first."""
-    # Time exit -- checked before stop/TP
-    if pos.max_hold_bars > 0 and (current_bar - pos.entry_bar) >= pos.max_hold_bars:
+    # Time exit -- checked before stop/TP (uses observed_bars for rolling-universe correctness)
+    if pos.max_hold_bars > 0 and pos.observed_bars >= pos.max_hold_bars:
         exit_price = (bar_high + bar_low) / 2.0  # midpoint approximation
         return exit_price, CloseReason.TIME_EXIT
 
@@ -874,11 +930,11 @@ def _build_trade_detail(
     close_reason: CloseReason,
     pnl: float,
 ) -> TradeDetail:
-    """Build a TradeDetail with consistent hold_bars = exit_bar - entry_bar."""
+    """Build a TradeDetail with hold_bars from observed active bars."""
     return TradeDetail(
         bar_index=pos.entry_bar,
         exit_bar_index=exit_bar,
-        hold_bars=exit_bar - pos.entry_bar,
+        hold_bars=pos.observed_bars,
         close_reason=close_reason,
         pair=pos.pair,
         strategy_name=pos.strategy_name,

@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass, field
 
+import numpy as np
+
 from dojiwick.domain.type_aliases import IntVector
 
 
@@ -12,8 +14,20 @@ class RegimeHysteresis:
     stable_by_pair: dict[str, int] = field(default_factory=dict)
     pending_by_pair: dict[str, tuple[int, int]] = field(default_factory=dict)
 
-    def apply(self, pairs: tuple[str, ...], raw_state: IntVector, bars: int) -> IntVector:
-        """Return stable regime state per pair."""
+    def apply(
+        self,
+        pairs: tuple[str, ...],
+        raw_state: IntVector,
+        bars: int,
+        eligibility_mask: np.ndarray | None = None,
+    ) -> IntVector:
+        """Return stable regime state per pair.
+
+        When *eligibility_mask* is provided, pairs where the mask is False are
+        skipped — their stable state is preserved and pending counts are not
+        advanced.  This prevents zero-padded inactive bars from affecting the
+        hysteresis state machine during rolling-universe replay.
+        """
 
         if bars < 1:
             raise ValueError(f"hysteresis_bars must be >= 1, got {bars}")
@@ -21,12 +35,19 @@ class RegimeHysteresis:
         stable = raw_state.copy()
         if bars == 1:
             for index, pair in enumerate(pairs):
+                if eligibility_mask is not None and not eligibility_mask[index]:
+                    stable[index] = self.stable_by_pair.get(pair, int(raw_state[index]))
+                    continue
                 self.stable_by_pair[pair] = int(raw_state[index])
                 self.pending_by_pair.pop(pair, None)
             self._cleanup_stale(pairs)
             return stable
 
         for index, pair in enumerate(pairs):
+            if eligibility_mask is not None and not eligibility_mask[index]:
+                stable[index] = self.stable_by_pair.get(pair, int(raw_state[index]))
+                continue
+
             incoming = int(raw_state[index])
             current = self.stable_by_pair.get(pair)
 

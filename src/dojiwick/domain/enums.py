@@ -263,6 +263,26 @@ class OrderTimeInForce(StrEnum):
     GTX = "gtx"
 
 
+class HistoryAlignment(StrEnum):
+    """Timeline construction mode for backtest series."""
+
+    INTERSECTION = "intersection"
+    ROLLING_JOINED = "rolling_joined"
+
+
+class BacktestGapPolicy(StrEnum):
+    """How to handle mid-series data gaps in backtest replay."""
+
+    FREEZE = "freeze"
+
+
+class BenchmarkMode(StrEnum):
+    """Benchmark construction mode for backtest comparison."""
+
+    STATIC_FULL_WINDOW = "static_full_window"
+    ROLLING_JOINED = "rolling_joined"
+
+
 STATUS_TO_EVENT_TYPE: dict[OrderStatus, OrderEventType] = {
     OrderStatus.NEW: OrderEventType.PLACED,
     OrderStatus.PARTIALLY_FILLED: OrderEventType.PARTIALLY_FILLED,

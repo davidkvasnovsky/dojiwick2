@@ -69,6 +69,7 @@ def _build_series(n_bars: int = 10) -> BacktestTimeSeries:
     return BacktestTimeSeries(
         contexts=tuple(contexts),
         next_prices=tuple(next_prices),
+        active_mask=np.ones((n_bars, 1), dtype=np.bool_),
         next_open=tuple(next_open),
         next_high=tuple(next_high),
         next_low=tuple(next_low),
@@ -96,6 +97,7 @@ async def test_default_close_model_backward_compat() -> None:
     series_no_ohlc = BacktestTimeSeries(
         contexts=series.contexts,
         next_prices=series.next_prices,
+        active_mask=series.active_mask,
     )
     result_without_ohlc, _ = await service.run_with_hysteresis_summary_only(series_no_ohlc)
 
