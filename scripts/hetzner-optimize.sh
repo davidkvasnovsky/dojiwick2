@@ -66,6 +66,13 @@ parse_args() {
     [[ -n "$CONFIG_PATH" ]] || die "--config is required"
     [[ -n "$START" ]]       || die "--start is required"
     [[ -n "$END" ]]         || die "--end is required"
+
+    # Input validation — prevent command injection via SSH
+    [[ "$START" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]   || die "--start must be YYYY-MM-DD"
+    [[ "$END" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]     || die "--end must be YYYY-MM-DD"
+    [[ "$WORKERS" =~ ^[0-9]+$ ]]                       || die "--workers must be a positive integer"
+    [[ "$TIMEOUT_HOURS" =~ ^[0-9]+$ ]]                 || die "--timeout must be a positive integer"
+    [[ "$LOCAL_PG_PORT" =~ ^[0-9]+$ ]]                 || die "--pg-port must be a number"
 }
 
 # preflight_checks
@@ -216,6 +223,7 @@ EOF
 
     # Write resource IDs for manual cleanup fallback
     RESOURCE_FILE="/tmp/dojiwick-hetzner-$(date +%s).txt"
+    install -m 600 /dev/null "$RESOURCE_FILE"
     echo "server=$SERVER_NAME firewall=$FW_NAME ip=$SERVER_IP" > "$RESOURCE_FILE"
     info "Resource IDs saved to $RESOURCE_FILE"
 }
@@ -250,6 +258,7 @@ wait_ready() {
 setup_project() {
     local repo_slug
     repo_slug=$(git remote get-url origin | sed 's|.*github.com[:/]||; s|\.git$||')
+    [[ "$repo_slug" =~ ^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$ ]] || die "Invalid repo slug: $repo_slug"
 
     info "Fetching deploy key from 1Password and sending to server"
     # Key never touches local disk — piped directly from op to remote via SSH
@@ -282,9 +291,9 @@ upload_config() {
     local temp_config
     temp_config=$(mktemp)
     sed 's/@postgres:/@localhost:/g' "$CONFIG_PATH" > "$temp_config"
-    scp -q "root@$SERVER_IP:/root/dojiwick/config.toml" < /dev/null 2>/dev/null || true
     scp -q "$temp_config" "root@$SERVER_IP:/root/dojiwick/config.toml"
     rm "$temp_config"
+    ssh "root@$SERVER_IP" "chmod 600 /root/dojiwick/config.toml"
 }
 
 # run_optimization
@@ -297,12 +306,15 @@ run_optimization() {
     ssh "root@$SERVER_IP" "shutdown +$((TIMEOUT_HOURS * 60))" 2>/dev/null || true
 
     info "Writing .env on remote (secrets fetched from 1Password)"
-    set +x
+    {
+        _bk=$(op read "$OP_BINANCE_API_KEY_REF")
+        _bs=$(op read "$OP_BINANCE_API_SECRET_REF")
+    } 2>/dev/null
     ssh "root@$SERVER_IP" "cat > /root/dojiwick/.env; chmod 600 /root/dojiwick/.env" <<EOF
-BINANCE_API_KEY=$(op read "$OP_BINANCE_API_KEY_REF")
-BINANCE_API_SECRET=$(op read "$OP_BINANCE_API_SECRET_REF")
+BINANCE_API_KEY=$_bk
+BINANCE_API_SECRET=$_bs
 EOF
-    set +x 2>/dev/null || true
+    unset _bk _bs
 
     info "Starting optimization (${WORKERS} workers, ${TIMEOUT_HOURS}h timeout)"
     info "Tunnel: remote 127.0.0.1:5432 → local localhost:${LOCAL_PG_PORT}"
