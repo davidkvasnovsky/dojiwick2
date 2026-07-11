@@ -25,8 +25,12 @@ Migrations: 4 files under `db/migrations/`, all applied to local dev+test DBs.
 
 **Backtest numbers changed across the board (costs were understated ~2.85×,
 equity was per-pair). v38/v39 studies are NOT comparable. After Phase 6,
-re-run `dojiwick optimize --gate --workers 8` as v40 and re-gate before any
-promotion.** config.toml `study_name` is already `dojiwick_v40`.
+re-run `dojiwick optimize --gate --workers 8` as v41 and re-gate before any
+promotion.** config.toml `study_name` is `dojiwick_v41` (v40 already ran on
+Hetzner under the OLD cost physics — its numbers are optimistic history; a
+parallel session measured the promoted params under the new engine at
+daily_sharpe −5.82 / DD 68%, confirming nothing tuned pre-overhaul is
+deployable).
 
 ---
 
@@ -282,9 +286,10 @@ drift):
     `docker compose run --rm tooling uv run dojiwick backtest --config config.toml --start 2022-01-01 --end 2026-03-01 --trades-csv /tmp/trades.csv --equity-csv /tmp/equity.csv`
     then `/analyze-research` on the outputs. First run will backfill the
     `funding_rates` table (one-time, ~5 requests/pair).
-37. Kick off the v40 study on Hetzner (`scripts/hetzner-optimize.sh` — after
-    item 21 fixes) and re-gate. **Do not promote v38 params to live: they
-    were tuned under the broken cost model.**
+37. Kick off the v41 study on Hetzner (`scripts/hetzner-optimize.sh` — after
+    item 21 fixes) and re-gate. **Do not promote v38/v39/v40 params to live:
+    all were tuned under the broken cost model. Expect lower leverage to win
+    under honest physics.**
 38. Live-path smoke before mainnet: run against Binance testnet
     (`testnet = true`) long enough to see: instrument sync succeeds, an entry
     fills, protective STOP+TP appear on the exchange, trailing revision
