@@ -7,10 +7,20 @@ from dojiwick.application.services.caching_candle_fetcher import CachingCandleFe
 from dojiwick.domain.models.value_objects.candle import Candle
 from dojiwick.domain.type_aliases import CandleInterval
 from fixtures.fakes.candle_repository import InMemoryCandleRepo
+from fixtures.fakes.clock import FixedClock
 
 _INTERVAL = CandleInterval("1h")
 _VENUE = "binance"
 _PRODUCT = "usd_c"
+# All test candles are historical relative to this clock, so the
+# forming-bar guard never drops them.
+_NOW = datetime(2026, 1, 1, tzinfo=UTC)
+
+
+def _cacher(repo: InMemoryCandleRepo, fetcher: "FakeFetcher") -> CachingCandleFetcher:
+    return CachingCandleFetcher(
+        candle_repo=repo, fetcher=fetcher, venue=_VENUE, product=_PRODUCT, clock=FixedClock(_NOW)
+    )
 
 
 def _make_candle(pair: str, t: datetime) -> Candle:
@@ -54,7 +64,7 @@ async def test_cache_miss_fetches_and_stores() -> None:
     t = datetime(2025, 1, 1, tzinfo=UTC)
     candle = _make_candle("BTC/USDC", t)
     fetcher = FakeFetcher((candle,))
-    cacher = CachingCandleFetcher(candle_repo=repo, fetcher=fetcher, venue=_VENUE, product=_PRODUCT)
+    cacher = _cacher(repo, fetcher)
 
     result = await cacher.fetch_candles_range("BTC/USDC", _INTERVAL, t, t + timedelta(hours=1))
     assert len(result) == 1
@@ -70,7 +80,7 @@ async def test_cache_hit_skips_fetch() -> None:
     await repo.upsert_candles("BTC/USDC", _INTERVAL, (candle,), venue=_VENUE, product=_PRODUCT)
 
     fetcher = FakeFetcher(())
-    cacher = CachingCandleFetcher(candle_repo=repo, fetcher=fetcher, venue=_VENUE, product=_PRODUCT)
+    cacher = _cacher(repo, fetcher)
 
     result = await cacher.fetch_candles_range("BTC/USDC", _INTERVAL, t, t + timedelta(hours=1))
     assert len(result) == 1
@@ -84,7 +94,7 @@ async def test_full_coverage_multi_candle_hit() -> None:
     await repo.upsert_candles("BTC/USDC", _INTERVAL, _hourly("BTC/USDC", start, 25), venue=_VENUE, product=_PRODUCT)
 
     fetcher = FakeFetcher(())
-    cacher = CachingCandleFetcher(candle_repo=repo, fetcher=fetcher, venue=_VENUE, product=_PRODUCT)
+    cacher = _cacher(repo, fetcher)
 
     result = await cacher.fetch_candles_range("BTC/USDC", _INTERVAL, start, end)
     assert fetcher.call_count == 0
@@ -102,7 +112,7 @@ async def test_partial_mid_slice_fetches_gaps_and_returns_full_range() -> None:
     await repo.upsert_candles("BTC/USDC", _INTERVAL, _hourly("BTC/USDC", mid, 24), venue=_VENUE, product=_PRODUCT)
 
     fetcher = FakeFetcher(exchange)
-    cacher = CachingCandleFetcher(candle_repo=repo, fetcher=fetcher, venue=_VENUE, product=_PRODUCT)
+    cacher = _cacher(repo, fetcher)
 
     result = await cacher.fetch_candles_range("BTC/USDC", _INTERVAL, start, end)
     assert fetcher.call_count == 2  # head gap + tail gap
@@ -121,7 +131,7 @@ async def test_cache_missing_tail_fetches_tail_only() -> None:
     await repo.upsert_candles("BTC/USDC", _INTERVAL, _hourly("BTC/USDC", start, 24), venue=_VENUE, product=_PRODUCT)
 
     fetcher = FakeFetcher(exchange)
-    cacher = CachingCandleFetcher(candle_repo=repo, fetcher=fetcher, venue=_VENUE, product=_PRODUCT)
+    cacher = _cacher(repo, fetcher)
 
     result = await cacher.fetch_candles_range("BTC/USDC", _INTERVAL, start, end)
     assert fetcher.call_count == 1  # tail gap only
@@ -143,10 +153,61 @@ async def test_late_listing_pair_not_refetched() -> None:
     await repo.upsert_candles("DOGE/USDC", _INTERVAL, listed_bars, venue=_VENUE, product=_PRODUCT)
 
     fetcher = FakeFetcher(listed_bars)  # exchange has nothing before listing
-    cacher = CachingCandleFetcher(candle_repo=repo, fetcher=fetcher, venue=_VENUE, product=_PRODUCT)
+    cacher = _cacher(repo, fetcher)
 
     result = await cacher.fetch_candles_range("DOGE/USDC", _INTERVAL, start, end)
     assert len(result) == 25
     assert result == listed_bars
     # Exactly one probe for the head gap, which returned empty — no full refetch.
     assert fetcher.calls == [(start, listing - timedelta(hours=1))]
+
+
+async def test_cache_missing_first_aligned_bar_fetches_head() -> None:
+    """Regression: cache starting exactly one bar after an aligned start must head-fetch."""
+    repo = InMemoryCandleRepo()
+    start = datetime(2025, 1, 1, tzinfo=UTC)
+    end = start + timedelta(hours=24)
+    exchange = _hourly("BTC/USDC", start, 25)
+    await repo.upsert_candles(
+        "BTC/USDC", _INTERVAL, _hourly("BTC/USDC", start + timedelta(hours=1), 24), venue=_VENUE, product=_PRODUCT
+    )
+
+    fetcher = FakeFetcher(exchange)
+    cacher = _cacher(repo, fetcher)
+
+    result = await cacher.fetch_candles_range("BTC/USDC", _INTERVAL, start, end)
+    assert fetcher.call_count == 1
+    assert len(result) == 25
+    assert result[0].open_time == start
+
+
+async def test_unaligned_start_with_complete_cache_is_a_hit() -> None:
+    """A non-grid start (first candle opens at the next grid point) must not probe the exchange."""
+    repo = InMemoryCandleRepo()
+    grid = datetime(2025, 1, 1, 1, tzinfo=UTC)
+    start = grid - timedelta(minutes=30)
+    end = grid + timedelta(hours=23)
+    await repo.upsert_candles("BTC/USDC", _INTERVAL, _hourly("BTC/USDC", grid, 24), venue=_VENUE, product=_PRODUCT)
+
+    fetcher = FakeFetcher(())
+    cacher = _cacher(repo, fetcher)
+
+    result = await cacher.fetch_candles_range("BTC/USDC", _INTERVAL, start, end)
+    assert fetcher.call_count == 0
+    assert len(result) == 24
+
+
+async def test_forming_bar_returned_but_not_cached() -> None:
+    """The still-open bar is served to the caller yet never persisted."""
+    repo = InMemoryCandleRepo()
+    forming_open = _NOW - timedelta(minutes=30)
+    closed_open = forming_open - timedelta(hours=1)
+    exchange = (_make_candle("BTC/USDC", closed_open), _make_candle("BTC/USDC", forming_open))
+
+    fetcher = FakeFetcher(exchange)
+    cacher = _cacher(repo, fetcher)
+
+    result = await cacher.fetch_candles_range("BTC/USDC", _INTERVAL, closed_open, _NOW)
+    assert len(result) == 2
+    stored = await repo.get_candles("BTC/USDC", _INTERVAL, closed_open, _NOW, venue=_VENUE, product=_PRODUCT)
+    assert [c.open_time for c in stored] == [closed_open]

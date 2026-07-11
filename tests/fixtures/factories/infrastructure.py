@@ -128,7 +128,6 @@ def default_risk_params(**overrides: Any) -> RiskParams:
         "drawdown_risk_scale_floor": 0.25,
         "equity_curve_filter_enabled": False,
         "equity_curve_filter_period": 20,
-        "portfolio_risk_baseline_pairs": 2,
     }
     defaults.update(overrides)
     return RiskParams(**defaults)
@@ -216,7 +215,6 @@ def default_risk_settings(**overrides: Any) -> RiskSettings:
         "drawdown_risk_scale_floor": 0.25,
         "equity_curve_filter_enabled": False,
         "equity_curve_filter_period": 20,
-        "portfolio_risk_baseline_pairs": 2,
         "daily_loss_precedence": 10,
         "max_positions_precedence": 20,
         "zero_stop_precedence": 30,

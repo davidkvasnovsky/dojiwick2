@@ -17,6 +17,7 @@ from dojiwick.domain.reason_codes import STRATEGY_HOLD, STRATEGY_SIGNAL
 
 from dojiwick.compute.kernels.strategy.confluence import compute_confluence_score
 from dojiwick.compute.kernels.strategy.plugin import StrategyPlugin
+from dojiwick.compute.kernels.strategy.stop_tp import atr_stop_take_profit
 
 log = logging.getLogger(__name__)
 
@@ -107,12 +108,8 @@ class StrategyRegistry:
         reason_codes = np.full(size, STRATEGY_HOLD, dtype=object)
         reason_codes[valid] = STRATEGY_SIGNAL
 
-        # NOTE: keep the stop/TP formula in sync with the scalar version in
-        # ``decision_pipeline.py:_compute_stop_tp_scalar``.
         action = np.full(size, TradeAction.HOLD.value, dtype=np.int64)
         entry = prices.copy()
-        stop = np.zeros(size, dtype=np.float64)
-        take_profit = np.zeros(size, dtype=np.float64)
 
         action[buy_mask] = TradeAction.BUY.value
         action[short_mask] = TradeAction.SHORT.value
@@ -128,22 +125,10 @@ class StrategyRegistry:
             rr_ratio = np.full(size, settings.rr_ratio, dtype=np.float64)
             min_stop_pct = np.full(size, settings.min_stop_distance_pct, dtype=np.float64)
 
-        base_distance = np.maximum(
-            atr * stop_atr_mult,
-            prices * min_stop_pct / 100.0,
-        )
-
-        buy_rows = action == TradeAction.BUY.value
-        short_rows = action == TradeAction.SHORT.value
-
-        stop[buy_rows] = prices[buy_rows] - base_distance[buy_rows]
-        take_profit[buy_rows] = prices[buy_rows] + base_distance[buy_rows] * rr_ratio[buy_rows]
-
-        stop[short_rows] = prices[short_rows] + base_distance[short_rows]
-        take_profit[short_rows] = prices[short_rows] - base_distance[short_rows] * rr_ratio[short_rows]
-
-        np.maximum(stop, 0.0, out=stop)
-        np.maximum(take_profit, 0.0, out=take_profit)
+        direction = np.zeros(size, dtype=np.int64)
+        direction[buy_mask] = 1
+        direction[short_mask] = -1
+        stop, take_profit = atr_stop_take_profit(prices, atr, direction, stop_atr_mult, rr_ratio, min_stop_pct)
 
         if settings.confluence_filter_enabled:
             scores = compute_confluence_score(indicators, prices, action, settings)

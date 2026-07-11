@@ -8,18 +8,14 @@ import hashlib
 import json
 from typing import cast
 
-from .schema import Settings
+from .schema import INFRA_ONLY_FIELDS, Settings
 
 _RESOLVER_VERSION = "strategy_scope_v2+risk_scope_v1"
 
-_INFRA_ONLY_SECTIONS = frozenset({"database", "optimization", "backtest"})
-_INFRA_ONLY_FIELDS: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("system", "log_level"),
-        ("system", "shutdown_timeout_sec"),
-        ("system", "max_ticks"),
-    }
-)
+# Sections with no trading behavior, excluded from the trading hash. The
+# database section never reaches any payload -- the DSN embeds credentials
+# and the canonical JSON is persisted to bot_config_snapshots.
+_INFRA_ONLY_SECTIONS = frozenset({"optimization", "backtest"})
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -35,6 +31,7 @@ def fingerprint_settings(settings: Settings) -> SettingsFingerprint:
     """Return deterministic JSON payload, full SHA-256, and trading-only SHA-256."""
 
     raw_settings: dict[str, object] = settings.model_dump()
+    raw_settings.pop("database", None)
     payload = {
         "resolver_version": _RESOLVER_VERSION,
         "settings": _normalize_value(raw_settings),
@@ -87,7 +84,7 @@ def _strip_infra(raw: dict[str, object]) -> dict[str, object]:
             section_dict = cast(dict[str, object], section_value)
             filtered: dict[str, object] = {}
             for key, val in section_dict.items():
-                if (section_name, key) not in _INFRA_ONLY_FIELDS:
+                if (section_name, key) not in INFRA_ONLY_FIELDS:
                     filtered[key] = val
             result[section_name] = filtered
         else:

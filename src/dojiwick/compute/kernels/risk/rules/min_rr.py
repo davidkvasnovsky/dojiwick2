@@ -2,6 +2,7 @@
 
 import numpy as np
 
+from dojiwick.compute.kernels.math import safe_divide
 from dojiwick.compute.kernels.risk.rule import ConfigurableRiskRule
 from dojiwick.domain.enums import TradeAction
 from dojiwick.domain.models.value_objects.batch_models import (
@@ -45,22 +46,12 @@ class MinRRRule(ConfigurableRiskRule):
         # BUY: reward = TP - entry, risk = entry - stop
         buy_den = candidate.entry_price - candidate.stop_price
         buy_num = candidate.take_profit_price - candidate.entry_price
-        rr[buy_rows] = np.divide(
-            buy_num[buy_rows],
-            buy_den[buy_rows],
-            out=np.zeros(np.count_nonzero(buy_rows), dtype=np.float64),
-            where=buy_den[buy_rows] > 0,
-        )
+        rr[buy_rows] = safe_divide(buy_num[buy_rows], buy_den[buy_rows])
 
         # SHORT: reward = entry - TP, risk = stop - entry
         short_den = candidate.stop_price - candidate.entry_price
         short_num = candidate.entry_price - candidate.take_profit_price
-        rr[short_rows] = np.divide(
-            short_num[short_rows],
-            short_den[short_rows],
-            out=np.zeros(np.count_nonzero(short_rows), dtype=np.float64),
-            where=short_den[short_rows] > 0,
-        )
+        rr[short_rows] = safe_divide(short_num[short_rows], short_den[short_rows])
 
         # Block rows with valid candidate, non-zero stop, and RR below threshold
         threshold = np.array([rp.min_rr_ratio for rp in risk_params])

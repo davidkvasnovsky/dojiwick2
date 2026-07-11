@@ -92,7 +92,7 @@ class OrderEventConsumer:
                 except Exception:
                     log.warning("order stream reconnect failed", exc_info=True)
         finally:
-            await self._flush_cursor()
+            await self.flush_cursor()
 
     async def process_update(self, update: ExchangeOrderUpdate) -> None:
         """Process a single ExchangeOrderUpdate."""
@@ -171,7 +171,7 @@ class OrderEventConsumer:
         )
         self._events_since_flush += 1
         if self._events_since_flush >= self.cursor_flush_interval:
-            await self._flush_cursor()
+            await self.flush_cursor()
 
     async def _handle_protective_fill(self, position_leg_id: int, symbol: str, account: str) -> None:
         """A protective order fired: cancel the surviving sibling when the leg closed.
@@ -185,8 +185,13 @@ class OrderEventConsumer:
             await self.protective_orders.on_leg_closed(position_leg_id, symbol)
         _ = account
 
-    async def _flush_cursor(self) -> None:
-        """Persist the pending cursor and reset the counter."""
+    async def flush_cursor(self) -> None:
+        """Persist the pending cursor and reset the counter.
+
+        Public so replay callers (startup orchestrator) can flush a batch
+        smaller than ``cursor_flush_interval`` — otherwise the same events
+        replay again on every restart.
+        """
         if self._pending_cursor is not None:
             await self.cursor_repo.set_cursor(self._pending_cursor)
             self._pending_cursor = None

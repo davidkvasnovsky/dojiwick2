@@ -112,8 +112,11 @@ def test_active_pairs_derived_from_targets(tmp_path: Path) -> None:
 
 def test_candle_cache_scoped_by_venue_product() -> None:
     """CachingCandleFetcher requires venue and product fields."""
+    from datetime import UTC, datetime
+
     from dojiwick.application.services.caching_candle_fetcher import CachingCandleFetcher
     from fixtures.fakes.candle_repository import InMemoryCandleRepo
+    from fixtures.fakes.clock import FixedClock
 
     class FakeFetcher:
         async def fetch_candles_range(self, symbol: str, interval: str, start: object, end: object) -> tuple[()]:
@@ -124,6 +127,7 @@ def test_candle_cache_scoped_by_venue_product() -> None:
         fetcher=FakeFetcher(),
         venue="binance",
         product="usd_c",
+        clock=FixedClock(datetime(2026, 1, 1, tzinfo=UTC)),
     )
     assert cacher.venue == "binance"
     assert cacher.product == "usd_c"

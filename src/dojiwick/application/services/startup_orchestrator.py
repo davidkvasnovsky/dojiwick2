@@ -195,6 +195,7 @@ class StartupOrchestrator:
                     count += 1
                 except Exception:
                     log.exception("replay: failed to process %s trade %s", symbol, update.trade_id)
+        await consumer.flush_cursor()
 
         if count > 0:
             log.info("replayed %d missed trades", count)

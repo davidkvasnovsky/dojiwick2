@@ -19,6 +19,7 @@ from dojiwick.application.registry.strategy_registry import StrategyRegistry
 from dojiwick.compute.kernels.regime.classify import classify_regime_batch
 from dojiwick.compute.kernels.regime.ensemble import combine_regime_ensemble
 from dojiwick.compute.kernels.sizing.fixed_fraction import size_intents
+from dojiwick.compute.kernels.strategy.stop_tp import atr_stop_take_profit_scalar
 from dojiwick.domain.contracts.policies.regime_classifier import AIRegimeClassifierPort
 from dojiwick.domain.contracts.policies.veto import VetoServicePort
 from dojiwick.domain.enums import DecisionAuthority, MarketState, TradeAction, safe_market_state
@@ -126,25 +127,6 @@ def _resolve_risk_params(
     )
 
 
-def _compute_stop_tp_scalar(
-    entry: float,
-    atr: float,
-    direction: int,
-    stop_atr_mult: float,
-    rr_ratio: float,
-    min_stop_pct: float,
-) -> tuple[float, float]:
-    """Compute ATR-based stop and take-profit for a single pair.
-
-    NOTE: keep formula in sync with the vectorized version in
-    ``strategy_registry.py:StrategyRegistry.propose_candidates`` (section 4).
-    """
-    raw = atr * stop_atr_mult
-    min_d = entry * (min_stop_pct / 100.0)
-    dist = max(raw, min_d)
-    return entry - direction * dist, entry + direction * dist * rr_ratio
-
-
 def _resolve_exit_overrides(
     pairs: tuple[str, ...],
     stable_state: np.ndarray,
@@ -207,7 +189,7 @@ def _resolve_exit_overrides(
             direction = 1 if act == TradeAction.BUY.value else -1
 
             assert new_tp is not None
-            new_stop[i], new_tp[i] = _compute_stop_tp_scalar(
+            new_stop[i], new_tp[i] = atr_stop_take_profit_scalar(
                 entry,
                 atr,
                 direction,

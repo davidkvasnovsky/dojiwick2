@@ -185,7 +185,6 @@ class RiskParams(BaseModel):
     drawdown_risk_scale_floor: float
     equity_curve_filter_enabled: bool
     equity_curve_filter_period: int
-    portfolio_risk_baseline_pairs: int
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
@@ -225,8 +224,6 @@ class RiskParams(BaseModel):
             raise ValueError("drawdown_risk_scale_floor must be in (0, 1]")
         if self.equity_curve_filter_period < 2:
             raise ValueError("equity_curve_filter_period must be >= 2")
-        if self.portfolio_risk_baseline_pairs < 1:
-            raise ValueError("portfolio_risk_baseline_pairs must be >= 1")
         return self
 
 

@@ -142,7 +142,7 @@ async def _drain(consumer: OrderEventConsumer) -> None:
         async for update in consumer.stream.raw_updates():
             await consumer.process_update(update)
     finally:
-        await consumer._flush_cursor()  # pyright: ignore[reportPrivateUsage] # noqa: SLF001
+        await consumer.flush_cursor()
 
 
 async def test_consumer_processes_filled_trade() -> None:

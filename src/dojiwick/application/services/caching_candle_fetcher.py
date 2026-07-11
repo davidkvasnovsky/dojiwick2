@@ -8,10 +8,11 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.contracts.gateways.historical_candle_source import HistoricalCandleSourcePort
 from dojiwick.domain.contracts.repositories.candle import CandleRepositoryPort
 from dojiwick.domain.models.value_objects.candle import Candle
-from dojiwick.domain.timebase import interval_to_seconds
+from dojiwick.domain.timebase import interval_to_seconds, last_confirmed_bar_close
 from dojiwick.domain.type_aliases import CandleInterval
 
 log = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ class CachingCandleFetcher:
     fetcher: HistoricalCandleSourcePort
     venue: str
     product: str
+    clock: ClockPort
 
     async def fetch_candles_range(
         self,
@@ -51,10 +53,15 @@ class CachingCandleFetcher:
             await self._store(symbol, interval, fresh)
             return fresh
 
-        step = timedelta(seconds=interval_to_seconds(interval))
+        step_sec = interval_to_seconds(interval)
+        step = timedelta(seconds=step_sec)
+        # First open the exchange would return for `start`: the grid point at
+        # start when aligned, otherwise the next one.
+        floored = last_confirmed_bar_close(start, step_sec)
+        expected_first = floored if floored == start else floored + step
         head: tuple[Candle, ...] = ()
         tail: tuple[Candle, ...] = ()
-        if cached[0].open_time > start + step:
+        if cached[0].open_time > expected_first:
             head = await self.fetcher.fetch_candles_range(symbol, interval, start, cached[0].open_time - step)
             await self._store(symbol, interval, head)
         if cached[-1].open_time < end - step:
@@ -76,8 +83,13 @@ class CachingCandleFetcher:
         return tuple(merged[t] for t in sorted(merged))
 
     async def _store(self, symbol: str, interval: CandleInterval, candles: tuple[Candle, ...]) -> None:
-        if candles:
+        # Never cache the still-forming bar -- its OHLCV would be frozen
+        # mid-bar and served as a confirmed candle on every later run.
+        step = timedelta(seconds=interval_to_seconds(interval))
+        now = self.clock.now_utc()
+        confirmed = tuple(c for c in candles if c.open_time + step <= now)
+        if confirmed:
             count = await self.candle_repo.upsert_candles(
-                symbol, interval, candles, venue=self.venue, product=self.product
+                symbol, interval, confirmed, venue=self.venue, product=self.product
             )
             log.info("cached %d candles for %s", count, symbol)

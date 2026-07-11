@@ -37,7 +37,6 @@ class RiskOverrideValues:
     drawdown_risk_scale_floor: float | None = None
     equity_curve_filter_enabled: bool | None = None
     equity_curve_filter_period: int | None = None
-    portfolio_risk_baseline_pairs: int | None = None
 
     def has_any(self) -> bool:
         """Return True when at least one override field is set."""

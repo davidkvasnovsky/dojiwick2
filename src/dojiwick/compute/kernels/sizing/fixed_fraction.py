@@ -10,6 +10,7 @@ from dojiwick.domain.models.value_objects.batch_models import (
     BatchRiskAssessment,
     BatchTradeCandidate,
 )
+from dojiwick.compute.kernels.math import safe_divide
 from dojiwick.domain.enums import TradeAction
 from dojiwick.domain.models.value_objects.params import RiskParams
 
@@ -62,12 +63,7 @@ def size_intents(
     zero_stop = stop_distance == 0.0
     active = active & ~zero_stop & (prices > 0.0)
 
-    raw_quantity = np.divide(
-        risk_usd,
-        stop_distance,
-        out=np.zeros(size, dtype=np.float64),
-        where=stop_distance > 0,
-    )
+    raw_quantity = safe_divide(risk_usd, stop_distance)
     raw_notional = raw_quantity * prices
     max_notional_pct_cap = equity * max_notional_pct / 100.0 * leverage
     max_notional = np.minimum(max_notional_pct_cap, max_notional_usd_arr)

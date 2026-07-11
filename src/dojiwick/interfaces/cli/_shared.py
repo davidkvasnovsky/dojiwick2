@@ -56,16 +56,22 @@ async def load_settings_and_series(
     # connection, which allows only one in-flight operation at a time.
     candles_by_pair: dict[str, tuple[Candle, ...]] = {}
     funding_by_pair: dict[str, tuple[FundingRate, ...]] | None = {} if fetchers.funding is not None else None
-    for pair, symbol in zip(pairs, symbols):
-        log.info("fetching %s candles for %s (%s to %s)", interval, symbol, args.start, args.end)
-        candles = await fetchers.candles.fetch_candles_range(symbol, interval, start, end)
-        log.info("  -> %d candles", len(candles))
-        candles_by_pair[pair] = candles
-        if fetchers.funding is not None and funding_by_pair is not None and candles:
-            # Funding coverage must span the pair's own candle range, which can
-            # start later than --start for late-listed rolling-universe pairs.
-            funding_by_pair[pair] = await fetchers.funding.fetch_funding_range(symbol, candles[0].open_time, end)
-            log.info("  -> %d funding events", len(funding_by_pair[pair]))
+    try:
+        for pair, symbol in zip(pairs, symbols):
+            log.info("fetching %s candles for %s (%s to %s)", interval, symbol, args.start, args.end)
+            candles = await fetchers.candles.fetch_candles_range(symbol, interval, start, end)
+            log.info("  -> %d candles", len(candles))
+            candles_by_pair[pair] = candles
+            if fetchers.funding is not None and funding_by_pair is not None and candles:
+                # Funding coverage must span the pair's own candle range, which can
+                # start later than --start for late-listed rolling-universe pairs.
+                funding_by_pair[pair] = await fetchers.funding.fetch_funding_range(symbol, candles[0].open_time, end)
+                log.info("  -> %d funding events", len(funding_by_pair[pair]))
+    except BaseException:
+        # Callers only receive the cleanup callback on success -- a fetch
+        # failure here would otherwise leak the HTTP client and DB connection
+        await cleanup()
+        raise
 
     for pair, candles in candles_by_pair.items():
         if len(candles) == 0:

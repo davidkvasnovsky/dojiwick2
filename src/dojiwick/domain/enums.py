@@ -87,7 +87,7 @@ class TickStatus(StrEnum):
 
 
 class CloseReason(StrEnum):
-    """Position close reason — values match SQL close_reason enum."""
+    """Position close reason for backtest trade attribution."""
 
     STOP_LOSS = "stop_loss"
     TAKE_PROFIT = "take_profit"

@@ -238,6 +238,7 @@ async def build_market_data_fetcher(
                 fetcher=candle_provider,
                 venue=venue,
                 product=product,
+                clock=effective_clock,
             )
             if funding_provider is not None:
                 funding_provider = CachingFundingRateFetcher(

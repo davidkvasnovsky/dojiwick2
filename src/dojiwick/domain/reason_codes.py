@@ -2,7 +2,6 @@
 
 STRATEGY_HOLD = "strategy_hold"
 STRATEGY_SIGNAL = "strategy_signal"
-AI_VETO = "ai_veto"
 AI_VETO_ERROR = "ai_veto_error"
 
 # AI veto — specific (persisted in DecisionOutcome.reason_code)

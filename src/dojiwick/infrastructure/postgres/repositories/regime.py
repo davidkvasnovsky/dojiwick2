@@ -19,6 +19,7 @@ INSERT INTO regime_observations (
     venue,
     product
 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+ON CONFLICT (target_id, observed_at) DO NOTHING
 """
 
 

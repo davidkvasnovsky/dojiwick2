@@ -17,6 +17,7 @@ INSERT INTO decision_outcomes (
     quantity, notional_usd, config_hash, order_id, note, market_state,
     tick_id, confidence_raw
 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+ON CONFLICT (tick_id, target_id) WHERE tick_id != '' DO NOTHING
 """
 
 

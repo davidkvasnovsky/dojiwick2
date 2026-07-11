@@ -435,9 +435,9 @@ class BacktestService:
         _dd_scale_max = settings.risk.drawdown_risk_scale_max_dd
         _dd_scale_floor = settings.risk.drawdown_risk_scale_floor
         _max_loss_frac = settings.risk.max_loss_per_trade_pct / 100.0
-        _baseline_pairs = settings.risk.portfolio_risk_baseline_pairs
-        _pair_scale = max(1.0, n_pairs / _baseline_pairs)
-        _max_portfolio_frac = settings.risk.max_portfolio_risk_pct / 100.0 * _pair_scale
+        # Flat fraction of the shared pool -- no pair-count scaling, so total
+        # leveraged risk stays fixed as the universe grows.
+        _max_portfolio_frac = settings.risk.max_portfolio_risk_pct / 100.0
 
         # Shared equity pool: all pairs draw from one wallet, as on the exchange.
         # The per-row snapshot arrays broadcast the pool so kernel shapes are unchanged.
@@ -697,7 +697,10 @@ class BacktestService:
                         if result is not None:
                             close_price, close_reason = result
                         elif bar_idx == last_active_bar[pair_idx]:
-                            close_price = float(series.next_prices[bar_idx][pair_idx])
+                            # Close at the just-closed bar's close: the following
+                            # bar is never exit-checked and never accrues funding,
+                            # so filling at its close would be unchecked exposure.
+                            close_price = float(series.next_prices[bar_idx - 1][pair_idx])
                             close_reason = CloseReason.END_OF_BACKTEST
 
                     if close_price is not None:

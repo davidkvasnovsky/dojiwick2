@@ -107,7 +107,6 @@ risk_per_trade_pct = 2.4713987317883466
 max_loss_per_trade_pct = 3.850224037687614
 # Portfolio limits
 max_portfolio_risk_pct = 19.71276015244258
-portfolio_risk_baseline_pairs = 2
 max_daily_loss_pct = 6.0
 max_open_positions = 5
 max_consecutive_losses = 10
@@ -317,7 +316,6 @@ display_pair = "BNB/USDT"
 execution_instrument = "BNBUSDT"
 market_data_instrument = "BNBUSDT"
 
-# Thompson-sampling arm selection
 # Anti-overfitting validation (CV, PBO, walk-forward)
 [research]
 enabled = true

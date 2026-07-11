@@ -13,7 +13,7 @@ from pydantic import BaseModel, ValidationError
 from dojiwick.domain.errors import ConfigurationError
 
 from .risk_scope import RISK_FIELDS, RiskOverrideValues, RiskScopeResolver, RiskScopeRule
-from .schema import Settings
+from .schema import INFRA_ONLY_FIELDS, Settings
 from .scope import (
     ScopeSelector,
     StrategyOverrideValues,
@@ -70,15 +70,8 @@ def _validate_sections(raw: dict[str, object]) -> None:
         raise ConfigurationError(f"missing required config sections: {', '.join(missing)}")
 
 
+# Sections exempt from explicit-config enforcement (infra plumbing / feature flags)
 _INFRA_ONLY_SECTIONS = frozenset({"database", "flags"})
-_INFRA_ONLY_FIELDS: frozenset[tuple[str, str]] = frozenset(
-    {
-        ("system", "log_level"),
-        ("system", "shutdown_timeout_sec"),
-        ("system", "max_ticks"),
-        ("system", "reconciliation_interval_ticks"),
-    }
-)
 _ENFORCE_SECTIONS = _KNOWN_SECTIONS - {"scope"} - _INFRA_ONLY_SECTIONS
 
 
@@ -86,7 +79,7 @@ def _enforce_explicit_config(raw: dict[str, object], settings: Settings) -> None
     """Reject missing behavior-bearing fields, log missing infra-only fields.
 
     Fields with ``None`` default are optional sentinels (e.g., ``sampler_seed: int | None``).
-    Fields in ``_INFRA_ONLY_FIELDS`` are infrastructure-only and keep code defaults.
+    Fields in ``INFRA_ONLY_FIELDS`` are infrastructure-only and keep code defaults.
     """
     missing: list[str] = []
     for section_name in _ENFORCE_SECTIONS:
@@ -99,7 +92,7 @@ def _enforce_explicit_config(raw: dict[str, object], settings: Settings) -> None
         for field_name, field_info in model_fields.items():
             if field_name in toml_keys:
                 continue
-            if (section_name, field_name) in _INFRA_ONLY_FIELDS:
+            if (section_name, field_name) in INFRA_ONLY_FIELDS:
                 value = getattr(sub_model, field_name)
                 log.debug(
                     "%s.%s not in TOML — using code default: %r",

@@ -1,7 +1,7 @@
 """Typed settings schema."""
 
-from collections.abc import Mapping
-from typing import Annotated, Any, Self, cast
+from functools import lru_cache
+from typing import Annotated, Self, cast
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
@@ -22,6 +22,18 @@ from dojiwick.domain.models.value_objects.params import RegimeParams, RiskParams
 
 from .risk_scope import RiskScopeResolver
 from .scope import StrategyScopeResolver
+
+
+# Fields with no trading behavior: optional in TOML (loader keeps code defaults)
+# and excluded from the trading fingerprint. Single source for both consumers.
+INFRA_ONLY_FIELDS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("system", "log_level"),
+        ("system", "shutdown_timeout_sec"),
+        ("system", "max_ticks"),
+        ("system", "reconciliation_interval_ticks"),
+    }
+)
 
 
 def _list_to_tuple(v: object) -> object:
@@ -161,39 +173,8 @@ class RegimeSettings(BaseModel):
 
     @property
     def params(self) -> RegimeParams:
-        d = vars(self)
-        cached = d.get("_cached_params")
-        if cached is not None:
-            return cached
-        result = RegimeParams(
-            adx_trend_min=self.adx_trend_min,
-            adx_strong_trend_min=self.adx_strong_trend_min,
-            ema_spread_weak_bps=self.ema_spread_weak_bps,
-            ema_spread_strong_bps=self.ema_spread_strong_bps,
-            atr_low_pct=self.atr_low_pct,
-            atr_high_pct=self.atr_high_pct,
-            atr_extreme_pct=self.atr_extreme_pct,
-            min_confidence=self.min_confidence,
-            truth_trend_return_pct=self.truth_trend_return_pct,
-            truth_volatile_return_pct=self.truth_volatile_return_pct,
-            trend_weight=self.trend_weight,
-            spread_weight=self.spread_weight,
-            vol_weight=self.vol_weight,
-            volume_clip_lo=self.volume_clip_lo,
-            volume_clip_hi=self.volume_clip_hi,
-        )
-        d["_cached_params"] = result
-        return result
-
-    def model_copy(
-        self,
-        *,
-        update: Mapping[str, Any] | None = None,
-        deep: bool = False,
-    ) -> Self:
-        copied = super().model_copy(update=update, deep=deep)
-        vars(copied).pop("_cached_params", None)
-        return copied
+        # frozen=True makes instances hashable at runtime; the stub can't see it
+        return _regime_params(self)  # pyright: ignore[reportArgumentType]
 
 
 class RiskSettings(BaseModel):
@@ -221,7 +202,6 @@ class RiskSettings(BaseModel):
     drawdown_risk_scale_floor: float
     equity_curve_filter_enabled: bool
     equity_curve_filter_period: int
-    portfolio_risk_baseline_pairs: int
     daily_loss_precedence: int
     max_positions_precedence: int
     zero_stop_precedence: int
@@ -268,45 +248,61 @@ class RiskSettings(BaseModel):
 
     @property
     def params(self) -> RiskParams:
-        d = vars(self)
-        cached = d.get("_cached_params")
-        if cached is not None:
-            return cached
-        result = RiskParams(
-            max_daily_loss_pct=self.max_daily_loss_pct,
-            max_open_positions=self.max_open_positions,
-            min_rr_ratio=self.min_rr_ratio,
-            risk_per_trade_pct=self.risk_per_trade_pct,
-            min_notional_usd=self.min_notional_usd,
-            max_notional_pct_of_equity=self.max_notional_pct_of_equity,
-            max_notional_usd=self.max_notional_usd,
-            max_loss_per_trade_pct=self.max_loss_per_trade_pct,
-            max_portfolio_risk_pct=self.max_portfolio_risk_pct,
-            trade_cooldown_sec=self.trade_cooldown_sec,
-            max_consecutive_losses=self.max_consecutive_losses,
-            pair_win_rate_floor=self.pair_win_rate_floor,
-            max_sector_exposure=self.max_sector_exposure,
-            max_risk_inflation_mult=self.max_risk_inflation_mult,
-            drawdown_halt_pct=self.drawdown_halt_pct,
-            drawdown_risk_scale_enabled=self.drawdown_risk_scale_enabled,
-            drawdown_risk_scale_max_dd=self.drawdown_risk_scale_max_dd,
-            drawdown_risk_scale_floor=self.drawdown_risk_scale_floor,
-            equity_curve_filter_enabled=self.equity_curve_filter_enabled,
-            equity_curve_filter_period=self.equity_curve_filter_period,
-            portfolio_risk_baseline_pairs=self.portfolio_risk_baseline_pairs,
-        )
-        d["_cached_params"] = result
-        return result
+        # frozen=True makes instances hashable at runtime; the stub can't see it
+        return _risk_params(self)  # pyright: ignore[reportArgumentType]
 
-    def model_copy(
-        self,
-        *,
-        update: Mapping[str, Any] | None = None,
-        deep: bool = False,
-    ) -> Self:
-        copied = super().model_copy(update=update, deep=deep)
-        vars(copied).pop("_cached_params", None)
-        return copied
+
+@lru_cache(maxsize=128)
+def _regime_params(settings: "RegimeSettings") -> RegimeParams:
+    """Memoized RegimeParams — ``.params`` runs per bar in the optimizer hot path.
+
+    Keyed on the frozen (hashable) settings instance; equal field values hit
+    the same entry, so ``model_copy`` never serves stale params.
+    """
+    return RegimeParams(
+        adx_trend_min=settings.adx_trend_min,
+        adx_strong_trend_min=settings.adx_strong_trend_min,
+        ema_spread_weak_bps=settings.ema_spread_weak_bps,
+        ema_spread_strong_bps=settings.ema_spread_strong_bps,
+        atr_low_pct=settings.atr_low_pct,
+        atr_high_pct=settings.atr_high_pct,
+        atr_extreme_pct=settings.atr_extreme_pct,
+        min_confidence=settings.min_confidence,
+        truth_trend_return_pct=settings.truth_trend_return_pct,
+        truth_volatile_return_pct=settings.truth_volatile_return_pct,
+        trend_weight=settings.trend_weight,
+        spread_weight=settings.spread_weight,
+        vol_weight=settings.vol_weight,
+        volume_clip_lo=settings.volume_clip_lo,
+        volume_clip_hi=settings.volume_clip_hi,
+    )
+
+
+@lru_cache(maxsize=128)
+def _risk_params(settings: "RiskSettings") -> RiskParams:
+    """Memoized RiskParams — see ``_regime_params`` for the caching rationale."""
+    return RiskParams(
+        max_daily_loss_pct=settings.max_daily_loss_pct,
+        max_open_positions=settings.max_open_positions,
+        min_rr_ratio=settings.min_rr_ratio,
+        risk_per_trade_pct=settings.risk_per_trade_pct,
+        min_notional_usd=settings.min_notional_usd,
+        max_notional_pct_of_equity=settings.max_notional_pct_of_equity,
+        max_notional_usd=settings.max_notional_usd,
+        max_loss_per_trade_pct=settings.max_loss_per_trade_pct,
+        max_portfolio_risk_pct=settings.max_portfolio_risk_pct,
+        trade_cooldown_sec=settings.trade_cooldown_sec,
+        max_consecutive_losses=settings.max_consecutive_losses,
+        pair_win_rate_floor=settings.pair_win_rate_floor,
+        max_sector_exposure=settings.max_sector_exposure,
+        max_risk_inflation_mult=settings.max_risk_inflation_mult,
+        drawdown_halt_pct=settings.drawdown_halt_pct,
+        drawdown_risk_scale_enabled=settings.drawdown_risk_scale_enabled,
+        drawdown_risk_scale_max_dd=settings.drawdown_risk_scale_max_dd,
+        drawdown_risk_scale_floor=settings.drawdown_risk_scale_floor,
+        equity_curve_filter_enabled=settings.equity_curve_filter_enabled,
+        equity_curve_filter_period=settings.equity_curve_filter_period,
+    )
 
 
 class AISettings(BaseModel):

@@ -73,7 +73,7 @@ def compute_daily_sharpe(
     daily_equity[1:] = portfolio_equity[bars_per_day - 1 :: bars_per_day][: n_days - 1]
     daily_returns = np.divide(daily_pnl, daily_equity, out=np.zeros(n_days), where=daily_equity > 0)
     daily_mean = float(np.mean(daily_returns))
-    daily_std = float(np.std(daily_returns))
+    daily_std = float(np.std(daily_returns, ddof=1))
     return (daily_mean / daily_std * float(np.sqrt(365))) if daily_std > 0 else 0.0
 
 
@@ -99,7 +99,7 @@ def quick_sharpe(
     trades = len(pnl)
 
     mean_return = float(np.mean(returns))
-    stdev = float(np.std(returns))
+    stdev = float(np.std(returns, ddof=1)) if trades > 1 else 0.0
     sharpe = 0.0 if stdev == 0.0 else mean_return / stdev
 
     if n_bars > 0 and trades > 1:
@@ -150,7 +150,7 @@ def summarize(
     avg_notional = float(np.mean(notional_active))
 
     mean_return = float(np.mean(returns))
-    stdev = float(np.std(returns))
+    stdev = float(np.std(returns, ddof=1)) if trades > 1 else 0.0
     sharpe_like = 0.0 if stdev == 0.0 else mean_return / stdev
 
     eq = np.cumprod(np.maximum(1.0 + returns / 100.0, 0.0))
@@ -161,7 +161,7 @@ def summarize(
     drawdowns = dd_arr if compute_curves else None
 
     downside = returns[returns < 0.0]
-    downside_std = float(np.std(downside)) if len(downside) > 0 else 0.0
+    downside_std = float(np.std(downside, ddof=1)) if len(downside) > 1 else 0.0
     sortino = 0.0 if downside_std == 0.0 else mean_return / downside_std
 
     # Annualize Sharpe and Sortino when bar count is known
