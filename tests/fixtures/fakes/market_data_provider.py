@@ -42,3 +42,7 @@ class InMemoryMarketDataProvider:
         """Test helper: set the price map."""
         normalized = {symbol: to_price(price) for symbol, price in prices.items()}
         self._prices.update(normalized)
+
+    def set_candles(self, pair: str, interval: CandleInterval, candles: list[Candle]) -> None:
+        """Test helper: set the candle history for a pair/interval."""
+        self._candles[f"{pair}:{interval}"] = list(candles)

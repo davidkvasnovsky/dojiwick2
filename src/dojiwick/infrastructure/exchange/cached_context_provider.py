@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -42,6 +42,7 @@ class CachedContextProvider:
     pair_separator: str = "/"
     indicator_enricher: IndicatorEnricher | None = None
     _day_start_equity: float | None = None
+    _day_start_date: date | None = None
 
     async def fetch_context_batch(
         self,
@@ -63,8 +64,10 @@ class CachedContextProvider:
         if self.indicator_enricher is not None:
             try:
                 indicators = await self.indicator_enricher.compute_for_pairs(symbols)
-            except (OSError, AdapterError):  # fmt: skip
-                log.warning("indicator enrichment failed, falling back to zeros", exc_info=True)
+            except (OSError, AdapterError) as exc:  # fmt: skip
+                # A zero matrix would silently no-trade the tick; failing marks
+                # the tick FAILED and feeds the consecutive-failure alert.
+                raise DataQualityError(f"indicator enrichment failed: {exc}") from exc
 
         account = snap.account
         if account is not None:
@@ -75,8 +78,12 @@ class CachedContextProvider:
             for leg in account.positions:
                 position_map[leg.instrument_id.symbol] = float(leg.quantity)
 
-            if self._day_start_equity is None:
+            today = at.date()
+            if self._day_start_equity is None or self._day_start_date != today:
+                # UTC day boundary reset — otherwise the daily-loss rule
+                # measures loss since process start, not since midnight
                 self._day_start_equity = equity
+                self._day_start_date = today
 
             equity_arr = np.full(size, equity, dtype=np.float64)
             day_start_arr = np.full(size, self._day_start_equity, dtype=np.float64)

@@ -123,6 +123,7 @@ def _build_binance_adapters(settings: Settings, clock: ClockPort) -> ComposedAda
 
     indicator_enricher = IndicatorEnricher(
         market_data=market_data,
+        clock=clock,
         candle_interval=CandleInterval(settings.trading.candle_interval),
         candle_lookback=settings.trading.candle_lookback,
         rsi_period=settings.trading.rsi_period,

@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from collections import deque
 from dataclasses import dataclass, field, replace as dc_replace
 from datetime import datetime
 from decimal import Decimal
@@ -35,7 +36,7 @@ from dojiwick.application.services.order_ledger import OrderLedgerService
 from dojiwick.application.services.position_tracker import PositionTracker
 from dojiwick.domain.enums import ExecutionStatus, MissingBarPolicy, ReconciliationHealth, TickStatus
 from dojiwick.domain.errors import CircuitBreakerTrippedError, DataQualityError, PostExecutionPersistenceError
-from dojiwick.domain.timebase import assert_timebase_valid
+from dojiwick.domain.timebase import assert_timebase_valid, interval_to_seconds
 from dojiwick.domain.models.entities.bot_state import BotState
 from dojiwick.domain.hashing import compute_inputs_hash, compute_intent_hash, compute_ops_hash, compute_tick_id
 from dojiwick.domain.models.value_objects.batch_models import (
@@ -140,6 +141,13 @@ class TickService:
     config_hash: str = ""
     target_ids: tuple[str, ...] = ()
     instrument_map: dict[str, InstrumentId] | None = None
+    # Entry risk scaling state (equity-curve filter + drawdown scaling), kept
+    # in-memory: after a restart the scale conservatively rebuilds from 1.0
+    _equity_window: deque[float] = field(default_factory=deque, init=False)
+    _equity_running_sum: float = field(default=0.0, init=False)
+    _peak_equity: float = field(default=0.0, init=False)
+    _last_equity_bucket: int = field(default=-1, init=False)
+    _entry_scale: float = field(default=1.0, init=False)
 
     def __post_init__(self) -> None:
         if not self.config_hash:
@@ -292,6 +300,23 @@ class TickService:
                     new_mask[i] = False
             pipeline = dc_replace(pipeline, intents=dc_replace(pipeline.intents, active_mask=new_mask))
             log.info("frozen symbols masked: %s", sorted(frozen))
+
+        # 10b. Entry risk scaling — the same ECF/drawdown sizing reductions the
+        # backtest applies (the optimizer tunes them; without this they had no
+        # live effect). Scales only new entries, never existing positions.
+        scale = self._update_entry_risk_scale(context, observed_at)
+        if scale < 1.0:
+            new_entries = pipeline.intents.active_mask & ~context.portfolio.has_open_position
+            if bool(np.any(new_entries)):
+                quantity = pipeline.intents.quantity.copy()
+                notional = pipeline.intents.notional_usd.copy()
+                quantity[new_entries] *= scale
+                notional[new_entries] *= scale
+                pipeline = dc_replace(
+                    pipeline,
+                    intents=dc_replace(pipeline.intents, quantity=quantity, notional_usd=notional),
+                )
+                log.info("entry risk scale %.3f applied to %d new entries", scale, int(np.sum(new_entries)))
 
         # 11. Execution via planner (tracked for ops hashing)
         exec_start = self.clock.monotonic_ns()
@@ -523,6 +548,51 @@ class TickService:
         state.last_tick_at = observed_at
         state.consecutive_errors = 0
         await self.bot_state_repository.update_state(state)
+
+    def _update_entry_risk_scale(self, context: BatchDecisionContext, observed_at: datetime) -> float:
+        """Combined ECF + drawdown entry scale, mirroring the backtest formulas.
+
+        The equity window advances once per candle interval (ticks can run
+        sub-bar), so the SMA period means bars in both paths. Equity is the
+        shared wallet balance broadcast across the snapshot rows.
+        """
+        risk = self.settings.risk
+        ecf_enabled = risk.equity_curve_filter_enabled
+        dd_enabled = risk.drawdown_risk_scale_enabled
+        if not ecf_enabled and not dd_enabled:
+            return 1.0
+
+        equity = float(context.portfolio.equity_usd[0])
+        if equity <= 0.0:
+            return self._entry_scale
+
+        interval_sec = interval_to_seconds(self.settings.trading.candle_interval)
+        bucket = int(observed_at.timestamp() // interval_sec)
+        if bucket != self._last_equity_bucket:
+            self._last_equity_bucket = bucket
+            if ecf_enabled:
+                if len(self._equity_window) == risk.equity_curve_filter_period:
+                    self._equity_running_sum -= self._equity_window.popleft()
+                self._equity_window.append(equity)
+                self._equity_running_sum += equity
+
+        self._peak_equity = max(self._peak_equity, equity)
+
+        ecf_scale = 1.0
+        if ecf_enabled and len(self._equity_window) == risk.equity_curve_filter_period:
+            sma = self._equity_running_sum / risk.equity_curve_filter_period
+            if sma > 0 and equity < sma:
+                ecf_scale = max(equity / sma, risk.drawdown_risk_scale_floor)
+
+        dd_scale = 1.0
+        if dd_enabled and self._peak_equity > 0:
+            drawdown_pct = (self._peak_equity - equity) / self._peak_equity * 100.0
+            if drawdown_pct > 0:
+                raw = max(1.0 - drawdown_pct / risk.drawdown_risk_scale_max_dd, 0.0)
+                dd_scale = max(raw**0.5, risk.drawdown_risk_scale_floor)
+
+        self._entry_scale = min(dd_scale, ecf_scale)
+        return self._entry_scale
 
     async def _get_frozen_symbols(self, state: BotState | None) -> tuple[str, ...]:
         """Return symbols frozen by reconciliation health state."""

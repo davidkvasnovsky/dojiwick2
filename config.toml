@@ -14,7 +14,8 @@ recon_uncertain_timeout_sec = 900
 [trading]
 enabled_strategies = ["trend_follow", "volatility_revert", "mean_revert"]
 candle_interval = "1h"
-candle_lookback = 60
+# Must exceed the longest indicator period; 3x EMA-200 for smoothing convergence
+candle_lookback = 600
 rsi_period = 14
 ema_fast_period = 12
 ema_slow_period = 26

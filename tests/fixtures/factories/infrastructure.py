@@ -156,7 +156,7 @@ def default_trading_settings(**overrides: Any) -> TradingSettings:
         "primary_pair": "BTC/USDC",
         "active_pairs": ("BTC/USDC", "ETH/USDC"),
         "candle_interval": "1h",
-        "candle_lookback": 60,
+        "candle_lookback": 600,
         "rsi_period": 14,
         "ema_fast_period": 12,
         "ema_slow_period": 26,

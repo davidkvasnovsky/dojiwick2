@@ -96,6 +96,22 @@ class TradingSettings(BaseModel):
     def _validate(self) -> Self:
         if not self.primary_pair:
             raise ValueError("primary_pair must not be empty")
+        longest_period = max(
+            self.rsi_period,
+            self.ema_fast_period,
+            self.ema_slow_period,
+            self.ema_base_period,
+            self.ema_trend_period,
+            self.atr_period,
+            self.adx_period,
+            self.bb_period,
+            self.volume_ema_period,
+        )
+        if self.candle_lookback <= longest_period:
+            raise ValueError(
+                f"candle_lookback ({self.candle_lookback}) must exceed the longest indicator period "
+                f"({longest_period}) — shorter windows leave the live EMA/trend gates NaN"
+            )
         if not self.active_pairs:
             raise ValueError("active_pairs must not be empty")
         return self
