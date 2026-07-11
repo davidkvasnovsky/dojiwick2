@@ -82,9 +82,7 @@ async def _run_cross_validate(
 ) -> None:
     """Run cross-validation + PBO and print per-fold results."""
     from dojiwick.application.use_cases.validation.cross_validator import cross_validate
-    from dojiwick.application.use_cases.validation.gate_evaluator import (
-        _compute_pbo,  # pyright: ignore[reportPrivateUsage]
-    )
+    from dojiwick.application.use_cases.validation.gate_evaluator import compute_pbo_from_cv
     from dojiwick.interfaces.cli._shared import build_service, load_settings_and_series
 
     settings, series, cleanup = await load_settings_and_series(args)
@@ -100,7 +98,7 @@ async def _run_cross_validate(
 
         # PBO needs a returns vector; the equity curve is a monotone level
         # series whose block Sharpes are ~always positive (PBO trivially 0)
-        pbo = _compute_pbo(
+        pbo = compute_pbo_from_cv(
             cv_result,
             pbo_min_trade_returns=settings.research.pbo_min_trade_returns,
             pbo_max_partitions=settings.research.pbo_max_partitions,
@@ -127,29 +125,14 @@ async def _run_full_gate(
     args: argparse.Namespace,
 ) -> int:
     """Run full research gate: CV + PBO + walk-forward + all 9 criteria."""
-    from dojiwick.application.use_cases.validation.gate_evaluator import DefaultGateEvaluator
-    from dojiwick.config.targets import resolve_target_ids
-    from dojiwick.interfaces.cli._shared import load_settings_and_series, print_gate_block
+    from dojiwick.interfaces.cli._shared import build_gate_evaluator, load_settings_and_series, print_gate_block
 
     settings, series, cleanup = await load_settings_and_series(args)
     try:
-        target_ids = resolve_target_ids(settings)
-        venue = str(settings.exchange.venue)
-        product = str(settings.exchange.product)
-
-        from dojiwick.config.param_tuning import perturb_exit_geometry
-
-        evaluator = DefaultGateEvaluator(
-            settings=settings,
-            series=series,
-            target_ids=target_ids,
-            venue=venue,
-            product=product,
-            perturb_exits=perturb_exit_geometry,
-        )
+        evaluator = build_gate_evaluator(settings, series)
 
         log.info("running full research gate evaluation")
-        # No apply_tuned and an empty param set: the evaluator gates the
+        # No apply_tuned_from and an empty param set: the evaluator gates the
         # loaded config exactly as promoted, with no re-tuning applied.
         gate = await evaluator.evaluate(best_params={})
 

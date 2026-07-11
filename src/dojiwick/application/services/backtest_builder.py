@@ -14,12 +14,12 @@ from dojiwick.domain.models.value_objects.batch_models import (
     BatchPortfolioSnapshot,
 )
 from dojiwick.domain.models.value_objects.candle import Candle
-from dojiwick.domain.models.value_objects.funding_rate import FundingRate
+from dojiwick.domain.models.value_objects.funding_rate import MAX_FUNDING_INTERVAL, FundingRate
 from dojiwick.domain.numerics import candles_to_ohlc, decimals_to_array
 
 log = logging.getLogger(__name__)
 
-_FUNDING_COVERAGE_TOLERANCE_SEC = 8 * 3600.0
+_FUNDING_COVERAGE_TOLERANCE_SEC = MAX_FUNDING_INTERVAL.total_seconds()
 
 
 def _bin_funding(

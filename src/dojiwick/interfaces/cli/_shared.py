@@ -6,7 +6,10 @@ import sys
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from dojiwick.application.use_cases.validation.gate_evaluator import DefaultGateEvaluator
 
 from dotenv import load_dotenv
 
@@ -57,17 +60,18 @@ async def load_settings_and_series(
     # Sequential per-pair fetching: the caching layers share one psycopg
     # connection, which allows only one in-flight operation at a time.
     candles_by_pair: dict[str, tuple[Candle, ...]] = {}
-    funding_by_pair: dict[str, tuple[FundingRate, ...]] | None = {} if fetchers.funding is not None else None
+    funding_by_pair: dict[str, tuple[FundingRate, ...]] = {}
+    funding_fetcher = fetchers.funding
     try:
         for pair, symbol in zip(pairs, symbols, strict=True):
             log.info("fetching %s candles for %s (%s to %s)", interval, symbol, args.start, args.end)
             candles = await fetchers.candles.fetch_candles_range(symbol, interval, start, end)
             log.info("  -> %d candles", len(candles))
             candles_by_pair[pair] = candles
-            if fetchers.funding is not None and funding_by_pair is not None and candles:
+            if funding_fetcher is not None and candles:
                 # Funding coverage must span the pair's own candle range, which can
                 # start later than --start for late-listed rolling-universe pairs.
-                funding_by_pair[pair] = await fetchers.funding.fetch_funding_range(symbol, candles[0].open_time, end)
+                funding_by_pair[pair] = await funding_fetcher.fetch_funding_range(symbol, candles[0].open_time, end)
                 log.info("  -> %d funding events", len(funding_by_pair[pair]))
     except BaseException:
         # Callers only receive the cleanup callback on success -- a fetch
@@ -99,7 +103,7 @@ async def load_settings_and_series(
         bb_std=t.bb_std,
         volume_ema_period=t.volume_ema_period,
         history_alignment=settings.backtest.history_alignment,
-        funding_by_pair=funding_by_pair,
+        funding_by_pair=funding_by_pair if funding_fetcher is not None else None,
     )
     log.info("built time series: %d bars x %d pairs", series.n_bars, series.n_pairs)
 
@@ -159,4 +163,29 @@ def build_service(settings: Settings) -> BacktestService:
         target_ids=resolve_target_ids(settings),
         venue=str(settings.exchange.venue),
         product=str(settings.exchange.product),
+    )
+
+
+def build_gate_evaluator(
+    settings: Settings,
+    series: BacktestTimeSeries,
+    *,
+    apply_tuned_from: Settings | None = None,
+) -> DefaultGateEvaluator:
+    """Wire a DefaultGateEvaluator with target/venue boilerplate and exit perturbation.
+
+    ``apply_tuned_from`` supplies the base settings the gate re-tunes per
+    evaluation; ``None`` gates ``settings`` exactly as loaded (validate path).
+    """
+    from dojiwick.application.use_cases.validation.gate_evaluator import DefaultGateEvaluator
+    from dojiwick.config.param_tuning import build_apply_tuned, perturb_exit_geometry
+
+    return DefaultGateEvaluator(
+        settings=settings,
+        series=series,
+        target_ids=resolve_target_ids(settings),
+        venue=str(settings.exchange.venue),
+        product=str(settings.exchange.product),
+        apply_tuned=build_apply_tuned(apply_tuned_from) if apply_tuned_from is not None else None,
+        perturb_exits=perturb_exit_geometry,
     )

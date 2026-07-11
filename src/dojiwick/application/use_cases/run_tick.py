@@ -20,6 +20,7 @@ from dojiwick.application.registry.strategy_registry import StrategyRegistry
 from dojiwick.application.services.order_ledger import OrderLedgerService
 from dojiwick.application.services.position_tracker import PositionTracker
 from dojiwick.application.services.protective_orders import ProtectiveOrderService
+from dojiwick.compute.kernels.risk.entry_scaling import drawdown_scale, equity_curve_scale
 from dojiwick.domain.contracts.gateways.account_state import AccountStatePort
 from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.contracts.gateways.context_provider import ContextProviderPort
@@ -36,6 +37,7 @@ from dojiwick.domain.contracts.repositories.regime import RegimeRepositoryPort
 from dojiwick.domain.contracts.repositories.tick import TickRepositoryPort
 from dojiwick.domain.enums import ExecutionStatus, MissingBarPolicy, OrderSide, ReconciliationHealth, TickStatus
 from dojiwick.domain.errors import CircuitBreakerTrippedError, DataQualityError, PostExecutionPersistenceError
+from dojiwick.domain.exit_rules import ExitAnchors, derive_exit_anchors
 from dojiwick.domain.hashing import compute_inputs_hash, compute_intent_hash, compute_ops_hash, compute_tick_id
 from dojiwick.domain.models.entities.bot_state import BotState
 from dojiwick.domain.models.value_objects.batch_models import (
@@ -57,6 +59,17 @@ _MAX_ERROR_MESSAGE_LEN = 500
 def _skipped_receipts(size: int) -> tuple[ExecutionReceipt, ...]:
     """Create SKIPPED receipts for all batch rows."""
     return tuple(ExecutionReceipt(status=ExecutionStatus.SKIPPED, reason="no_plan_deltas") for _ in range(size))
+
+
+@dataclass(slots=True, frozen=True)
+class PlannerExecution:
+    """Result of the planner execution path, carrying the plan for ops hashing."""
+
+    receipts: tuple[ExecutionReceipt, ...]
+    plan: ExecutionPlan | None = None
+    plan_receipts: tuple[ExecutionReceipt, ...] = ()
+    request_ids: dict[int, int] = field(default_factory=dict)
+    resolved: ResolvedTargets | None = None
 
 
 def align_plan_receipts(
@@ -305,9 +318,12 @@ class TickService:
 
         # Execution tracked for ops hashing
         exec_start = self.clock.monotonic_ns()
-        receipts, plan, plan_receipts, request_ids, resolved = await self._execute_via_planner_tracked(
-            pipeline.intents, tick_id=tick_id
-        )
+        execn = await self._execute_via_planner_tracked(pipeline.intents, tick_id=tick_id)
+        receipts = execn.receipts
+        plan = execn.plan
+        plan_receipts = execn.plan_receipts
+        request_ids = execn.request_ids
+        resolved = execn.resolved
         exec_duration_us = (self.clock.monotonic_ns() - exec_start) // 1_000
 
         # Stage hashes are pure -- no I/O dependency on ledger
@@ -434,13 +450,7 @@ class TickService:
         intents: BatchExecutionIntent,
         *,
         tick_id: str = "",
-    ) -> tuple[
-        tuple[ExecutionReceipt, ...],
-        ExecutionPlan | None,
-        tuple[ExecutionReceipt, ...],
-        dict[int, int],
-        ResolvedTargets | None,
-    ]:
+    ) -> PlannerExecution:
         """Target-position planner execution path, returning plan for ops hashing."""
         assert self.instrument_map is not None  # validated in __post_init__
         resolved = resolve_targets(
@@ -455,7 +465,7 @@ class TickService:
             instrument_map=self.instrument_map,
         )
         if not resolved.targets:
-            return _skipped_receipts(len(intents.pairs)), None, (), {}, None
+            return PlannerExecution(_skipped_receipts(len(intents.pairs)))
 
         snapshot = await self.account_state_provider.get_account_snapshot(self.settings.universe.account)
         plan = await self.execution_planner.plan(snapshot, resolved.targets)
@@ -464,7 +474,7 @@ class TickService:
             plan = await self._apply_pending_order_guard(plan)
 
         if plan.is_empty:
-            return _skipped_receipts(len(intents.pairs)), plan, (), {}, resolved
+            return PlannerExecution(_skipped_receipts(len(intents.pairs)), plan=plan, resolved=resolved)
 
         # A reduce/flip market order racing its own protective stop can double
         # close — free the protection first
@@ -479,7 +489,7 @@ class TickService:
 
         plan_receipts = await self.execution_gateway.execute_plan(plan, tick_id=tick_id)
         aligned = align_plan_receipts(len(intents.pairs), resolved, plan, plan_receipts)
-        return aligned, plan, plan_receipts, request_ids, resolved
+        return PlannerExecution(aligned, plan, plan_receipts, request_ids, resolved)
 
     async def _apply_pending_order_guard(self, plan: ExecutionPlan) -> ExecutionPlan:
         """Deduct pending (in-flight) quantities from plan deltas."""
@@ -591,25 +601,21 @@ class TickService:
             direction = 1.0 if is_long else -1.0
             stop_distance = abs(fill_price - stop)
 
+            # Anchors re-derived from the ACTUAL fill so live protection matches
+            # what was paid. ATR is not carried on the intent, so the shared
+            # kernel derives the trail from stop geometry (atr=None).
             params = per_pair_params[batch_idx] if batch_idx < len(per_pair_params) else None
-            trailing_activation = 0.0
-            trailing_distance = 0.0
-            breakeven = 0.0
-            max_hold = 0
-            tp1_price = 0.0
-            tp1_fraction = 0.0
-            if params is not None:
-                if params.trailing_stop_activation_rr is not None and params.trailing_stop_atr_mult is not None:
-                    trailing_activation = fill_price + direction * stop_distance * params.trailing_stop_activation_rr
-                    # ATR is not carried on the intent; derive the trail from
-                    # the stop geometry, which is itself ATR-based
-                    trailing_distance = stop_distance * params.trailing_stop_atr_mult / max(params.stop_atr_mult, 1e-9)
-                if params.breakeven_after_rr is not None:
-                    breakeven = fill_price + direction * stop_distance * params.breakeven_after_rr
-                max_hold = params.max_hold_bars if params.max_hold_bars is not None else 0
-                if params.partial_tp_enabled and params.partial_tp1_rr > 0:
-                    tp1_price = fill_price + direction * stop_distance * params.partial_tp1_rr
-                    tp1_fraction = params.partial_tp1_fraction
+            anchors = (
+                derive_exit_anchors(
+                    entry_price=fill_price,
+                    stop_distance=stop_distance,
+                    direction=direction,
+                    params=params,
+                    atr=None,
+                )
+                if params is not None
+                else ExitAnchors()
+            )
 
             iid = delta.instrument_id
             instrument_int = await self.position_tracker.instrument_repo.resolve_id(iid.venue, iid.product, iid.symbol)
@@ -628,12 +634,12 @@ class TickService:
                 entry_price=fill_price,
                 stop_price=stop,
                 take_profit_price=tp,
-                trailing_activation_price=trailing_activation,
-                trailing_distance=trailing_distance,
-                breakeven_price=breakeven,
-                max_hold_bars=max_hold,
-                tp1_price=tp1_price,
-                tp1_fraction=tp1_fraction,
+                trailing_activation_price=anchors.trailing_activation_price,
+                trailing_distance=anchors.trailing_distance,
+                breakeven_price=anchors.breakeven_price,
+                max_hold_bars=anchors.max_hold_bars,
+                tp1_price=anchors.tp1_price,
+                tp1_fraction=anchors.tp1_fraction,
             )
 
     def _update_entry_risk_scale(self, context: BatchDecisionContext, observed_at: datetime) -> float:
@@ -668,15 +674,12 @@ class TickService:
         ecf_scale = 1.0
         if ecf_enabled and len(self._equity_window) == risk.equity_curve_filter_period:
             sma = self._equity_running_sum / risk.equity_curve_filter_period
-            if sma > 0 and equity < sma:
-                ecf_scale = max(equity / sma, risk.drawdown_risk_scale_floor)
+            ecf_scale = equity_curve_scale(equity, sma, risk.drawdown_risk_scale_floor)
 
         dd_scale = 1.0
         if dd_enabled and self._peak_equity > 0:
             drawdown_pct = (self._peak_equity - equity) / self._peak_equity * 100.0
-            if drawdown_pct > 0:
-                raw = max(1.0 - drawdown_pct / risk.drawdown_risk_scale_max_dd, 0.0)
-                dd_scale = max(raw**0.5, risk.drawdown_risk_scale_floor)
+            dd_scale = drawdown_scale(drawdown_pct, risk.drawdown_risk_scale_max_dd, risk.drawdown_risk_scale_floor)
 
         self._entry_scale = min(dd_scale, ecf_scale)
         return self._entry_scale

@@ -296,21 +296,10 @@ async def _run() -> int:
         print(f"{'=' * 50}\n")
 
         if args.gate:
-            from dojiwick.application.use_cases.validation.gate_evaluator import DefaultGateEvaluator
-            from dojiwick.config.param_tuning import build_apply_tuned, perturb_exit_geometry
+            from dojiwick.interfaces.cli._shared import build_gate_evaluator, print_gate_block
 
-            evaluator = DefaultGateEvaluator(
-                settings=settings,
-                series=series,
-                target_ids=target_ids,
-                venue=venue,
-                product=product,
-                apply_tuned=build_apply_tuned(settings),
-                perturb_exits=perturb_exit_geometry,
-            )
+            evaluator = build_gate_evaluator(settings, series, apply_tuned_from=settings)
             gate_result = await evaluator.evaluate(result.best_params, workers=workers)
-            from dojiwick.interfaces.cli._shared import print_gate_block
-
             return print_gate_block(gate_result)
 
         return 0

@@ -39,7 +39,7 @@ from dojiwick.domain.models.value_objects.instrument_metadata import InstrumentI
 from dojiwick.domain.models.value_objects.order_request import OrderRequest
 from dojiwick.domain.models.value_objects.position_leg import PositionLeg
 from dojiwick.domain.models.value_objects.protective_orders import ProtectiveOrderSpec
-from dojiwick.domain.numerics import quantize_qty_to_step, round_price_to_tick, to_price, to_quantity
+from dojiwick.domain.numerics import Price, Quantity, quantize_qty_to_step, round_price_to_tick, to_price, to_quantity
 
 log = logging.getLogger(__name__)
 
@@ -183,32 +183,39 @@ class ProtectiveOrderService:
         state: PositionExitState,
         info: InstrumentInfo,
     ) -> tuple[ProtectiveOrderSpec, ...]:
-        assert leg.id is not None
+        leg_id = leg.id
+        assert leg_id is not None
         filters = info.filters
         exit_side = OrderSide.SELL if state.is_long else OrderSide.BUY
         entry = to_price(str(state.entry_price))
+
+        def _spec(
+            kind: OrderKind, order_type: OrderType, trigger_price: Price, quantity: Quantity
+        ) -> ProtectiveOrderSpec:
+            return ProtectiveOrderSpec(
+                kind=kind,
+                position_leg_id=leg_id,
+                instrument_id=info.instrument_id,
+                position_side=leg.position_side,
+                side=exit_side,
+                order_type=order_type,
+                trigger_price=trigger_price,
+                quantity=quantity,
+                working_type=self.settings.exchange.protective_working_type,
+                price_protect=self.settings.exchange.protective_price_protect,
+                client_order_id=compute_protective_client_order_id(leg_id, kind.value, state.revision),
+            )
 
         specs: list[ProtectiveOrderSpec] = []
 
         stop_qty = quantize_qty_to_step(leg.quantity, filters.step_size)
         if stop_qty > 0:
             specs.append(
-                ProtectiveOrderSpec(
-                    kind=OrderKind.PROTECTIVE_STOP,
-                    position_leg_id=leg.id,
-                    instrument_id=info.instrument_id,
-                    position_side=leg.position_side,
-                    side=exit_side,
-                    order_type=OrderType.STOP_MARKET,
-                    trigger_price=round_price_to_tick(
-                        to_price(str(state.stop_price)), filters.tick_size, away_from=entry
-                    ),
-                    quantity=stop_qty,
-                    working_type=self.settings.exchange.protective_working_type,
-                    price_protect=self.settings.exchange.protective_price_protect,
-                    client_order_id=compute_protective_client_order_id(
-                        leg.id, OrderKind.PROTECTIVE_STOP.value, state.revision
-                    ),
+                _spec(
+                    OrderKind.PROTECTIVE_STOP,
+                    OrderType.STOP_MARKET,
+                    round_price_to_tick(to_price(str(state.stop_price)), filters.tick_size, away_from=entry),
+                    stop_qty,
                 )
             )
 
@@ -217,40 +224,22 @@ class ProtectiveOrderService:
             tp1_qty = quantize_qty_to_step(leg.quantity * to_quantity(str(state.tp1_fraction)), filters.step_size)
             if tp1_qty > 0:
                 specs.append(
-                    ProtectiveOrderSpec(
-                        kind=OrderKind.PROTECTIVE_TP1,
-                        position_leg_id=leg.id,
-                        instrument_id=info.instrument_id,
-                        position_side=leg.position_side,
-                        side=exit_side,
-                        order_type=OrderType.TAKE_PROFIT_MARKET,
-                        trigger_price=round_price_to_tick(to_price(str(state.tp1_price)), filters.tick_size),
-                        quantity=tp1_qty,
-                        working_type=self.settings.exchange.protective_working_type,
-                        price_protect=self.settings.exchange.protective_price_protect,
-                        client_order_id=compute_protective_client_order_id(
-                            leg.id, OrderKind.PROTECTIVE_TP1.value, state.revision
-                        ),
+                    _spec(
+                        OrderKind.PROTECTIVE_TP1,
+                        OrderType.TAKE_PROFIT_MARKET,
+                        round_price_to_tick(to_price(str(state.tp1_price)), filters.tick_size),
+                        tp1_qty,
                     )
                 )
 
         tp_qty = quantize_qty_to_step(leg.quantity - tp1_qty, filters.step_size)
         if tp_qty > 0:
             specs.append(
-                ProtectiveOrderSpec(
-                    kind=OrderKind.PROTECTIVE_TP,
-                    position_leg_id=leg.id,
-                    instrument_id=info.instrument_id,
-                    position_side=leg.position_side,
-                    side=exit_side,
-                    order_type=OrderType.TAKE_PROFIT_MARKET,
-                    trigger_price=round_price_to_tick(to_price(str(state.take_profit_price)), filters.tick_size),
-                    quantity=tp_qty,
-                    working_type=self.settings.exchange.protective_working_type,
-                    price_protect=self.settings.exchange.protective_price_protect,
-                    client_order_id=compute_protective_client_order_id(
-                        leg.id, OrderKind.PROTECTIVE_TP.value, state.revision
-                    ),
+                _spec(
+                    OrderKind.PROTECTIVE_TP,
+                    OrderType.TAKE_PROFIT_MARKET,
+                    round_price_to_tick(to_price(str(state.take_profit_price)), filters.tick_size),
+                    tp_qty,
                 )
             )
 

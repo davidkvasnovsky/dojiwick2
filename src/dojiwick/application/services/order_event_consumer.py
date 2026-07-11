@@ -162,7 +162,7 @@ class OrderEventConsumer:
                 and order_request.order_kind in PROTECTIVE_ORDER_KINDS
                 and order_request.position_leg_id is not None
             ):
-                await self._handle_protective_fill(order_request.position_leg_id, update.symbol, account)
+                await self._handle_protective_fill(order_request.position_leg_id, update.symbol)
 
         self._pending_cursor = StreamCursorRecord(
             stream_name=self.stream.stream_name,
@@ -173,7 +173,7 @@ class OrderEventConsumer:
         if self._events_since_flush >= self.cursor_flush_interval:
             await self.flush_cursor()
 
-    async def _handle_protective_fill(self, position_leg_id: int, symbol: str, account: str) -> None:
+    async def _handle_protective_fill(self, position_leg_id: int, symbol: str) -> None:
         """A protective order fired: cancel the surviving sibling when the leg closed.
 
         The consumer cancels only — placements happen in the tick's sync pass,
@@ -183,7 +183,6 @@ class OrderEventConsumer:
         leg = await self.position_tracker.position_leg_repo.get_leg(position_leg_id)
         if leg is None or leg.closed_at is not None or leg.quantity <= 0:
             await self.protective_orders.on_leg_closed(position_leg_id, symbol)
-        _ = account
 
     async def flush_cursor(self) -> None:
         """Persist the pending cursor and reset the counter.

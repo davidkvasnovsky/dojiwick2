@@ -3,13 +3,19 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from typing import Protocol
 
 from dojiwick.domain.enums import SQL_TO_MARKET_STATE, MarketState, RegimeExitProfile
 from dojiwick.domain.models.value_objects.params import StrategyParams
 
 _MAX_PRIORITY = 1_000_000
+
+# Consumers read these only from the global StrategyParams, never from
+# per-pair resolutions: the registry gates confluence on `settings.*`
+# (strategy_registry.py) and trend_volatile_ema_enabled is a global toggle
+# (NOTE in trend_follow.py). Scope overrides for them are silently ignored.
+_GLOBAL_ONLY = {"global_only": True}
 
 
 class ScopeRuleLike(Protocol):
@@ -81,7 +87,7 @@ class StrategyOverrideValues:
     trend_pullback_adx_min: float | None = None
     trend_max_regime_confidence: float | None = None
     trend_short_max_regime_confidence: float | None = None
-    trend_volatile_ema_enabled: bool | None = None
+    trend_volatile_ema_enabled: bool | None = field(default=None, metadata=_GLOBAL_ONLY)
     partial_tp_enabled: bool | None = None
     partial_tp1_rr: float | None = None
     partial_tp1_fraction: float | None = None
@@ -90,8 +96,8 @@ class StrategyOverrideValues:
     mean_revert_disable_ema_filter: bool | None = None
     mean_revert_max_bb_width: float | None = None
     macd_filter_enabled: bool | None = None
-    confluence_filter_enabled: bool | None = None
-    min_confluence_score: float | None = None
+    confluence_filter_enabled: bool | None = field(default=None, metadata=_GLOBAL_ONLY)
+    min_confluence_score: float | None = field(default=None, metadata=_GLOBAL_ONLY)
     regime_exit_profile: RegimeExitProfile | None = None
     adaptive_volatile_stop_scale: float | None = None
     adaptive_volatile_rr_mult: float | None = None
@@ -112,6 +118,10 @@ class StrategyOverrideValues:
 
 
 STRATEGY_FIELDS: tuple[str, ...] = tuple(f.name for f in fields(StrategyOverrideValues))
+
+GLOBAL_ONLY_STRATEGY_FIELDS: frozenset[str] = frozenset(
+    f.name for f in fields(StrategyOverrideValues) if f.metadata.get("global_only", False)
+)
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

@@ -82,6 +82,31 @@ def _row_to_request(row: tuple[object, ...]) -> OrderRequest:
     )
 
 
+def _request_to_row(request: OrderRequest) -> tuple[object, ...]:
+    """Flatten an OrderRequest into the _INSERT_SQL parameter tuple."""
+    return (
+        request.venue,
+        request.product,
+        request.client_order_id,
+        request.instrument_id,
+        request.account,
+        request.tick_id or None,
+        request.side.value,
+        request.order_type.value,
+        request.quantity,
+        request.price,
+        request.position_side.value,
+        request.reduce_only,
+        request.close_position,
+        request.time_in_force.value,
+        request.working_type.value,
+        request.price_protect,
+        request.recv_window_ms,
+        request.order_kind.value,
+        request.position_leg_id,
+    )
+
+
 @dataclass(slots=True)
 class PgOrderRequestRepository:
     """Persists order requests into PostgreSQL."""
@@ -90,30 +115,9 @@ class PgOrderRequestRepository:
 
     async def insert_request(self, request: OrderRequest) -> int:
         """Persist an order request and return the DB-assigned id."""
-        row = (
-            request.venue,
-            request.product,
-            request.client_order_id,
-            request.instrument_id,
-            request.account,
-            request.tick_id or None,
-            request.side.value,
-            request.order_type.value,
-            request.quantity,
-            request.price,
-            request.position_side.value,
-            request.reduce_only,
-            request.close_position,
-            request.time_in_force.value,
-            request.working_type.value,
-            request.price_protect,
-            request.recv_window_ms,
-            request.order_kind.value,
-            request.position_leg_id,
-        )
         try:
             async with self.connection.cursor() as cursor:
-                await cursor.execute(_INSERT_SQL, row)
+                await cursor.execute(_INSERT_SQL, _request_to_row(request))
                 result = await cursor.fetchone()
             await self.connection.commit()
         except Exception as exc:
@@ -122,6 +126,33 @@ class PgOrderRequestRepository:
         if result is None:
             raise AdapterError("INSERT order_requests returned no id")
         return int(result[0])
+
+    async def insert_requests(self, requests: list[OrderRequest]) -> list[int]:
+        """Persist order requests in one transaction; return ids in input order.
+
+        A single commit for the whole batch instead of one per row: the tick
+        pre-persists every planned order before any is placed, so all-or-nothing
+        durability is equivalent to the per-row path but costs one fsync.
+        """
+        if not requests:
+            return []
+        ids: list[int] = []
+        try:
+            async with self.connection.cursor() as cursor:
+                for request in requests:
+                    await cursor.execute(_INSERT_SQL, _request_to_row(request))
+                    result = await cursor.fetchone()
+                    if result is None:
+                        raise AdapterError("INSERT order_requests returned no id")
+                    ids.append(int(result[0]))
+            await self.connection.commit()
+        except AdapterError:
+            await self.connection.rollback()
+            raise
+        except Exception as exc:
+            await self.connection.rollback()
+            raise AdapterError(f"failed to insert order requests: {exc}") from exc
+        return ids
 
     async def get_by_client_order_id(self, client_order_id: str) -> OrderRequest | None:
         """Return an order request by client_order_id, or None."""

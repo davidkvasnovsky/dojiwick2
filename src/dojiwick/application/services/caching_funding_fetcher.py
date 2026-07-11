@@ -12,11 +12,9 @@ from datetime import datetime, timedelta
 
 from dojiwick.domain.contracts.gateways.historical_funding_source import HistoricalFundingSourcePort
 from dojiwick.domain.contracts.repositories.funding_rate import FundingRateRepositoryPort
-from dojiwick.domain.models.value_objects.funding_rate import FundingRate
+from dojiwick.domain.models.value_objects.funding_rate import MAX_FUNDING_INTERVAL, FundingRate
 
 log = logging.getLogger(__name__)
-
-_MAX_FUNDING_INTERVAL = timedelta(hours=8)
 
 
 @dataclass(slots=True)
@@ -37,10 +35,10 @@ class CachingFundingRateFetcher:
 
         head: tuple[FundingRate, ...] = ()
         tail: tuple[FundingRate, ...] = ()
-        if cached[0].funding_time > start + _MAX_FUNDING_INTERVAL:
+        if cached[0].funding_time > start + MAX_FUNDING_INTERVAL:
             head = await self.fetcher.fetch_funding_range(symbol, start, cached[0].funding_time - timedelta(seconds=1))
             await self._store(symbol, head)
-        if cached[-1].funding_time < end - _MAX_FUNDING_INTERVAL:
+        if cached[-1].funding_time < end - MAX_FUNDING_INTERVAL:
             tail = await self.fetcher.fetch_funding_range(symbol, cached[-1].funding_time + timedelta(seconds=1), end)
             await self._store(symbol, tail)
 

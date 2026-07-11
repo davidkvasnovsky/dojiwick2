@@ -6,6 +6,7 @@ from datetime import datetime
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.value_objects.funding_rate import FundingRate
 from dojiwick.infrastructure.postgres.connection import DbConnection
+from dojiwick.infrastructure.postgres.helpers import pg_execute_many, pg_fetch_all
 
 _INSERT_SQL = """
 INSERT INTO funding_rates (venue, product, symbol, funding_time, funding_rate)
@@ -39,13 +40,7 @@ class PgFundingRateRepository:
         if not venue or not product:
             raise AdapterError("upsert_rates requires non-empty venue and product")
         rows = [(venue, product, symbol, r.funding_time, r.rate) for r in rates]
-        try:
-            async with self.connection.cursor() as cursor:
-                await cursor.executemany(_INSERT_SQL, rows)
-            await self.connection.commit()
-        except Exception as exc:
-            await self.connection.rollback()
-            raise AdapterError(f"failed to upsert funding rates: {exc}") from exc
+        await pg_execute_many(self.connection, _INSERT_SQL, rows, error_msg="failed to upsert funding rates")
         return len(rows)
 
     async def get_rates(
@@ -59,11 +54,7 @@ class PgFundingRateRepository:
     ) -> tuple[FundingRate, ...]:
         if not venue or not product:
             raise AdapterError("get_rates requires non-empty venue and product")
-        try:
-            async with self.connection.cursor() as cursor:
-                await cursor.execute(_SELECT_SQL, (symbol, start, end, venue, product))
-                rows = await cursor.fetchall()
-        except Exception as exc:
-            await self.connection.rollback()
-            raise AdapterError(f"failed to get funding rates: {exc}") from exc
+        rows = await pg_fetch_all(
+            self.connection, _SELECT_SQL, (symbol, start, end, venue, product), error_msg="failed to get funding rates"
+        )
         return tuple(FundingRate(symbol=row[0], funding_time=row[1], rate=row[2]) for row in rows)

@@ -49,7 +49,7 @@ def _worker_init(
     return build_backtest_service(settings, target_ids=target_ids, venue=venue, product=product)
 
 
-def _compute_pbo(cv_result: CVResult, *, pbo_min_trade_returns: int = 8, pbo_max_partitions: int = 16) -> float:
+def compute_pbo_from_cv(cv_result: CVResult, *, pbo_min_trade_returns: int = 8, pbo_max_partitions: int = 16) -> float:
     """Compute PBO from CV result, preferring trade-level returns over fold Sharpes."""
     if cv_result.trade_returns is not None and len(cv_result.trade_returns) >= pbo_min_trade_returns:
         n_partitions = min(pbo_max_partitions, max(4, len(cv_result.trade_returns) // 10 * 2))
@@ -94,7 +94,9 @@ def _gate_cv_worker(
         )
     )
 
-    pbo = _compute_pbo(cv_result, pbo_min_trade_returns=pbo_min_trade_returns, pbo_max_partitions=pbo_max_partitions)
+    pbo = compute_pbo_from_cv(
+        cv_result, pbo_min_trade_returns=pbo_min_trade_returns, pbo_max_partitions=pbo_max_partitions
+    )
 
     return _CVWorkerResult(
         fold_sharpes=cv_result.fold_sharpes.tolist(),
@@ -162,7 +164,7 @@ class DefaultGateEvaluator:
             embargo_bars=self.settings.research.embargo_bars,
         )
 
-        pbo = _compute_pbo(
+        pbo = compute_pbo_from_cv(
             cv_result,
             pbo_min_trade_returns=self.settings.research.pbo_min_trade_returns,
             pbo_max_partitions=self.settings.research.pbo_max_partitions,

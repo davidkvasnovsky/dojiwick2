@@ -13,6 +13,10 @@ class OrderRequestRepositoryPort(Protocol):
         """Persist an order request and return the DB-assigned id."""
         ...
 
+    async def insert_requests(self, requests: list[OrderRequest]) -> list[int]:
+        """Persist order requests in one transaction; return ids in input order."""
+        ...
+
     async def get_by_client_order_id(self, client_order_id: str) -> OrderRequest | None:
         """Return an order request by client_order_id, or None."""
         ...

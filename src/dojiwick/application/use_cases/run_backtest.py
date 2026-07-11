@@ -38,6 +38,7 @@ from dojiwick.compute.kernels.pnl.partial_fill import apply_fill_ratio, compute_
 from dojiwick.compute.kernels.pnl.pnl import scalar_net_pnl
 from dojiwick.compute.kernels.regime.classify import classify_regime_batch
 from dojiwick.compute.kernels.regime.evaluate import evaluate_regimes
+from dojiwick.compute.kernels.risk.entry_scaling import drawdown_scale, equity_curve_scale
 from dojiwick.domain.enums import (
     CloseReason,
     EntryPriceModel,
@@ -47,6 +48,7 @@ from dojiwick.domain.enums import (
     regime_group,
     safe_market_state,
 )
+from dojiwick.domain.exit_rules import advance_trailing_stop, derive_exit_anchors
 from dojiwick.domain.indicator_schema import INDICATOR_INDEX
 from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext, BatchExecutionIntent
 from dojiwick.domain.models.value_objects.cost_model import CostModel
@@ -577,8 +579,9 @@ class BacktestService:
                     )
                 else:
                     bar_highs = bar_lows = bar_opens = series.next_prices[bar_idx - 1]
+                bar_funding = funding_arrs[bar_idx - 1] if funding_arrs is not None else None
             else:
-                bar_highs = bar_lows = bar_opens = None
+                bar_highs = bar_lows = bar_opens = bar_funding = None
 
             # Always track portfolio drawdown (used by objective function)
             peak_equity = max(peak_equity, pool_equity)
@@ -596,9 +599,7 @@ class BacktestService:
                 # Equity curve filter -- proportional scaling (never blocks)
                 ecf_scale = 1.0
                 if _ecf_enabled and len(equity_window) == ecf_period:
-                    sma = equity_running_sum / ecf_period
-                    if sma > 0 and pool_equity < sma:
-                        ecf_scale = max(pool_equity / sma, _dd_scale_floor)
+                    ecf_scale = equity_curve_scale(pool_equity, equity_running_sum / ecf_period, _dd_scale_floor)
 
             pending_entries.clear()
             pending_risk_total = 0.0
@@ -613,10 +614,10 @@ class BacktestService:
 
                     # Increment observed_bars BEFORE exit checks
                     pos.observed_bars += 1
-                    if funding_arrs is not None:
+                    if bar_funding is not None:
                         # next_funding mirrors next_high: index bar_idx - 1 is the
                         # just-closed bar the exit checks below evaluate.
-                        rate = float(funding_arrs[bar_idx - 1][pair_idx])
+                        rate = float(bar_funding[pair_idx])
                         if rate != 0.0:
                             signed = rate if pos.action == TradeAction.BUY else -rate
                             pos.funding_usd += signed * pos.notional_usd * cost.leverage
@@ -758,11 +759,9 @@ class BacktestService:
                     )
                     if new_pos is not None:
                         # Progressive risk scaling: drawdown + ECF combined (never blocks)
-                        dd_scale = 1.0
-                        if _dd_scale_enabled and drawdown_pct > 0:
-                            max_dd = _dd_scale_max
-                            raw = max(1.0 - drawdown_pct / max_dd, 0.0)
-                            dd_scale = max(raw**0.5, _dd_scale_floor)
+                        dd_scale = (
+                            drawdown_scale(drawdown_pct, _dd_scale_max, _dd_scale_floor) if _dd_scale_enabled else 1.0
+                        )
 
                         combined_scale = min(dd_scale, ecf_scale)
                         if combined_scale < 1.0:
@@ -916,27 +915,21 @@ class BacktestService:
 
 
 def _update_trailing_stop(pos: _OpenPosition, bar_high: float, bar_low: float) -> None:
-    """Update extreme price and trailing stop in-place."""
+    """Update extreme price and trailing stop in-place via the shared kernel."""
     if pos.trailing_activation_price == 0.0 and pos.breakeven_price == 0.0:
         return
     is_long = pos.action == TradeAction.BUY
-    new_extreme = max(pos.extreme_price, bar_high) if is_long else min(pos.extreme_price, bar_low)
-    new_stop = pos.stop_price
-
-    # Breakeven: once price exceeds breakeven threshold, move stop to entry
-    be_hit = (new_extreme >= pos.breakeven_price) if is_long else (new_extreme <= pos.breakeven_price)
-    stop_not_at_entry = (pos.stop_price < pos.entry_price) if is_long else (pos.stop_price > pos.entry_price)
-    if pos.breakeven_price > 0.0 and be_hit and stop_not_at_entry:
-        new_stop = pos.entry_price
-
-    # Trailing: once price exceeds activation, trail stop behind extreme
-    act_hit = (
-        (new_extreme >= pos.trailing_activation_price) if is_long else (new_extreme <= pos.trailing_activation_price)
+    new_extreme, new_stop = advance_trailing_stop(
+        is_long=is_long,
+        high=bar_high,
+        low=bar_low,
+        extreme_price=pos.extreme_price,
+        stop_price=pos.stop_price,
+        entry_price=pos.entry_price,
+        trailing_activation_price=pos.trailing_activation_price,
+        trailing_distance=pos.trailing_distance,
+        breakeven_price=pos.breakeven_price,
     )
-    if pos.trailing_activation_price > 0.0 and act_hit:
-        trail_stop = (new_extreme - pos.trailing_distance) if is_long else (new_extreme + pos.trailing_distance)
-        new_stop = max(new_stop, trail_stop) if is_long else min(new_stop, trail_stop)
-
     pos.extreme_price = new_extreme
     pos.stop_price = new_stop
 
@@ -1098,27 +1091,23 @@ def _open_position(
     atr_at_entry = float(ctx.market.indicators[pair_idx, INDICATOR_INDEX["atr"]])
     direction = 1 if act == TradeAction.BUY else -1
 
-    trailing_activation_price = 0.0
-    trailing_distance = 0.0
-    if pair_params.trailing_stop_activation_rr is not None and pair_params.trailing_stop_atr_mult is not None:
-        trailing_activation_price = entry + direction * stop_distance * pair_params.trailing_stop_activation_rr
-        trailing_distance = atr_at_entry * pair_params.trailing_stop_atr_mult
-
-    breakeven_price = 0.0
-    if pair_params.breakeven_after_rr is not None:
-        breakeven_price = entry + direction * stop_distance * pair_params.breakeven_after_rr
-
-    max_hold_bars = pair_params.max_hold_bars if pair_params.max_hold_bars is not None else 0
+    anchors = derive_exit_anchors(
+        entry_price=entry,
+        stop_distance=stop_distance,
+        direction=direction,
+        params=pair_params,
+        atr=atr_at_entry,
+    )
     strategy_name = intents.strategy_name[pair_idx]
     bb_mid_val = float(ctx.market.indicators[pair_idx, INDICATOR_INDEX["bb_mid"]])
 
     profile = _ExitProfile(
         stop=stop,
         take_profit=tp,
-        trailing_activation_price=trailing_activation_price,
-        trailing_distance=trailing_distance,
-        breakeven_price=breakeven_price,
-        max_hold_bars=max_hold_bars,
+        trailing_activation_price=anchors.trailing_activation_price,
+        trailing_distance=anchors.trailing_distance,
+        breakeven_price=anchors.breakeven_price,
+        max_hold_bars=anchors.max_hold_bars,
     )
     exit_ctx = _ExitContext(
         entry=entry,
@@ -1139,9 +1128,7 @@ def _open_position(
     # Partial take profit setup (uses original stop_distance, not post-modifier)
     quantity = float(intents.quantity[pair_idx])
     partial_tp_enabled = pair_params.partial_tp_enabled
-    tp1_price = 0.0
-    if partial_tp_enabled and pair_params.partial_tp1_rr > 0:
-        tp1_price = entry + direction * stop_distance * pair_params.partial_tp1_rr
+    tp1_price = anchors.tp1_price
 
     return _OpenPosition(
         entry_price=entry,

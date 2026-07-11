@@ -2,12 +2,13 @@
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from typing import cast
 
 from dojiwick.domain.models.value_objects.funding_rate import FundingRate
 
+from .boundary import ms_to_utc
 from .http_client import BinanceHttpClient
 
 log = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ def _parse_funding_entry(entry: dict[str, object]) -> FundingRate | None:
         return None
     return FundingRate(
         symbol=symbol,
-        funding_time=datetime.fromtimestamp(int(funding_time_ms) / 1000, tz=UTC),
+        funding_time=ms_to_utc(int(funding_time_ms)),
         rate=rate,
     )
 

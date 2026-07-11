@@ -9,6 +9,7 @@ missing_bar_policy = "skip"
 reconciliation_interval_ticks = 10
 recon_degraded_timeout_sec = 300
 recon_uncertain_timeout_sec = 900
+tick_boundary_settle_sec = 3.0
 
 # Indicators and candle settings
 [trading]

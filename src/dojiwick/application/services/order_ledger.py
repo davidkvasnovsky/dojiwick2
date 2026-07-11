@@ -62,7 +62,8 @@ class OrderLedgerService:
         """
         indexed_deltas = sorted(enumerate(plan.deltas), key=lambda p: p[1].sequence)
         resolved_ids: dict[tuple[str, str, str], int | None] = {}
-        request_ids: dict[int, int] = {}
+        original_indices: list[int] = []
+        requests: list[OrderRequest] = []
 
         for leg_seq, (original_index, delta) in enumerate(indexed_deltas):
             iid = delta.instrument_id
@@ -77,27 +78,32 @@ class OrderLedgerService:
                 tick_id, iid.symbol, delta.side, delta.position_side, leg_seq, delta.order_type
             )
             kind = OrderKind.EXIT if (delta.reduce_only or delta.close_position) else OrderKind.ENTRY
-            request = OrderRequest(
-                client_order_id=client_order_id,
-                instrument_id=instrument_id_int,
-                account=plan.account,
-                venue=iid.venue,
-                product=iid.product,
-                tick_id=tick_id,
-                side=delta.side,
-                order_type=delta.order_type,
-                quantity=delta.quantity,
-                price=delta.price,
-                position_side=delta.position_side,
-                reduce_only=delta.reduce_only,
-                close_position=delta.close_position,
-                time_in_force=delta.time_in_force,
-                working_type=delta.working_type,
-                order_kind=kind,
+            original_indices.append(original_index)
+            requests.append(
+                OrderRequest(
+                    client_order_id=client_order_id,
+                    instrument_id=instrument_id_int,
+                    account=plan.account,
+                    venue=iid.venue,
+                    product=iid.product,
+                    tick_id=tick_id,
+                    side=delta.side,
+                    order_type=delta.order_type,
+                    quantity=delta.quantity,
+                    price=delta.price,
+                    position_side=delta.position_side,
+                    reduce_only=delta.reduce_only,
+                    close_position=delta.close_position,
+                    time_in_force=delta.time_in_force,
+                    working_type=delta.working_type,
+                    order_kind=kind,
+                )
             )
-            request_ids[original_index] = await self.order_request_repo.insert_request(request)
 
-        return request_ids
+        # One batched insert (single commit) instead of one round-trip + fsync
+        # per delta on the shared tick connection.
+        ids = await self.order_request_repo.insert_requests(requests)
+        return dict(zip(original_indices, ids, strict=True))
 
     async def record_results(
         self,
@@ -110,8 +116,7 @@ class OrderLedgerService:
         Fill rows are written exclusively by the WS consumer (trade-id keyed);
         writing them here too created undeduplicatable blank-id duplicates.
         """
-        for original_index, delta in enumerate(plan.deltas):
-            _ = delta
+        for original_index in range(len(plan.deltas)):
             request_id = request_ids.get(original_index)
             if request_id is None:
                 continue

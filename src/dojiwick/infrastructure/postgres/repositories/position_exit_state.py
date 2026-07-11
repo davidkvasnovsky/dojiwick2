@@ -1,6 +1,7 @@
 """PostgreSQL position exit-state repository."""
 
 from dataclasses import dataclass
+from typing import Any
 
 from dojiwick.domain.models.entities.position_exit_state import PositionExitState
 from dojiwick.infrastructure.postgres.connection import DbConnection
@@ -40,24 +41,24 @@ WHERE l.account = %s AND l.closed_at IS NULL
 """
 
 
-def _row_to_state(row: tuple[object, ...]) -> PositionExitState:
+def _row_to_state(row: tuple[Any, ...]) -> PositionExitState:
     return PositionExitState(
-        position_leg_id=int(str(row[0])),
+        position_leg_id=int(row[0]),
         is_long=bool(row[1]),
-        entry_price=float(str(row[2])),
-        stop_price=float(str(row[3])),
-        original_stop=float(str(row[4])),
-        take_profit_price=float(str(row[5])),
-        trailing_activation_price=float(str(row[6])),
-        trailing_distance=float(str(row[7])),
-        breakeven_price=float(str(row[8])),
-        extreme_price=float(str(row[9])),
-        max_hold_bars=int(str(row[10])),
-        bars_held=int(str(row[11])),
-        tp1_price=float(str(row[12])),
-        tp1_fraction=float(str(row[13])),
+        entry_price=float(row[2]),
+        stop_price=float(row[3]),
+        original_stop=float(row[4]),
+        take_profit_price=float(row[5]),
+        trailing_activation_price=float(row[6]),
+        trailing_distance=float(row[7]),
+        breakeven_price=float(row[8]),
+        extreme_price=float(row[9]),
+        max_hold_bars=int(row[10]),
+        bars_held=int(row[11]),
+        tp1_price=float(row[12]),
+        tp1_fraction=float(row[13]),
         tp1_filled=bool(row[14]),
-        revision=int(str(row[15])),
+        revision=int(row[15]),
     )
 
 

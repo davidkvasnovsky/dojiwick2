@@ -20,6 +20,9 @@ class FakeOrderRequestRepo:
         self.requests.append(replace(request, id=db_id))
         return db_id
 
+    async def insert_requests(self, requests: list[OrderRequest]) -> list[int]:
+        return [await self.insert_request(request) for request in requests]
+
     async def get_by_client_order_id(self, client_order_id: str) -> OrderRequest | None:
         for r in self.requests:
             if r.client_order_id == client_order_id:

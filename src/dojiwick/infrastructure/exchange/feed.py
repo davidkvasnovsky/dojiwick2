@@ -30,9 +30,6 @@ class FeedStatus(StrEnum):
 class OrderStreamAdapter(Protocol):
     """Connection lifecycle subset of OrderEventStreamPort used by the feed."""
 
-    @property
-    def stream_name(self) -> str: ...
-
     async def connect(self) -> None: ...
     async def disconnect(self) -> None: ...
 

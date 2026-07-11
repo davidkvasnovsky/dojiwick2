@@ -1,7 +1,7 @@
 """Default execution planner — computes leg deltas from current vs target positions."""
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from dojiwick.domain.contracts.gateways.exchange_metadata import ExchangeMetadataPort
 from dojiwick.domain.enums import OrderSide, OrderType, PositionMode, PositionSide
@@ -101,20 +101,7 @@ class DefaultExecutionPlanner:
                 return None
         if qty == delta.quantity:
             return delta
-        return LegDelta(
-            instrument_id=delta.instrument_id,
-            target_index=delta.target_index,
-            position_side=delta.position_side,
-            side=delta.side,
-            order_type=delta.order_type,
-            quantity=qty,
-            price=delta.price,
-            reduce_only=delta.reduce_only,
-            close_position=delta.close_position,
-            time_in_force=delta.time_in_force,
-            working_type=delta.working_type,
-            sequence=delta.sequence,
-        )
+        return replace(delta, quantity=qty)
 
     async def _filters_for(self, instrument_id: InstrumentId) -> InstrumentFilter:
         assert self.exchange_metadata is not None

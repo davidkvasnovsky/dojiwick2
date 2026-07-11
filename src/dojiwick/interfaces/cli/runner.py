@@ -89,11 +89,6 @@ def _require_open_orders(adapters: ComposedAdapters) -> OpenOrderPort:
     return adapters.open_order_port
 
 
-# Delay after an interval boundary before ticking: lets the exchange finalize
-# the just-closed candle so the enricher fetches it as a confirmed bar
-_TICK_BOUNDARY_SETTLE_SEC = 3.0
-
-
 def build_parser() -> argparse.ArgumentParser:
     """Build argument parser for loop runner."""
 
@@ -409,7 +404,7 @@ async def _run_tick_loop(
             # it — free-running sleeps drift to arbitrary mid-bar offsets
             interval = float(settings.system.tick_interval_sec)
             now_ts = clock.now_utc().timestamp()
-            delay = (int(now_ts // interval) + 1) * interval + _TICK_BOUNDARY_SETTLE_SEC - now_ts
+            delay = (int(now_ts // interval) + 1) * interval + settings.system.tick_boundary_settle_sec - now_ts
             await asyncio.wait_for(stop_event.wait(), timeout=max(1.0, delay))
         except TimeoutError:
             continue

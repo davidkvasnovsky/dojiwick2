@@ -58,11 +58,16 @@ class SystemSettings(BaseModel):
     reconciliation_interval_ticks: int = 10
     recon_degraded_timeout_sec: int
     recon_uncertain_timeout_sec: int
+    # Delay after an interval boundary before ticking: lets the exchange
+    # finalize the just-closed candle so the enricher fetches a confirmed bar
+    tick_boundary_settle_sec: float = 3.0
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
         if self.tick_interval_sec < 1:
             raise ValueError("tick_interval_sec must be >= 1")
+        if self.tick_boundary_settle_sec < 0:
+            raise ValueError("tick_boundary_settle_sec must be >= 0")
         if self.log_level.upper() not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
             raise ValueError(f"invalid log_level: {self.log_level}")
         if self.shutdown_timeout_sec < 1:

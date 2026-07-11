@@ -31,9 +31,8 @@ def _parse_args() -> argparse.Namespace:
 async def _run() -> int:
     args = _parse_args()
 
-    from dojiwick.application.use_cases.validation.gate_evaluator import DefaultGateEvaluator
     from dojiwick.config.param_tuning import apply_params
-    from dojiwick.interfaces.cli._shared import load_settings_and_series
+    from dojiwick.interfaces.cli._shared import build_gate_evaluator, load_settings_and_series
 
     if args.params_file:
         with open(args.params_file) as f:
@@ -44,24 +43,8 @@ async def _run() -> int:
     settings, series, cleanup = await load_settings_and_series(args)
 
     try:
-        from dojiwick.config.targets import resolve_target_ids
-
-        target_ids = resolve_target_ids(settings)
-        venue = str(settings.exchange.venue)
-        product = str(settings.exchange.product)
-
         tuned = apply_params(settings, params)
-        from dojiwick.config.param_tuning import build_apply_tuned, perturb_exit_geometry
-
-        evaluator = DefaultGateEvaluator(
-            settings=tuned,
-            series=series,
-            target_ids=target_ids,
-            venue=venue,
-            product=product,
-            apply_tuned=build_apply_tuned(settings),
-            perturb_exits=perturb_exit_geometry,
-        )
+        evaluator = build_gate_evaluator(tuned, series, apply_tuned_from=settings)
 
         log.info("running research gate evaluation")
         result = await evaluator.evaluate(params)

@@ -1,8 +1,13 @@
 """Settled perpetual funding rate event."""
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
+
+# Perpetual funding settles at most every 8h (some symbols settle every 4h,
+# which only yields more rows). This is the coverage tolerance for gap-fill
+# and the max expected spacing between consecutive events.
+MAX_FUNDING_INTERVAL = timedelta(hours=8)
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
