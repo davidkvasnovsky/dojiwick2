@@ -107,10 +107,22 @@ def build_pruner(spec: OptimizationRunSpec) -> optuna.pruners.BasePruner | None:
 
 
 def build_storage(url: str) -> optuna.storages.RDBStorage:
-    """Build an Optuna RDBStorage with pool_pre_ping enabled."""
-    import optuna
+    """Build an Optuna RDBStorage with heartbeat-based stale-trial recovery.
 
-    return optuna.storages.RDBStorage(url=url, engine_kwargs={"pool_pre_ping": True})
+    Without a heartbeat, a SIGKILL'd worker leaves its trial RUNNING in the
+    database forever; with one, the next worker marks it FAILED and the
+    retry callback re-enqueues it once.
+    """
+    import optuna
+    from optuna.storages import RetryFailedTrialCallback
+
+    return optuna.storages.RDBStorage(
+        url=url,
+        engine_kwargs={"pool_pre_ping": True},
+        heartbeat_interval=60,
+        grace_period=180,
+        failed_trial_callback=RetryFailedTrialCallback(max_retry=1),
+    )
 
 
 def create_study_from_spec(spec: OptimizationRunSpec, storage_url: str | None = None) -> optuna.study.Study:
@@ -162,8 +174,16 @@ class OptunaRunner:
         import optuna
 
         if spec.load_existing:
+            # Workers must carry the configured sampler/pruner: load_study
+            # defaults to univariate TPE without constant_liar and a
+            # MedianPruner, silently degrading distributed search.
             storage = build_storage(spec.storage_url)
-            study = optuna.load_study(study_name=spec.study_name, storage=storage)
+            study = optuna.load_study(
+                study_name=spec.study_name,
+                storage=storage,
+                sampler=build_sampler(spec),
+                pruner=build_pruner(spec),
+            )
         else:
             study = create_study_from_spec(spec)
 
@@ -182,16 +202,24 @@ class OptunaRunner:
             except PrunedError:
                 raise optuna.TrialPruned()
             except TimeoutError:
+                # The coroutine keeps running past the timeout otherwise,
+                # contending with subsequent trials on the event loop.
+                future.cancel()
                 logger.warning("Trial %d timed out after %.1fs", trial.number, spec.trial_timeout_sec)
                 gc.collect()
                 raise
+            except Exception:
+                logger.exception("Trial %d failed with params: %s", trial.number, params)
+                raise
 
+        # catch=(Exception,) marks a crashed trial FAILED and continues the
+        # study — one degenerate param combination must not abort the run.
         await loop.run_in_executor(
             None,
             lambda: study.optimize(
                 _objective,
                 n_trials=spec.trials,
-                catch=(TimeoutError,),
+                catch=(Exception,),
             ),
         )
         return OptimizationResult(

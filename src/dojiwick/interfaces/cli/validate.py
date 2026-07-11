@@ -15,21 +15,9 @@ import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from dojiwick.application.use_cases.run_backtest import BacktestService, BacktestTimeSeries
+    pass
 
 log = logging.getLogger(__name__)
-
-
-async def _compute_pbo(service: BacktestService, series: BacktestTimeSeries) -> float:
-    """Run a full backtest and compute PBO from the equity curve."""
-    import numpy as np
-    from dojiwick.compute.kernels.validation.cscv import compute_pbo
-
-    result = await service.run_with_hysteresis(series)
-    flat_pnl = result.summary.equity_curve
-    if flat_pnl is not None:
-        return float(compute_pbo(np.array(flat_pnl, dtype=np.float64)))
-    return 0.0
 
 
 def _parse_args() -> argparse.Namespace:
@@ -95,6 +83,7 @@ async def _run_cross_validate(
     """Run cross-validation + PBO and print per-fold results."""
     from dojiwick.interfaces.cli._shared import build_service, load_settings_and_series
     from dojiwick.application.use_cases.validation.cross_validator import cross_validate
+    from dojiwick.application.use_cases.validation.gate_evaluator import _compute_pbo  # pyright: ignore[reportPrivateUsage]
 
     settings, series, cleanup = await load_settings_and_series(args)
     try:
@@ -104,11 +93,16 @@ async def _run_cross_validate(
             backtest_service=service,
             series=series,
             n_folds=settings.research.cv_folds,
-            purge_bars=settings.research.purge_bars,
             embargo_bars=settings.research.embargo_bars,
         )
 
-        pbo = await _compute_pbo(service, series)
+        # PBO needs a returns vector; the equity curve is a monotone level
+        # series whose block Sharpes are ~always positive (PBO trivially 0)
+        pbo = _compute_pbo(
+            cv_result,
+            pbo_min_trade_returns=settings.research.pbo_min_trade_returns,
+            pbo_max_partitions=settings.research.pbo_max_partitions,
+        )
 
         print(f"\n{'=' * 60}")
         print("CROSS-VALIDATION")
@@ -141,12 +135,15 @@ async def _run_full_gate(
         venue = str(settings.exchange.venue)
         product = str(settings.exchange.product)
 
+        from dojiwick.config.param_tuning import perturb_exit_geometry
+
         evaluator = DefaultGateEvaluator(
             settings=settings,
             series=series,
             target_ids=target_ids,
             venue=venue,
             product=product,
+            perturb_exits=perturb_exit_geometry,
         )
 
         log.info("running full research gate evaluation")

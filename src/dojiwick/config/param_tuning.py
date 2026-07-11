@@ -4,8 +4,10 @@ Moved from ``application/use_cases/optimization/objective.py`` to keep
 Pydantic ``model_copy`` calls in the config layer (not application).
 """
 
+from collections.abc import Callable
 from dataclasses import replace as dc_replace
 
+from dojiwick.application.models.pipeline_settings import PipelineSettings
 from dojiwick.application.use_cases.optimization.search_space import (
     INT_PARAMS,
     NON_STRATEGY_PARAMS,
@@ -13,11 +15,12 @@ from dojiwick.application.use_cases.optimization.search_space import (
     REGIME_PARAMS,
     REGIME_SCOPE_FIELDS,
     REGIME_SCOPE_PREFIX,
+    RISK_PARAM_BOUNDS,
     SearchSpace,
     extract_regularization_baseline,
 )
 from dojiwick.domain.enums import MarketState
-from dojiwick.domain.models.value_objects.params import StrategyParams
+from dojiwick.domain.models.value_objects.params import RegimeParams, StrategyParams
 
 from .risk_scope import RiskScopeResolver, RiskScopeRule
 from .schema import RiskSettings, Settings
@@ -122,6 +125,11 @@ def _scale_risk_scope_rules(
             else:
                 ratio = float(tuned_val) / float(baseline_val)
                 scaled = float(rule_val) * ratio
+            bounds = RISK_PARAM_BOUNDS.get(field_name)
+            if bounds is not None:
+                # Unbounded proportional scaling can silently inflate scoped
+                # position sizing past anything the optimizer ever explored
+                scaled = max(bounds[0], min(bounds[1], scaled))
             overrides[field_name] = scaled
         if overrides:
             new_values = dc_replace(rule.values, **overrides)
@@ -187,8 +195,7 @@ def apply_params(
 ) -> Settings:
     """Apply optimization params to settings, returning a new Settings.
 
-    Dynamic: iterates over ``params`` keys so callers may pass any subset
-    (9-param reduced space or legacy 15-param dicts from old studies).
+    Dynamic: iterates over ``params`` keys so callers may pass any subset.
 
     When *search_names* is provided, skips ``SearchSpace`` construction
     (optimization hot path).
@@ -259,7 +266,12 @@ def apply_params(
         kept_rules = tuple(r for r in existing_scope.rules if r.id not in auto_ids)
         update["strategy_scope"] = StrategyScopeResolver(rules=kept_rules + tuple(auto_rules))
 
-    return settings.model_copy(update=update)
+    result = settings.model_copy(update=update)
+    # model_copy bypasses cross-field validators; a bad sample must fail the
+    # trial loudly instead of silently producing an invalid Settings
+    StrategyParams.model_validate(result.strategy.model_dump())
+    RegimeParams.model_validate(result.regime.params.model_dump())
+    return result
 
 
 def generate_warm_start_params(settings: Settings) -> tuple[ParamSet, ...]:
@@ -292,3 +304,58 @@ def generate_warm_start_params(settings: Settings) -> tuple[ParamSet, ...]:
         trials.append(perturbed)
 
     return tuple(trials)
+
+
+def perturb_exit_geometry(settings: PipelineSettings, tp_shift_pct: float, sl_shift_pct: float) -> PipelineSettings:
+    """Shock-test variant of *settings*: TP geometry scaled by ``1 + tp_shift_pct/100``,
+    stop geometry by ``1 + sl_shift_pct/100``, applied to both global strategy
+    params and every scope rule so the perturbed backtest exercises the same
+    per-regime exit overrides the real one does.
+
+    Typed against the protocol so the application-layer gate can hold it;
+    only the config layer's concrete Settings can actually be perturbed.
+    """
+    assert isinstance(settings, Settings)
+    tp_mult = 1.0 + tp_shift_pct / 100.0
+    sl_mult = 1.0 + sl_shift_pct / 100.0
+
+    strategy = settings.strategy.model_copy(
+        update={
+            "rr_ratio": settings.strategy.rr_ratio * tp_mult,
+            "stop_atr_mult": settings.strategy.stop_atr_mult * sl_mult,
+            "min_stop_distance_pct": settings.strategy.min_stop_distance_pct * sl_mult,
+        }
+    )
+
+    rules: list[StrategyScopeRule] = []
+    for rule in settings.strategy_scope.rules:
+        values = rule.values
+        updates: dict[str, float] = {}
+        if values.rr_ratio is not None:
+            updates["rr_ratio"] = values.rr_ratio * tp_mult
+        if values.stop_atr_mult is not None:
+            updates["stop_atr_mult"] = values.stop_atr_mult * sl_mult
+        if values.min_stop_distance_pct is not None:
+            updates["min_stop_distance_pct"] = values.min_stop_distance_pct * sl_mult
+        rules.append(dc_replace(rule, values=dc_replace(values, **updates)) if updates else rule)
+
+    return settings.model_copy(
+        update={"strategy": strategy, "strategy_scope": StrategyScopeResolver(rules=tuple(rules))}
+    )
+
+
+def build_apply_tuned(settings: Settings) -> Callable[[ParamSet], Settings]:
+    """Closure applying sampled params to *settings* with precomputed search names.
+
+    Precomputing skips per-trial ``SearchSpace`` construction on the
+    optimization hot path.
+    """
+    names = frozenset(
+        SearchSpace(
+            partial_tp_enabled=settings.strategy.partial_tp_enabled,
+            confluence_filter_enabled=settings.strategy.confluence_filter_enabled,
+            enabled_strategies=settings.trading.enabled_strategies,
+        ).strategy_param_names()
+        | REGIME_PARAMS
+    )
+    return lambda params: apply_params(settings, params, baseline=settings, search_names=names)

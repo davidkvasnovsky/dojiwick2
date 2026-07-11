@@ -1,7 +1,10 @@
-"""Purged K-fold cross-validation use case.
+"""Embargoed K-fold cross-validation use case.
 
-Slices a ``BacktestTimeSeries`` into purged folds and runs backtests on
-each test fold to estimate out-of-sample Sharpe distribution.
+Slices a ``BacktestTimeSeries`` into contiguous folds and runs a backtest on
+each to estimate the out-of-sample Sharpe distribution. Every fold after the
+first drops its leading ``embargo_bars``: consecutive folds share a boundary,
+and without the gap a position or warm hysteresis state from the end of one
+fold leaks into the start of the next.
 """
 
 from dataclasses import dataclass
@@ -9,7 +12,6 @@ from dataclasses import dataclass
 import numpy as np
 
 from dojiwick.application.use_cases.run_backtest import BacktestService, BacktestTimeSeries
-from dojiwick.compute.kernels.validation.purged_kfold import purged_kfold_splits
 from dojiwick.domain.type_aliases import FloatVector
 
 
@@ -29,28 +31,20 @@ async def cross_validate(
     backtest_service: BacktestService,
     series: BacktestTimeSeries,
     n_folds: int,
-    purge_bars: int,
     embargo_bars: int,
 ) -> CVResult:
-    """Run purged K-fold cross-validation over a backtest time series.
-
-    For each fold, the test indices are used to slice a sub-series from
-    ``series``, and a full backtest-with-hysteresis is run on that slice.
-    The resulting Sharpe from each fold is collected.
-    """
-
-    splits = purged_kfold_splits(
-        n_samples=series.n_bars,
-        n_folds=n_folds,
-        purge_bars=purge_bars,
-        embargo_bars=embargo_bars,
-    )
+    """Run embargoed K-fold cross-validation over a backtest time series."""
+    if n_folds < 2:
+        raise ValueError(f"n_folds must be >= 2, got {n_folds}")
 
     fold_sharpes: list[float] = []
     all_trade_returns: list[np.ndarray] = []
 
-    for _train_idx, test_idx in splits:
-        sub_series = series.slice_by_indices([int(i) for i in test_idx])
+    for fold_idx, fold in enumerate(np.array_split(np.arange(series.n_bars), n_folds)):
+        indices = fold[embargo_bars:] if fold_idx > 0 else fold
+        if len(indices) < 2:
+            raise ValueError(f"fold {fold_idx} has {len(indices)} bars after embargo — reduce n_folds or embargo_bars")
+        sub_series = series.slice_by_indices([int(i) for i in indices])
 
         summary, trade_rets = await backtest_service.run_with_hysteresis_summary_only(sub_series)
         fold_sharpes.append(summary.sharpe_like)

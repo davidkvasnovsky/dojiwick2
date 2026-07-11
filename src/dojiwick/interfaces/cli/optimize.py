@@ -40,9 +40,9 @@ def _parse_args() -> argparse.Namespace:
 
 def _build_apply_tuned(settings: Settings) -> Callable[[ParamSet], Settings]:
     """Build the apply_tuned callable for objectives."""
-    from dojiwick.config.param_tuning import apply_params
+    from dojiwick.config.param_tuning import build_apply_tuned
 
-    return lambda params: apply_params(settings, params, baseline=settings)
+    return build_apply_tuned(settings)
 
 
 def _build_objective(
@@ -294,7 +294,7 @@ async def _run() -> None:
         print(f"{'=' * 50}\n")
 
         if args.gate:
-            from dojiwick.config.param_tuning import apply_params
+            from dojiwick.config.param_tuning import build_apply_tuned, perturb_exit_geometry
             from dojiwick.application.use_cases.validation.gate_evaluator import DefaultGateEvaluator
 
             evaluator = DefaultGateEvaluator(
@@ -303,7 +303,8 @@ async def _run() -> None:
                 target_ids=target_ids,
                 venue=venue,
                 product=product,
-                apply_tuned=lambda params: apply_params(settings, params, baseline=settings),
+                apply_tuned=build_apply_tuned(settings),
+                perturb_exits=perturb_exit_geometry,
             )
             gate_result = await evaluator.evaluate(result.best_params, workers=workers)
             from dojiwick.interfaces.cli._shared import print_gate_result, print_wf_windows

@@ -470,6 +470,7 @@ class OptimizationSettings(BaseModel):
     objective_drawdown_cliff_penalty: float
     # Trade frequency bonus
     objective_trade_freq_weight: float
+    objective_trade_freq_cap: float
     # Trade density penalty
     objective_min_density_threshold: float
     # Win rate bonus
@@ -535,6 +536,8 @@ class OptimizationSettings(BaseModel):
             raise ValueError("objective_consistency_penalty must be >= 0")
         if self.objective_min_trades_penalty >= self.objective_min_trades_penalty_start:
             raise ValueError("objective_min_trades_penalty must be < objective_min_trades_penalty_start")
+        if self.objective_trade_freq_cap <= 0:
+            raise ValueError("objective_trade_freq_cap must be > 0")
         if self.objective_regime_pf_penalty < 0:
             raise ValueError("objective_regime_pf_penalty must be >= 0")
         if self.objective_regime_pf_target <= 0:
@@ -682,13 +685,13 @@ class ResearchGateSettings(BaseModel):
     max_pbo: float
     min_oos_degradation_ratio: float
     cv_folds: int
-    purge_bars: int
     embargo_bars: int
     wf_train_size: int
     wf_test_size: int
     wf_expanding: bool
     wf_mode: WFMode
     min_wf_oos_sharpe: float
+    min_wf_worst_window_sharpe: float
     wf_min_trades: int
     continuous_validation_enabled: bool
     min_continuous_trades_per_1000_bars: int
@@ -723,8 +726,6 @@ class ResearchGateSettings(BaseModel):
             raise ValueError("research.min_oos_degradation_ratio must be in (0, 1]")
         if self.cv_folds < 2:
             raise ValueError("research.cv_folds must be >= 2")
-        if self.purge_bars < 0:
-            raise ValueError("research.purge_bars must be >= 0")
         if self.embargo_bars < 0:
             raise ValueError("research.embargo_bars must be >= 0")
         if self.wf_train_size < 1:

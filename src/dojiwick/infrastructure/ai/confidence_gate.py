@@ -16,9 +16,11 @@ def compute_llm_review_mask(
 
     Rules:
     - ``valid_mask=False`` on candidate -> skip (no candidate to review)
-    - Regime confidence >= threshold AND trending (up/down) -> skip LLM
-    - VOLATILE regime -> always review
-    - RANGING with confidence < threshold -> always review
+    - Trending (up/down) with confidence >= threshold -> skip LLM
+    - Everything else (VOLATILE, RANGING at any confidence) -> always review
+
+    The confidence threshold only gates trending skips — raising it never
+    reduces RANGING review cost.
     """
     size = len(candidates.valid_mask)
     needs_review = np.zeros(size, dtype=np.bool_)

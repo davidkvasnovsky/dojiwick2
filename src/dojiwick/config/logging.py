@@ -2,6 +2,7 @@
 
 import json
 import logging
+from datetime import UTC, datetime
 import traceback
 from logging.config import dictConfig
 
@@ -10,8 +11,10 @@ class JSONFormatter(logging.Formatter):
     """Outputs log records as single-line JSON."""
 
     def format(self, record: logging.LogRecord) -> str:
+        # UTC ISO-8601 — formatTime defaults to ambiguous local time
+        ts = datetime.fromtimestamp(record.created, tz=UTC).isoformat(timespec="milliseconds")
         entry: dict[str, object] = {
-            "ts": self.formatTime(record, self.datefmt),
+            "ts": ts,
             "level": record.levelname,
             "logger": record.name,
             "msg": record.getMessage(),

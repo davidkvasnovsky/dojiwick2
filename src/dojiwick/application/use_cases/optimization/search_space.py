@@ -81,6 +81,11 @@ _BASE_BOUNDS: dict[str, tuple[float, float]] = {
     "max_portfolio_risk_pct": (3.0, 25.0),
 }
 
+# Canonical clamp range for scoped risk overrides scaled during optimization
+RISK_PARAM_BOUNDS: dict[str, tuple[float, float]] = {
+    k: _BASE_BOUNDS[k] for k in ("risk_per_trade_pct", "max_loss_per_trade_pct", "max_portfolio_risk_pct")
+}
+
 REGIME_SCOPE_PREFIX = "scope_"
 
 REGIME_SCOPE_FIELDS: dict[str, dict[str, tuple[float, float]]] = {

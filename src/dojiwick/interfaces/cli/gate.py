@@ -51,13 +51,16 @@ async def _run() -> None:
         product = str(settings.exchange.product)
 
         tuned = apply_params(settings, params)
+        from dojiwick.config.param_tuning import build_apply_tuned, perturb_exit_geometry
+
         evaluator = DefaultGateEvaluator(
             settings=tuned,
             series=series,
             target_ids=target_ids,
             venue=venue,
             product=product,
-            apply_tuned=lambda p: apply_params(settings, p, baseline=settings),
+            apply_tuned=build_apply_tuned(settings),
+            perturb_exits=perturb_exit_geometry,
         )
 
         log.info("running research gate evaluation")

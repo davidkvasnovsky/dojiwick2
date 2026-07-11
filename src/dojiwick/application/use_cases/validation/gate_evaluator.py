@@ -75,7 +75,6 @@ def _gate_cv_worker(
     settings: PipelineSettings,
     series: BacktestTimeSeries,
     n_folds: int,
-    purge_bars: int,
     embargo_bars: int,
     target_ids: tuple[str, ...],
     venue: str,
@@ -91,7 +90,6 @@ def _gate_cv_worker(
             backtest_service=service,
             series=series,
             n_folds=n_folds,
-            purge_bars=purge_bars,
             embargo_bars=embargo_bars,
         )
     )
@@ -144,6 +142,9 @@ class DefaultGateEvaluator:
     venue: str
     product: str
     apply_tuned: Callable[[ParamSet], PipelineSettings] | None = None
+    # Injected from the config layer (needs model_copy); builds the shock-test
+    # settings variant: (settings, tp_shift_pct, sl_shift_pct) -> settings
+    perturb_exits: Callable[[PipelineSettings, float, float], PipelineSettings] | None = None
 
     async def evaluate(self, best_params: ParamSet, workers: int = 1) -> GateResult:
         """Run all three validation checks against the best params."""
@@ -161,7 +162,6 @@ class DefaultGateEvaluator:
             backtest_service=service,
             series=self.series,
             n_folds=self.settings.research.cv_folds,
-            purge_bars=self.settings.research.purge_bars,
             embargo_bars=self.settings.research.embargo_bars,
         )
 
@@ -181,8 +181,9 @@ class DefaultGateEvaluator:
         )
 
         continuous = await self._run_continuous_check(service)
+        shock_test = await self._run_shock_check(tuned)
 
-        return self._build_gate_result(cv_result, pbo, wf_result, continuous)
+        return self._build_gate_result(cv_result, pbo, wf_result, continuous, shock_test)
 
     async def _evaluate_parallel(self, tuned: PipelineSettings, workers: int) -> GateResult:
         """Run CV and WF in parallel processes."""
@@ -197,7 +198,6 @@ class DefaultGateEvaluator:
                     tuned,
                     self.series,
                     self.settings.research.cv_folds,
-                    self.settings.research.purge_bars,
                     self.settings.research.embargo_bars,
                     self.target_ids,
                     self.venue,
@@ -240,8 +240,23 @@ class DefaultGateEvaluator:
 
         service = build_backtest_service(tuned, target_ids=self.target_ids, venue=self.venue, product=self.product)
         continuous = await self._run_continuous_check(service)
+        shock_test = await self._run_shock_check(tuned)
 
-        return self._build_gate_result(cv_result, cv_raw.pbo, wf_result, continuous)
+        return self._build_gate_result(cv_result, cv_raw.pbo, wf_result, continuous, shock_test)
+
+    async def _run_shock_check(self, tuned: PipelineSettings) -> ShockTestResult | None:
+        """Re-simulate with perturbed TP/SL geometry and report the real PF.
+
+        Scaling realized PnL by the shift multipliers (the old approach) never
+        changes which exits fire, so it cannot detect exit-parameter fragility.
+        """
+        rs = self.settings.research
+        if not rs.shock_test_enabled or self.perturb_exits is None:
+            return None
+        shocked = self.perturb_exits(tuned, rs.shock_test_tp_shift_pct, rs.shock_test_sl_shift_pct)
+        service = build_backtest_service(shocked, target_ids=self.target_ids, venue=self.venue, product=self.product)
+        summary, _ = await service.run_with_hysteresis_summary_only(self.series, skip_benchmark=True)
+        return ShockTestResult(profit_factor=summary.profit_factor)
 
     def _build_gate_result(
         self,
@@ -249,34 +264,20 @@ class DefaultGateEvaluator:
         pbo: float,
         wf_result: WalkForwardResult,
         continuous: ContinuousBacktestResult | None,
+        shock_test: ShockTestResult | None,
     ) -> GateResult:
         """Build GateResult with all gate checks — shared by serial and parallel paths."""
         rs = self.settings.research
         min_ct = int(self.series.n_bars * rs.min_continuous_trades_per_1000_bars / 1000)
 
-        shock_test: ShockTestResult | None = None
         regime_pf: RegimePFResult | None = None
         concentration: ConcentrationResult | None = None
         pair_robustness: PairRobustnessResult | None = None
 
-        need_analysis = (
-            rs.shock_test_enabled
-            or rs.per_regime_pf_enabled
-            or rs.concentration_check_enabled
-            or rs.pair_robustness_enabled
-        )
+        need_analysis = rs.per_regime_pf_enabled or rs.concentration_check_enabled or rs.pair_robustness_enabled
         if continuous is not None and continuous.trade_details and need_analysis:
             trades = continuous.trade_details
-            analysis = _analyze_trades(
-                trades,
-                tp_shift_pct=rs.shock_test_tp_shift_pct,
-                sl_shift_pct=rs.shock_test_sl_shift_pct,
-                regime_min_trades=rs.per_regime_min_trades,
-            )
-            if rs.shock_test_enabled:
-                shock_test = ShockTestResult(
-                    profit_factor=scalar_profit_factor(analysis.shock_win, analysis.shock_loss)
-                )
+            analysis = _analyze_trades(trades, regime_min_trades=rs.per_regime_min_trades)
             if rs.concentration_check_enabled and continuous.total_pnl_usd > 0:
                 max_month = (
                     max(continuous.monthly_pnl.values()) / continuous.total_pnl_usd * 100
@@ -309,6 +310,7 @@ class DefaultGateEvaluator:
                 wf_mode=rs.wf_mode,
                 min_oos_degradation_ratio=rs.min_oos_degradation_ratio,
                 min_wf_oos_sharpe=rs.min_wf_oos_sharpe,
+                min_wf_worst_window_sharpe=rs.min_wf_worst_window_sharpe,
                 min_continuous_trades=min_ct,
                 max_continuous_drawdown_pct=rs.max_continuous_drawdown_pct,
                 shock_test_min_pf=rs.shock_test_min_pf,
@@ -342,32 +344,18 @@ class DefaultGateEvaluator:
 class _TradeAnalysis(NamedTuple):
     """Single-pass aggregates over all trades."""
 
-    shock_win: float
-    shock_loss: float
     max_trade_pnl: float
     regime_pfs: dict[str, float]
     pair_pfs: dict[str, float]
 
 
-def _analyze_trades(
-    trades: tuple[TradeDetail, ...],
-    tp_shift_pct: float,
-    sl_shift_pct: float,
-    regime_min_trades: int,
-) -> _TradeAnalysis:
-    """Single pass over trades to compute all gate check inputs."""
-    tp_mult = 1 + tp_shift_pct / 100
-    sl_mult = 1 + sl_shift_pct / 100
-    shock_win = 0.0
-    shock_loss = 0.0
+def _analyze_trades(trades: tuple[TradeDetail, ...], regime_min_trades: int) -> _TradeAnalysis:
+    """Single pass over trades to compute per-regime, per-pair, and concentration inputs."""
     max_trade_pnl = 0.0
 
-    # Per-regime accumulators
     regime_wins: dict[str, float] = defaultdict(float)
     regime_losses: dict[str, float] = defaultdict(float)
     regime_counts: dict[str, int] = defaultdict(int)
-
-    # Per-pair accumulators
     pair_wins: dict[str, float] = defaultdict(float)
     pair_losses: dict[str, float] = defaultdict(float)
 
@@ -376,13 +364,10 @@ def _analyze_trades(
         rk = regime_group(t.regime)
         pair = t.pair
 
-        # Shock test aggregation
         if pnl > 0:
-            shock_win += pnl * tp_mult
             regime_wins[rk] += pnl
             pair_wins[pair] += pnl
         elif pnl < 0:
-            shock_loss += abs(pnl) * sl_mult
             regime_losses[rk] += abs(pnl)
             pair_losses[pair] += abs(pnl)
 
@@ -391,21 +376,12 @@ def _analyze_trades(
         if pnl > max_trade_pnl:
             max_trade_pnl = pnl
 
-    # Compute per-regime PFs (only groups with enough trades)
     regime_pfs = {
         key: scalar_profit_factor(regime_wins.get(key, 0.0), regime_losses.get(key, 0.0))
         for key, count in regime_counts.items()
         if count >= regime_min_trades
     }
-
-    # Compute per-pair PFs (all pairs)
     all_pairs = set(pair_wins) | set(pair_losses)
     pair_pfs = {pair: scalar_profit_factor(pair_wins.get(pair, 0.0), pair_losses.get(pair, 0.0)) for pair in all_pairs}
 
-    return _TradeAnalysis(
-        shock_win=shock_win,
-        shock_loss=shock_loss,
-        max_trade_pnl=max_trade_pnl,
-        regime_pfs=regime_pfs,
-        pair_pfs=pair_pfs,
-    )
+    return _TradeAnalysis(max_trade_pnl=max_trade_pnl, regime_pfs=regime_pfs, pair_pfs=pair_pfs)

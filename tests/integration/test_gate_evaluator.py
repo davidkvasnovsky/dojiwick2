@@ -13,7 +13,6 @@ async def test_gate_evaluator_produces_gate_result() -> None:
             "research": default_research_gate_settings(
                 enabled=True,
                 cv_folds=2,
-                purge_bars=0,
                 embargo_bars=0,
                 wf_train_size=4,
                 wf_test_size=2,

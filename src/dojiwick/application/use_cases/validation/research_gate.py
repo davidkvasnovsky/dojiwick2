@@ -68,6 +68,7 @@ class GateThresholds:
     wf_mode: WFMode
     min_oos_degradation_ratio: float
     min_wf_oos_sharpe: float
+    min_wf_worst_window_sharpe: float = -100.0
     min_continuous_trades: int = 0
     max_continuous_drawdown_pct: float = 100.0
     shock_test_min_pf: float = 0.0
@@ -140,6 +141,13 @@ def evaluate_research_gate(
 
     if check_oos_sharpe and walk_forward_result.aggregate_oos_sharpe < t.min_wf_oos_sharpe:
         reasons.append(f"WF OOS Sharpe {walk_forward_result.aggregate_oos_sharpe:.4f} < min {t.min_wf_oos_sharpe}")
+
+    # Mode-independent: one catastrophic OOS window fails regardless of how
+    # the aggregate is judged
+    if walk_forward_result.min_oos_sharpe < t.min_wf_worst_window_sharpe:
+        reasons.append(
+            f"WF worst window Sharpe {walk_forward_result.min_oos_sharpe:.4f} < min {t.min_wf_worst_window_sharpe}"
+        )
 
     if checks is not None:
         _check_continuous(checks.continuous, t, reasons)

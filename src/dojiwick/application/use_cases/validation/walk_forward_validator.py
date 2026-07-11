@@ -89,7 +89,9 @@ async def walk_forward_validate(
 
     mean_is = float(np.mean(is_sharpes)) if is_sharpes else 0.0
     mean_oos = float(np.mean(oos_sharpes)) if oos_sharpes else 0.0
-    oos_is_ratio = mean_oos / mean_is if mean_is != 0.0 else 0.0
+    # A non-positive IS mean means the strategy never worked in-sample; the
+    # ratio would otherwise turn two negatives into a passing positive.
+    oos_is_ratio = mean_oos / mean_is if mean_is > 0.0 else 0.0
     min_oos = float(np.min(oos_sharpes)) if oos_sharpes else 0.0
 
     return WalkForwardResult(

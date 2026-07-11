@@ -226,6 +226,7 @@ objective_regime_pf_min_trades = 30
 objective_payoff_ratio_weight = 2.0
 objective_payoff_ratio_cap = 3.0
 objective_trade_freq_weight = 1.5
+objective_trade_freq_cap = 100.0
 # Penalties and thresholds
 objective_drawdown_penalty = 5.0
 objective_drawdown_cliff_penalty = 25.0
@@ -323,7 +324,6 @@ min_samples = 30
 enabled = true
 # Cross-validation
 cv_folds = 5
-purge_bars = 5
 embargo_bars = 3
 min_cv_sharpe = 0.50
 # PBO (probability of backtest overfitting)
@@ -337,6 +337,8 @@ wf_test_size = 2500
 wf_expanding = false
 wf_mode = "oos_sharpe"
 min_wf_oos_sharpe = 0.20
+# Worst single OOS window floor; -100 leaves the check permissive
+min_wf_worst_window_sharpe = -100.0
 wf_min_trades = 8
 # Continuous backtest validation
 continuous_validation_enabled = true

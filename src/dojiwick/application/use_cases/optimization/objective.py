@@ -13,8 +13,6 @@ from dojiwick.application.registry.strategy_registry import StrategyRegistry, bu
 from dojiwick.application.use_cases.optimization.pruning import PruningCallback
 from dojiwick.application.use_cases.optimization.search_space import (
     ParamSet,
-    REGIME_PARAMS,
-    SearchSpace,
     extract_regularization_baseline,
 )
 from dojiwick.application.use_cases.run_backtest import BacktestService, BacktestTimeSeries, PruningConfig
@@ -55,7 +53,6 @@ class HysteresisObjective:
     _strategy_registry: StrategyRegistry = field(init=False, repr=False)
     _risk_engine: RiskPolicyEngine = field(init=False, repr=False)
     _baseline: dict[str, float] = field(init=False, repr=False)
-    _search_names: frozenset[str] = field(init=False, repr=False)
     _is_series: BacktestTimeSeries = field(init=False, repr=False)
     _oos_series: BacktestTimeSeries = field(init=False, repr=False)
 
@@ -65,16 +62,6 @@ class HysteresisObjective:
             self,
             "_baseline",
             extract_regularization_baseline(self.settings),
-        )
-        object.__setattr__(
-            self,
-            "_search_names",
-            SearchSpace(
-                partial_tp_enabled=self.settings.strategy.partial_tp_enabled,
-                confluence_filter_enabled=self.settings.strategy.confluence_filter_enabled,
-                enabled_strategies=self.settings.trading.enabled_strategies,
-            ).strategy_param_names()
-            | REGIME_PARAMS,
         )
         if self.train_fraction < 1.0:
             n = self.series.n_bars
@@ -168,7 +155,6 @@ class WalkForwardObjective:
     _strategy_registry: StrategyRegistry = field(init=False, repr=False)
     _risk_engine: RiskPolicyEngine = field(init=False, repr=False)
     _baseline: dict[str, float] = field(init=False, repr=False)
-    _search_names: frozenset[str] = field(init=False, repr=False)
     _fold_series: tuple[BacktestTimeSeries, ...] = field(init=False, repr=False)
     _per_fold_min_trades: int = field(init=False, repr=False)
 
@@ -178,16 +164,6 @@ class WalkForwardObjective:
             self,
             "_baseline",
             extract_regularization_baseline(self.settings),
-        )
-        object.__setattr__(
-            self,
-            "_search_names",
-            SearchSpace(
-                partial_tp_enabled=self.settings.strategy.partial_tp_enabled,
-                confluence_filter_enabled=self.settings.strategy.confluence_filter_enabled,
-                enabled_strategies=self.settings.trading.enabled_strategies,
-            ).strategy_param_names()
-            | REGIME_PARAMS,
         )
         n = self.series.n_bars
         fold_size = n // self.n_folds
@@ -288,9 +264,10 @@ def _base_score(
         excess = (dd_for_penalty - opt.objective_max_drawdown_threshold) / 100.0
         score -= opt.objective_drawdown_cliff_penalty * excess**2
 
-    # Trade frequency bonus (logarithmic — diminishing returns, never capped hard)
+    # Trade frequency bonus: logarithmic with a hard cap — uncapped, sheer
+    # trade count can outgrow every quality term and reward churn
     if n_bars > 0 and summary.trades > 0:
-        trades_per_1000_bars = summary.trades / n_bars * 1000
+        trades_per_1000_bars = min(summary.trades / n_bars * 1000, opt.objective_trade_freq_cap)
         score += opt.objective_trade_freq_weight * math.log2(1 + trades_per_1000_bars)
 
     # Trade density penalty — multiplicative reduction for very sparse strategies
