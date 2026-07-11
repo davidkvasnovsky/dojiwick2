@@ -7,7 +7,6 @@ from dojiwick.application.registry.strategy_registry import build_default_strate
 from dojiwick.application.use_cases.run_backtest import BacktestService
 from dojiwick.config.schema import Settings
 from fixtures.factories.infrastructure import default_regime_settings, default_risk_settings, default_settings
-from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext
 from fixtures.factories.domain import TimeSeriesBuilder
 
 
@@ -19,17 +18,6 @@ def _service(settings: Settings | None = None) -> BacktestService:
         risk_engine=build_default_risk_engine(default_risk_settings()),
         config_hash="test_config_hash",
     )
-
-
-async def test_backtest_service_returns_summary(sample_context: BatchDecisionContext) -> None:
-    service = _service()
-    next_prices = sample_context.market.price + np.array([1.0, -0.5], dtype=np.float64)
-
-    summary = await service.run(sample_context, next_prices)
-
-    assert summary.trades >= 1
-    assert isinstance(summary.total_pnl_usd, float)
-    assert summary.max_drawdown_pct >= 0.0
 
 
 async def test_backtest_with_hysteresis_returns_summary() -> None:
@@ -101,19 +89,6 @@ async def test_hysteresis_suppresses_single_bar_flip() -> None:
     bt_result = await service.run_with_hysteresis(series, hysteresis_bars=3)
     assert bt_result.summary.trades >= 0
     assert bt_result.summary.config_hash != ""
-
-
-async def test_hysteresis_bars_1_matches_single_bar() -> None:
-    """With hysteresis_bars=1 and a 1-bar series, result matches run() on same context."""
-    series = TimeSeriesBuilder(n_bars=1).build()
-    service = _service()
-
-    bt_result = await service.run_with_hysteresis(series, hysteresis_bars=1)
-    result_single = await service.run(series.contexts[0], series.next_prices[0])
-
-    assert bt_result.summary.trades == result_single.trades
-    np.testing.assert_allclose(bt_result.summary.total_pnl_usd, result_single.total_pnl_usd, atol=1e-10)
-    np.testing.assert_allclose(bt_result.summary.win_rate, result_single.win_rate, atol=1e-10)
 
 
 async def test_regime_profit_factors_consistent_across_paths() -> None:

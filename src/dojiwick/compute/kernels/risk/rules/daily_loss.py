@@ -30,7 +30,15 @@ class DailyLossRule(ConfigurableRiskRule):
         candidate: BatchTradeCandidate,
         risk_params: tuple[RiskParams, ...],
     ) -> RiskRuleDecision:
-        daily_pnl_pct = (context.portfolio.equity_usd / context.portfolio.day_start_equity_usd - 1.0) * 100.0
+        day_start = context.portfolio.day_start_equity_usd
+        # A blown account (day_start 0) must block, not divide to nan —
+        # nan <= threshold is False and would silently disable this gate.
+        alive = day_start > 0.0
+        daily_pnl_pct = np.where(
+            alive,
+            (context.portfolio.equity_usd / np.where(alive, day_start, 1.0) - 1.0) * 100.0,
+            -100.0,
+        )
         threshold = np.array([rp.max_daily_loss_pct for rp in risk_params])
         blocked = daily_pnl_pct <= -threshold
 

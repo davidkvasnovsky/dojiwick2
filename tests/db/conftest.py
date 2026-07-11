@@ -82,6 +82,7 @@ async def clean_tables(db_cursor: DbCursor) -> None:
             pair_trading_state,
             signals,
             candles,
+            funding_rates,
             ticks,
             regime_observations,
             decision_outcomes

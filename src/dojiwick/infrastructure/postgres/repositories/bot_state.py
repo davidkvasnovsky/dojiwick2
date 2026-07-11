@@ -108,6 +108,7 @@ class PgBotStateRepository:
         )
         try:
             async with self.connection.cursor() as cursor:
+                await cursor.execute(_ENSURE_SQL)
                 await cursor.execute(_INSERT_HISTORY_SQL, history_row)
                 await cursor.execute(_UPDATE_SQL, row)
             await self.connection.commit()

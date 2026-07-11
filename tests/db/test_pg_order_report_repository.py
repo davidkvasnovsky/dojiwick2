@@ -88,9 +88,12 @@ async def test_upsert_updates_existing(repo: Any, request_repo: Any, test_instru
 
 async def test_get_by_exchange_order_ids(repo: Any, request_repo: Any, test_instrument_id: int) -> None:
     req_id = await _insert_order_request(request_repo, test_instrument_id)
-    await repo.upsert_report(OrderReport(order_request_id=req_id, exchange_order_id="bulk-1", status=OrderStatus.NEW))
+    now = datetime.now(UTC)
     await repo.upsert_report(
-        OrderReport(order_request_id=req_id, exchange_order_id="bulk-2", status=OrderStatus.FILLED)
+        OrderReport(order_request_id=req_id, exchange_order_id="bulk-1", status=OrderStatus.NEW, reported_at=now)
+    )
+    await repo.upsert_report(
+        OrderReport(order_request_id=req_id, exchange_order_id="bulk-2", status=OrderStatus.FILLED, reported_at=now)
     )
 
     result = await repo.get_by_exchange_order_ids(["bulk-1", "bulk-2", "missing"])

@@ -25,6 +25,6 @@ async def test_upsert_and_get(repo: Any, clean_tables: None) -> None:
     assert loaded.daily_trade_count == 5
 
 
-async def test_get_returns_none_when_empty(repo: Any, clean_tables: None) -> None:
+async def test_get_returns_defaults_when_empty(repo: Any, clean_tables: None) -> None:
     loaded = await repo.get_state()
-    assert loaded is None
+    assert loaded == BotState()

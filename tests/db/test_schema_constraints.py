@@ -101,8 +101,8 @@ async def test_order_requests_quantity_positive(db_cursor: Any) -> None:
     with pytest.raises(Exception):
         await db_cursor.execute(
             """INSERT INTO order_requests
-            (client_order_id, instrument_id, account, side, order_type, quantity)
-            VALUES ('test-ck-qty', 999999, 'test', 'buy', 'market', 0)"""
+            (venue, product, client_order_id, instrument_id, account, side, order_type, quantity)
+            VALUES ('binance', 'usd_c', 'test-ck-qty', 999999, 'test', 'buy', 'market', 0)"""
         )
 
 
@@ -110,15 +110,15 @@ async def test_order_requests_unique_client_order_id(db_cursor: Any, test_instru
     """UNIQUE constraint on client_order_id should reject duplicates."""
     await db_cursor.execute(
         """INSERT INTO order_requests
-        (client_order_id, instrument_id, account, side, order_type, quantity)
-        VALUES ('dup-test', %s, 'test', 'buy', 'market', 1)""",
+        (venue, product, client_order_id, instrument_id, account, side, order_type, quantity)
+        VALUES ('binance', 'usd_c', 'dup-test', %s, 'test', 'buy', 'market', 1)""",
         (test_instrument_id,),
     )
     with pytest.raises(Exception):
         await db_cursor.execute(
             """INSERT INTO order_requests
-            (client_order_id, instrument_id, account, side, order_type, quantity)
-            VALUES ('dup-test', %s, 'test', 'buy', 'market', 1)""",
+            (venue, product, client_order_id, instrument_id, account, side, order_type, quantity)
+            VALUES ('binance', 'usd_c', 'dup-test', %s, 'test', 'buy', 'market', 1)""",
             (test_instrument_id,),
         )
 
@@ -275,12 +275,12 @@ async def test_position_legs_hedge_mode_independent_sides(db_cursor: Any, test_i
 async def test_strategy_state_different_strategies_same_pair(db_cursor: Any) -> None:
     """Composite PK allows different (strategy, variant) rows for the same pair."""
     await db_cursor.execute(
-        """INSERT INTO strategy_state (pair, active_strategy, variant, state_json)
-        VALUES ('BTC/USDC', 'trend_follow', 'baseline', '{}')"""
+        """INSERT INTO strategy_state (target_id, venue, product, pair, active_strategy, variant, state_json)
+        VALUES ('btc_usdc', 'binance', 'usd_c', 'BTC/USDC', 'trend_follow', 'baseline', '{}')"""
     )
     await db_cursor.execute(
-        """INSERT INTO strategy_state (pair, active_strategy, variant, state_json)
-        VALUES ('BTC/USDC', 'mean_revert', 'baseline', '{}')"""
+        """INSERT INTO strategy_state (target_id, venue, product, pair, active_strategy, variant, state_json)
+        VALUES ('btc_usdc', 'binance', 'usd_c', 'BTC/USDC', 'mean_revert', 'baseline', '{}')"""
     )
     await db_cursor.execute("SELECT COUNT(*) FROM strategy_state WHERE pair = 'BTC/USDC'")
     row: tuple[object, ...] | None = await db_cursor.fetchone()
@@ -291,11 +291,11 @@ async def test_strategy_state_different_strategies_same_pair(db_cursor: Any) -> 
 async def test_strategy_state_upsert_on_conflict(db_cursor: Any) -> None:
     """Duplicate (pair, strategy, variant) should conflict on PK."""
     await db_cursor.execute(
-        """INSERT INTO strategy_state (pair, active_strategy, variant, state_json)
-        VALUES ('BTC/USDC', 'trend_follow', 'v2', '{"a": 1}')"""
+        """INSERT INTO strategy_state (target_id, venue, product, pair, active_strategy, variant, state_json)
+        VALUES ('btc_usdc', 'binance', 'usd_c', 'BTC/USDC', 'trend_follow', 'v2', '{"a": 1}')"""
     )
     with pytest.raises(Exception):
         await db_cursor.execute(
-            """INSERT INTO strategy_state (pair, active_strategy, variant, state_json)
-            VALUES ('BTC/USDC', 'trend_follow', 'v2', '{"a": 2}')"""
+            """INSERT INTO strategy_state (target_id, venue, product, pair, active_strategy, variant, state_json)
+            VALUES ('btc_usdc', 'binance', 'usd_c', 'BTC/USDC', 'trend_follow', 'v2', '{"a": 2}')"""
         )

@@ -172,13 +172,13 @@ leverage = 2.852844921662174
 fee_bps = 4.0
 slippage_bps = 2.0
 fee_multiplier = 2.0
-funding_rate_per_bar = 0.00005
-impact_bps = 0.0
+funding_mode = "historical"
 # Simulation
 warmup_bars = 200
 entry_price_model = "next_open"
 max_volume_pct = 0.1
-maintenance_margin_rate = 0.0
+# Conservative single rate: Binance tier-1 maintenance margin for major alts
+maintenance_margin_rate = 0.01
 # Partial fills
 partial_fill_enabled = false
 partial_fill_threshold_pct = 0.05

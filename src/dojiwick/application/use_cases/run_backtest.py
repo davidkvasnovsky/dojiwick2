@@ -1,20 +1,15 @@
-"""Vectorized backtest and regime evaluation service.
+"""Sequential backtest and regime evaluation service.
 
 Uses the same canonical pipeline as the live tick loop via
-``run_decision_pipeline``: regime -> variant selection -> strategy -> veto
--> risk -> sizing -> (vectorized P&L instead of execution).  The sizing
-output represents target-position intents -- the vectorized P&L kernel is
-the offline-equivalent of the planner -> gateway execution path,
-preserving full semantic parity.
+``run_decision_pipeline_sync``: regime -> variant selection -> strategy ->
+risk -> sizing, with a shared ``RegimeHysteresis`` instance so regime
+state accumulates identically to live ticks.
 
-The ``run_with_hysteresis`` method adds sequential replay: bars are fed
-one-at-a-time through the shared pipeline with a shared
-``RegimeHysteresis`` instance, so regime state accumulates identically
-to live ticks.  P&L computation stays vectorized after collection.
-
-Multi-bar position holds: trades remain open until stop or take-profit is
-hit (checked against next bar's high/low), making ``stop_atr_mult`` and
-``rr_ratio`` meaningful exit parameters.
+Multi-bar position holds: trades stay open until liquidation, stop,
+take-profit, or time exit fires — each checked against the OHLC of the
+bar that just closed, with gap-through fills at the bar open when price
+gapped past the trigger. All pairs draw from one shared equity pool,
+matching a single-margin futures wallet.
 """
 
 import logging
@@ -25,7 +20,7 @@ from dataclasses import dataclass, replace
 import numpy as np
 
 from dojiwick.application.models.pipeline_settings import PipelineSettings
-from dojiwick.application.orchestration.decision_pipeline import run_decision_pipeline, run_decision_pipeline_sync
+from dojiwick.application.orchestration.decision_pipeline import run_decision_pipeline_sync
 from dojiwick.application.orchestration.regime_hysteresis import RegimeHysteresis
 from dojiwick.application.policies.risk.engine import RiskPolicyEngine
 from dojiwick.application.registry.strategy_registry import STRATEGY_MEAN_REVERT, StrategyRegistry
@@ -37,12 +32,9 @@ from dojiwick.compute.kernels.metrics.summarize import (
     summarize,
 )
 from dojiwick.compute.kernels.pnl.entry_price import resolve_entry_price
+from dojiwick.compute.kernels.pnl.liquidation import liquidation_price
 from dojiwick.compute.kernels.pnl.partial_fill import apply_fill_ratio, compute_fill_ratio
 from dojiwick.compute.kernels.pnl.pnl import scalar_net_pnl
-from dojiwick.compute.kernels.pnl.portfolio_evolution import (
-    compute_bar_net_pnl,
-    evolve_portfolio,
-)
 from dojiwick.compute.kernels.regime.classify import classify_regime_batch
 from dojiwick.compute.kernels.regime.evaluate import evaluate_regimes
 from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext, BatchExecutionIntent
@@ -157,6 +149,10 @@ class _OpenPosition:
     original_stop: float = 0.0
     # Time exit
     max_hold_bars: int = 0  # 0 = no limit
+    # Margin exhaustion price; 0.0 = unleveraged, never liquidates
+    liquidation_price: float = 0.0
+    # Signed accrued funding (positive = paid), settled into PnL at exits
+    funding_usd: float = 0.0
     # Diagnostics
     regime: MarketState | None = None
     regime_confidence: float = 0.0
@@ -216,6 +212,8 @@ class BacktestTimeSeries:
     next_open: tuple[np.ndarray, ...] | None = None
     next_high: tuple[np.ndarray, ...] | None = None
     next_low: tuple[np.ndarray, ...] | None = None
+    # Signed funding rate settling during bar t+1 (same shift as next_high)
+    next_funding: tuple[np.ndarray, ...] | None = None
 
     def __post_init__(self) -> None:
         if not self.contexts:
@@ -235,6 +233,7 @@ class BacktestTimeSeries:
             ("next_open", self.next_open),
             ("next_high", self.next_high),
             ("next_low", self.next_low),
+            ("next_funding", self.next_funding),
         ):
             if arr_tuple is not None and len(arr_tuple) != len(self.contexts):
                 raise ValueError(f"{name} length mismatch")
@@ -257,6 +256,7 @@ class BacktestTimeSeries:
             next_open=tuple(self.next_open[i] for i in indices) if self.next_open is not None else None,
             next_high=tuple(self.next_high[i] for i in indices) if self.next_high is not None else None,
             next_low=tuple(self.next_low[i] for i in indices) if self.next_low is not None else None,
+            next_funding=tuple(self.next_funding[i] for i in indices) if self.next_funding is not None else None,
         )
 
 
@@ -277,30 +277,6 @@ class BacktestService:
     target_ids: tuple[str, ...] = ()
     venue: str = ""
     product: str = ""
-
-    async def run(self, context: BatchDecisionContext, next_prices: np.ndarray) -> BacktestSummary:
-        """Run deterministic backtest for aligned sample rows.
-
-        Pipeline: shared decision pipeline (regime -> variants -> strategy -> risk -> sizing)
-        -> vectorized P&L (planner-equivalent).
-        """
-
-        # 1-5. Shared decision pipeline (no hysteresis, no veto, no adaptive)
-        pipeline = await run_decision_pipeline(
-            context=context,
-            settings=self.settings,
-            strategy_registry=self.strategy_registry,
-            risk_engine=self.risk_engine,
-        )
-
-        # 6. Vectorized P&L (offline equivalent of planner -> execution)
-        net = compute_bar_net_pnl(pipeline.intents, next_prices, self.settings.backtest.cost_model)
-        result = summarize(
-            net,
-            pipeline.intents.notional_usd,
-            bars_per_year=interval_to_bars_per_year(self.settings.trading.candle_interval),
-        )
-        return replace(result.summary, config_hash=self.config_hash)
 
     async def run_with_hysteresis(
         self,
@@ -335,7 +311,7 @@ class BacktestService:
 
         # Daily Sharpe (industry-standard)
         bar_totals = collected.bar_pnls.sum(axis=1)
-        bars_per_day = int(bpy / 365)
+        bars_per_day = max(1, int(bpy / 365))
         daily_sharpe = compute_daily_sharpe(bar_totals, peq, collected.initial_equity, bars_per_day)
 
         summary = replace(
@@ -434,7 +410,6 @@ class BacktestService:
                 regime_losses[key] = regime_losses.get(key, 0.0) + abs(pnl)
             regime_counts[key] = regime_counts.get(key, 0) + 1
 
-        portfolio = series.contexts[0].portfolio
         prev_time = None
         n_pairs = series.n_pairs
 
@@ -443,6 +418,7 @@ class BacktestService:
         use_partial = settings.backtest.partial_fill_enabled
 
         has_ohlc = series.next_high is not None and series.next_low is not None
+        funding_arrs = series.next_funding
         positions: dict[int, _OpenPosition] = {}
 
         # Scope resolution caches -- persisted across bars
@@ -466,11 +442,19 @@ class BacktestService:
         _pair_scale = max(1.0, n_pairs / _baseline_pairs)
         _max_portfolio_frac = settings.risk.max_portfolio_risk_pct / 100.0 * _pair_scale
 
-        # Rolling universe: joined_mask tracks which pairs have activated at least once
-        joined_mask = np.zeros(n_pairs, dtype=np.bool_)
-        _any_joined = False
-        _all_joined = False
-        _starting_equity = settings.backtest.equity_usd
+        # Shared equity pool: all pairs draw from one wallet, as on the exchange.
+        # The per-row snapshot arrays broadcast the pool so kernel shapes are unchanged.
+        pool_equity: float = settings.backtest.equity_usd
+        day_start_pool: float = pool_equity
+        equity_vec = np.full(n_pairs, pool_equity, dtype=np.float64)
+        day_start_vec = np.full(n_pairs, day_start_pool, dtype=np.float64)
+        base_portfolio = replace(
+            series.contexts[0].portfolio,
+            equity_usd=equity_vec,
+            day_start_equity_usd=day_start_vec,
+            has_open_position=bar_has_open,
+            open_positions_total=bar_open_count,
+        )
         # Precompute last active bar per pair for terminal closeout
         last_active_bar = np.full(n_pairs, -1, dtype=np.int64)
         for p in range(n_pairs):
@@ -479,7 +463,7 @@ class BacktestService:
                 last_active_bar[p] = int(active_indices[-1])
 
         # Drawdown protection state + portfolio equity tracking
-        initial_equity: float = _starting_equity
+        initial_equity: float = pool_equity
         peak_equity: float = initial_equity
         max_portfolio_dd: float = 0.0
         portfolio_equity = np.zeros(series.n_bars, dtype=np.float64) if collect_equity else np.empty(0)
@@ -497,28 +481,12 @@ class BacktestService:
         pending_risk_total: float = 0.0
 
         for bar_idx in range(series.n_bars):
-            # Rolling universe: seed equity for newly-joining pairs BEFORE context construction
             bar_active = series.active_mask[bar_idx]
-            if not _all_joined:
-                newly_joined = bar_active & ~joined_mask
-                if np.any(newly_joined):
-                    if _any_joined:
-                        # Late join: seed to mean of already-joined pairs
-                        eq = portfolio.equity_usd.copy()
-                        day_eq = portfolio.day_start_equity_usd.copy()
-                        seed_val = float(np.mean(eq[joined_mask]))
-                        eq[newly_joined] = seed_val
-                        day_eq[newly_joined] = seed_val
-                        portfolio = replace(portfolio, equity_usd=eq, day_start_equity_usd=day_eq)
-                    # else: first batch of pairs — use existing equity from context (set by builder)
-                    joined_mask |= newly_joined
-                    _any_joined = True
-                    _all_joined = bool(np.all(joined_mask))
 
             # Fast context construction -- bypass __post_init__ validation.
-            # Data is already validated at series construction time.
-            _port = replace(portfolio, has_open_position=bar_has_open, open_positions_total=bar_open_count)
-            ctx = replace(series.contexts[bar_idx], portfolio=_port)
+            # Data is already validated at series construction time; the
+            # snapshot arrays are mutated in place between bars.
+            ctx = replace(series.contexts[bar_idx], portfolio=base_portfolio)
 
             # Skip pipeline when all positions open
             intents = None
@@ -596,18 +564,29 @@ class BacktestService:
             bar_pnl_buf.fill(0.0)
             bar_notional_buf.fill(0.0)
 
-            # Pre-compute bar-level OHLC
-            if has_ohlc:
-                assert series.next_high is not None and series.next_low is not None
-                bar_highs = series.next_high[bar_idx]
-                bar_lows = series.next_low[bar_idx]
+            # OHLC of the bar that just closed. next_* arrays are forward-shifted
+            # (next_high[t] == high of bar t+1), so the bar whose close the
+            # pipeline is deciding on lives at index bar_idx - 1. Exit checks
+            # for positions entered at earlier bars run against this bar; at
+            # bar 0 no position can exist yet.
+            if bar_idx > 0:
+                if has_ohlc:
+                    assert series.next_high is not None and series.next_low is not None
+                    bar_highs = series.next_high[bar_idx - 1]
+                    bar_lows = series.next_low[bar_idx - 1]
+                    bar_opens = (
+                        series.next_open[bar_idx - 1]
+                        if series.next_open is not None
+                        else series.next_prices[bar_idx - 1]
+                    )
+                else:
+                    bar_highs = bar_lows = bar_opens = series.next_prices[bar_idx - 1]
             else:
-                bar_highs = bar_lows = series.next_prices[bar_idx]
+                bar_highs = bar_lows = bar_opens = None
 
-            avg_equity = float(np.mean(portfolio.equity_usd[joined_mask])) if _any_joined else _starting_equity
             # Always track portfolio drawdown (used by objective function)
-            peak_equity = max(peak_equity, avg_equity)
-            drawdown_pct = (peak_equity - avg_equity) / peak_equity * 100.0 if peak_equity > 0 else 0.0
+            peak_equity = max(peak_equity, pool_equity)
+            drawdown_pct = (peak_equity - pool_equity) / peak_equity * 100.0 if peak_equity > 0 else 0.0
             max_portfolio_dd = max(max_portfolio_dd, drawdown_pct)
 
             if _any_drawdown_active:
@@ -615,15 +594,15 @@ class BacktestService:
                 if _ecf_enabled:
                     if len(equity_window) == ecf_period:
                         equity_running_sum -= equity_window[0]
-                    equity_window.append(avg_equity)
-                    equity_running_sum += avg_equity
+                    equity_window.append(pool_equity)
+                    equity_running_sum += pool_equity
 
                 # Equity curve filter -- proportional scaling (never blocks)
                 ecf_scale = 1.0
                 if _ecf_enabled and len(equity_window) == ecf_period:
                     sma = equity_running_sum / ecf_period
-                    if sma > 0 and avg_equity < sma:
-                        ecf_scale = max(avg_equity / sma, _dd_scale_floor)
+                    if sma > 0 and pool_equity < sma:
+                        ecf_scale = max(pool_equity / sma, _dd_scale_floor)
 
             pending_entries.clear()
             pending_risk_total = 0.0
@@ -638,73 +617,98 @@ class BacktestService:
 
                     # Increment observed_bars BEFORE exit checks
                     pos.observed_bars += 1
+                    if funding_arrs is not None:
+                        # next_funding mirrors next_high: index bar_idx - 1 is the
+                        # just-closed bar the exit checks below evaluate.
+                        rate = float(funding_arrs[bar_idx - 1][pair_idx])
+                        if rate != 0.0:
+                            signed = rate if pos.action == TradeAction.BUY else -rate
+                            pos.funding_usd += signed * pos.notional_usd * cost.leverage
 
-                    # Check exit for existing position
+                    assert bar_highs is not None and bar_lows is not None and bar_opens is not None
                     next_h = float(bar_highs[pair_idx])
                     next_l = float(bar_lows[pair_idx])
+                    next_o = float(bar_opens[pair_idx])
+                    is_long = pos.action == TradeAction.BUY
 
-                    # Update trailing stop before checking exit
-                    _update_trailing_stop(pos, next_h, next_l)
-
-                    # Check partial TP1 before full exit
-                    if pos.partial_tp_enabled and not pos.tp1_filled and pos.tp1_price > 0:
-                        is_long = pos.action == TradeAction.BUY
-                        favorable = next_h if is_long else next_l
-                        tp1_hit = (favorable >= pos.tp1_price) if is_long else (favorable <= pos.tp1_price)
-                        if tp1_hit:
-                            tp1_qty = pos.entry_quantity * pos.tp1_fraction
-                            tp1_pnl = _realized_pnl(pos, pos.tp1_price, cost, pos.observed_bars, quantity=tp1_qty)
-                            bar_pnl_buf[pair_idx] += tp1_pnl
-                            bar_notional_buf[pair_idx] = _full_notional(pos)
-                            record_regime_pnl(pos.regime, tp1_pnl)
-                            if collect_details:
-                                trade_details.append(
-                                    TradeDetail(
-                                        bar_index=pos.entry_bar,
-                                        exit_bar_index=bar_idx,
-                                        hold_bars=pos.observed_bars,
-                                        close_reason=CloseReason.PARTIAL_TP,
-                                        pair=pos.pair,
-                                        strategy_name=pos.strategy_name,
-                                        action=pos.action,
-                                        entry_price=pos.entry_price,
-                                        exit_price=pos.tp1_price,
-                                        quantity=tp1_qty,
-                                        notional_usd=tp1_qty * pos.entry_price,
-                                        pnl_usd=tp1_pnl,
-                                        regime=pos.regime,
-                                        regime_confidence=pos.regime_confidence,
-                                        atr_at_entry=pos.atr_at_entry,
-                                        stop_price=pos.original_stop,
-                                        take_profit_price=pos.take_profit_price,
-                                        strategy_variant=pos.strategy_variant,
-                                    )
-                                )
-                            pos.tp1_filled = True
-                            remaining_qty = pos.entry_quantity - tp1_qty
-                            pos.quantity = remaining_qty
-                            pos.notional_usd = remaining_qty * pos.entry_price
-                            pos.stop_price = (
-                                pos.original_stop + (pos.entry_price - pos.original_stop) * pos.partial_tp_stop_ratio
-                            )
-                            # Partial TP counts as a win
-                            if tp1_pnl > 0:
-                                consecutive_losses[pair_idx] = 0
-                            continue  # Defer exit check to next bar -- protective stop at entry activates next bar
-
-                    # Determine exit: normal exit or terminal per-pair closeout
                     close_price: float | None = None
                     close_reason: CloseReason | None = None
-                    result = _check_exit(pos, next_h, next_l)
-                    if result is not None:
-                        close_price, close_reason = result
-                    elif bar_idx == last_active_bar[pair_idx]:
-                        close_price = float(series.next_prices[bar_idx][pair_idx])
-                        close_reason = CloseReason.END_OF_BACKTEST
+
+                    # Liquidation outranks every managed exit: the exchange
+                    # force-closes before any stop order could fill.
+                    if pos.liquidation_price > 0.0 and (
+                        (next_l <= pos.liquidation_price) if is_long else (next_h >= pos.liquidation_price)
+                    ):
+                        close_price = (
+                            min(pos.liquidation_price, next_o) if is_long else max(pos.liquidation_price, next_o)
+                        )
+                        close_reason = CloseReason.LIQUIDATION
+                    else:
+                        # Update trailing stop before checking exit
+                        _update_trailing_stop(pos, next_h, next_l)
+
+                        # Check partial TP1 before full exit
+                        if pos.partial_tp_enabled and not pos.tp1_filled and pos.tp1_price > 0:
+                            favorable = next_h if is_long else next_l
+                            tp1_hit = (favorable >= pos.tp1_price) if is_long else (favorable <= pos.tp1_price)
+                            if tp1_hit:
+                                tp1_fill = max(pos.tp1_price, next_o) if is_long else min(pos.tp1_price, next_o)
+                                tp1_qty = pos.entry_quantity * pos.tp1_fraction
+                                tp1_pnl = _realized_pnl(pos, tp1_fill, cost, quantity=tp1_qty)
+                                bar_pnl_buf[pair_idx] += tp1_pnl
+                                bar_notional_buf[pair_idx] = _full_notional(pos)
+                                record_regime_pnl(pos.regime, tp1_pnl)
+                                if collect_details:
+                                    trade_details.append(
+                                        TradeDetail(
+                                            bar_index=pos.entry_bar,
+                                            exit_bar_index=bar_idx,
+                                            hold_bars=pos.observed_bars,
+                                            close_reason=CloseReason.PARTIAL_TP,
+                                            pair=pos.pair,
+                                            strategy_name=pos.strategy_name,
+                                            action=pos.action,
+                                            entry_price=pos.entry_price,
+                                            exit_price=tp1_fill,
+                                            quantity=tp1_qty,
+                                            notional_usd=tp1_qty * pos.entry_price,
+                                            pnl_usd=tp1_pnl,
+                                            funding_usd=pos.funding_usd,
+                                            regime=pos.regime,
+                                            regime_confidence=pos.regime_confidence,
+                                            atr_at_entry=pos.atr_at_entry,
+                                            stop_price=pos.original_stop,
+                                            take_profit_price=pos.take_profit_price,
+                                            strategy_variant=pos.strategy_variant,
+                                        )
+                                    )
+                                pos.tp1_filled = True
+                                pos.funding_usd = 0.0
+                                remaining_qty = pos.entry_quantity - tp1_qty
+                                pos.quantity = remaining_qty
+                                pos.notional_usd = remaining_qty * pos.entry_price
+                                pos.stop_price = (
+                                    pos.original_stop
+                                    + (pos.entry_price - pos.original_stop) * pos.partial_tp_stop_ratio
+                                )
+                                # Partial TP counts as a win
+                                if tp1_pnl > 0:
+                                    consecutive_losses[pair_idx] = 0
+                                continue  # Defer exit check to next bar -- moved stop activates next bar
+
+                        result = _check_exit(pos, next_o, next_h, next_l)
+                        if result is not None:
+                            close_price, close_reason = result
+                        elif bar_idx == last_active_bar[pair_idx]:
+                            close_price = float(series.next_prices[bar_idx][pair_idx])
+                            close_reason = CloseReason.END_OF_BACKTEST
 
                     if close_price is not None:
                         assert close_reason is not None
-                        pnl = _realized_pnl(pos, close_price, cost, pos.observed_bars)
+                        pnl = _realized_pnl(pos, close_price, cost)
+                        if close_reason is CloseReason.LIQUIDATION:
+                            # Isolated-margin loss cap: at most the tranche margin
+                            pnl = max(pnl, -pos.notional_usd)
                         bar_pnl_buf[pair_idx] += pnl
                         bar_notional_buf[pair_idx] = _full_notional(pos)
                         record_regime_pnl(pos.regime, pnl)
@@ -770,9 +774,15 @@ class BacktestService:
 
                         # Cap leveraged risk per trade and collect for fair allocation
                         if new_pos.entry_price > 0:
+                            new_pos.liquidation_price = liquidation_price(
+                                new_pos.entry_price,
+                                cost.leverage,
+                                cost.maintenance_margin_rate,
+                                new_pos.action == TradeAction.BUY,
+                            )
                             stop_dist_pct = abs(new_pos.entry_price - new_pos.stop_price) / new_pos.entry_price
                             leveraged_risk = new_pos.notional_usd * stop_dist_pct * cost.leverage
-                            max_loss_usd = avg_equity * _max_loss_frac
+                            max_loss_usd = pool_equity * _max_loss_frac
                             if leveraged_risk > max_loss_usd and leveraged_risk > 0:
                                 cap_scale = max_loss_usd / leveraged_risk
                                 new_pos.quantity *= cap_scale
@@ -791,7 +801,7 @@ class BacktestService:
                     pos_stop_dist = abs(existing_pos.entry_price - existing_pos.stop_price) / existing_pos.entry_price
                     existing_risk_usd += existing_pos.notional_usd * pos_stop_dist * cost.leverage
 
-                max_portfolio_risk_usd = avg_equity * _max_portfolio_frac
+                max_portfolio_risk_usd = pool_equity * _max_portfolio_frac
                 available = max_portfolio_risk_usd - existing_risk_usd
 
                 if available > 0:
@@ -811,27 +821,24 @@ class BacktestService:
             bar_pnls[bar_idx] = bar_pnl_buf
             bar_notionals[bar_idx] = bar_notional_buf
             current_time = ctx.market.observed_at
-            portfolio = evolve_portfolio(
-                portfolio,
-                bar_pnl_buf,
-                current_time,
-                prev_time,
-                has_open_position=bar_has_open,
-                open_positions_total=bar_open_count,
-            )
+            bar_total = float(bar_pnl_buf.sum())
+            if bar_total != 0.0:
+                pool_equity = max(pool_equity + bar_total, 0.0)
+                equity_vec.fill(pool_equity)
+            if prev_time is not None and current_time.date() != prev_time.date():
+                day_start_pool = pool_equity
+                day_start_vec.fill(day_start_pool)
             prev_time = current_time
             if collect_equity:
-                portfolio_equity[bar_idx] = (
-                    float(np.mean(portfolio.equity_usd[joined_mask])) if _any_joined else _starting_equity
-                )
+                portfolio_equity[bar_idx] = pool_equity
 
             if bar_idx > 0 and bar_idx % 100 == 0 and log.isEnabledFor(logging.INFO):
                 log.info(
-                    "bar %d/%d | open positions: %d | avg equity: $%.2f",
+                    "bar %d/%d | open positions: %d | equity: $%.2f",
                     bar_idx,
                     series.n_bars,
                     len(positions),
-                    avg_equity,
+                    pool_equity,
                 )
 
             # Pruning checkpoints: report intermediate value at 50%/70%/85%
@@ -851,7 +858,7 @@ class BacktestService:
             for pair_idx, pos in positions.items():
                 close_bar = int(last_active_bar[pair_idx]) if last_active_bar[pair_idx] >= 0 else series.n_bars - 1
                 exit_price = float(series.next_prices[close_bar][pair_idx])
-                pnl = _realized_pnl(pos, exit_price, cost, pos.observed_bars)
+                pnl = _realized_pnl(pos, exit_price, cost)
                 record_regime_pnl(pos.regime, pnl)
                 if collect_details:
                     trade_details.append(
@@ -937,14 +944,19 @@ def _update_trailing_stop(pos: _OpenPosition, bar_high: float, bar_low: float) -
 
 def _check_exit(
     pos: _OpenPosition,
+    bar_open: float,
     bar_high: float,
     bar_low: float,
 ) -> tuple[float, CloseReason] | None:
-    """Return (exit_price, reason) if stop/TP/time hit, else None. Time exit checked first."""
-    # Time exit -- checked before stop/TP (uses observed_bars for rolling-universe correctness)
+    """Return (exit_price, reason) if time/stop/TP hit, else None.
+
+    Time exit is checked first (uses observed_bars for rolling-universe
+    correctness) and fills at the bar open. Stop and TP fills honor
+    gap-through: when the bar opens beyond the trigger, the fill is the
+    open — worse than the stop, better than the TP.
+    """
     if pos.max_hold_bars > 0 and pos.observed_bars >= pos.max_hold_bars:
-        exit_price = (bar_high + bar_low) / 2.0  # midpoint approximation
-        return exit_price, CloseReason.TIME_EXIT
+        return bar_open, CloseReason.TIME_EXIT
 
     is_long = pos.action == TradeAction.BUY
     adverse = bar_low if is_long else bar_high
@@ -957,9 +969,11 @@ def _check_exit(
             if pos.trailing_activation_price != 0.0 and stop_trailed
             else CloseReason.STOP_LOSS
         )
-        return pos.stop_price, reason
+        fill = min(pos.stop_price, bar_open) if is_long else max(pos.stop_price, bar_open)
+        return fill, reason
     if (favorable >= pos.take_profit_price) if is_long else (favorable <= pos.take_profit_price):
-        return pos.take_profit_price, CloseReason.TAKE_PROFIT
+        fill = max(pos.take_profit_price, bar_open) if is_long else min(pos.take_profit_price, bar_open)
+        return fill, CloseReason.TAKE_PROFIT
     return None
 
 
@@ -984,6 +998,7 @@ def _build_trade_detail(
         quantity=pos.quantity,
         notional_usd=pos.notional_usd,
         pnl_usd=pnl,
+        funding_usd=pos.funding_usd,
         regime=pos.regime,
         regime_confidence=pos.regime_confidence,
         atr_at_entry=pos.atr_at_entry,
@@ -1162,14 +1177,15 @@ def _realized_pnl(
     pos: _OpenPosition,
     exit_price: float,
     cost: CostModel,
-    hold_bars: int,
     *,
     quantity: float | None = None,
 ) -> float:
     """Compute net PnL for a closed position -- delegates to scalar_net_pnl.
 
     When *quantity* is given, computes PnL for that tranche instead of the
-    full position (used for partial take-profit).
+    full position (used for partial take-profit). The position's accrued
+    funding is settled in full with whichever tranche books first — the
+    caller must reset ``pos.funding_usd`` after a partial settlement.
     """
     qty = quantity if quantity is not None else pos.quantity
     notional = (qty * pos.entry_price) if quantity is not None else pos.notional_usd
@@ -1183,6 +1199,5 @@ def _realized_pnl(
         fee_bps=cost.fee_bps,
         fee_multiplier=cost.fee_multiplier,
         leverage=cost.leverage,
-        funding_rate_per_bar=cost.funding_rate_per_bar,
-        hold_bars=hold_bars,
+        funding_usd=pos.funding_usd,
     )

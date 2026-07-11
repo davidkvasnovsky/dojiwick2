@@ -1,7 +1,6 @@
 """Shared CLI helpers for backtest-based CLIs."""
 
 import argparse
-import asyncio
 import logging
 import sys
 from collections.abc import Awaitable, Callable
@@ -18,6 +17,7 @@ from dojiwick.config.loader import load_settings
 from dojiwick.config.schema import Settings
 from dojiwick.config.targets import resolve_symbols, resolve_target_ids
 from dojiwick.domain.models.value_objects.candle import Candle
+from dojiwick.domain.models.value_objects.funding_rate import FundingRate
 from dojiwick.domain.type_aliases import CandleInterval
 
 log = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ async def load_settings_and_series(
     settings = load_settings(args.config)
 
     use_cache = settings.backtest.use_candle_cache
-    market_data, cleanup = await build_market_data_fetcher(settings, use_cache=use_cache)
+    fetchers, cleanup = await build_market_data_fetcher(settings, use_cache=use_cache)
 
     start = datetime.strptime(args.start, "%Y-%m-%d").replace(tzinfo=UTC)
     end = datetime.strptime(args.end, "%Y-%m-%d").replace(tzinfo=UTC)
@@ -52,18 +52,25 @@ async def load_settings_and_series(
     pairs = settings.trading.active_pairs
     symbols = resolve_symbols(settings)
 
-    async def _fetch_pair(pair: str, symbol: str) -> tuple[str, tuple[Candle, ...]]:
+    # Sequential per-pair fetching: the caching layers share one psycopg
+    # connection, which allows only one in-flight operation at a time.
+    candles_by_pair: dict[str, tuple[Candle, ...]] = {}
+    funding_by_pair: dict[str, tuple[FundingRate, ...]] | None = {} if fetchers.funding is not None else None
+    for pair, symbol in zip(pairs, symbols):
         log.info("fetching %s candles for %s (%s to %s)", interval, symbol, args.start, args.end)
-        candles = await market_data.fetch_candles_range(symbol, interval, start, end)
+        candles = await fetchers.candles.fetch_candles_range(symbol, interval, start, end)
         log.info("  -> %d candles", len(candles))
-        return pair, candles
-
-    results = await asyncio.gather(*(_fetch_pair(p, s) for p, s in zip(pairs, symbols)))
-    candles_by_pair: dict[str, tuple[Candle, ...]] = dict(results)
+        candles_by_pair[pair] = candles
+        if fetchers.funding is not None and funding_by_pair is not None and candles:
+            # Funding coverage must span the pair's own candle range, which can
+            # start later than --start for late-listed rolling-universe pairs.
+            funding_by_pair[pair] = await fetchers.funding.fetch_funding_range(symbol, candles[0].open_time, end)
+            log.info("  -> %d funding events", len(funding_by_pair[pair]))
 
     for pair, candles in candles_by_pair.items():
         if len(candles) == 0:
             log.error("no candles returned for %s — check date range and pair", pair)
+            await cleanup()
             sys.exit(1)
 
     warmup = settings.backtest.warmup_bars
@@ -84,6 +91,7 @@ async def load_settings_and_series(
         bb_std=t.bb_std,
         volume_ema_period=t.volume_ema_period,
         history_alignment=settings.backtest.history_alignment,
+        funding_by_pair=funding_by_pair,
     )
     log.info("built time series: %d bars x %d pairs", series.n_bars, series.n_pairs)
 

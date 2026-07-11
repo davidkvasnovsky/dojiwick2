@@ -12,11 +12,19 @@ from dojiwick.domain.models.value_objects.position_leg import PositionLeg
 pytestmark = pytest.mark.db
 
 
-async def test_rollback_undoes_insert(db_connection: Any, db_cursor: Any, test_instrument_id: int) -> None:
-    """A rolled-back insert should not be visible after rollback."""
-    from dojiwick.infrastructure.postgres.repositories.position_leg import PgPositionLegRepository
+async def test_uow_rollback_undoes_insert(db_connection: Any, db_cursor: Any, test_instrument_id: int) -> None:
+    """Inside a failing unit-of-work transaction, repo writes are rolled back.
 
-    repo = PgPositionLegRepository(connection=db_connection)
+    Repositories commit internally when standalone; the UoW's
+    TransactionAwareConnection defers those commits so a raised exception
+    rolls the whole batch back.
+    """
+    from dojiwick.infrastructure.postgres.connection import TransactionAwareConnection
+    from dojiwick.infrastructure.postgres.repositories.position_leg import PgPositionLegRepository
+    from dojiwick.infrastructure.postgres.unit_of_work import PgUnitOfWork
+
+    uow = PgUnitOfWork(connection=db_connection)
+    repo = PgPositionLegRepository(connection=TransactionAwareConnection(db_connection, uow))
 
     leg = PositionLeg(
         account="rollback-test",
@@ -26,13 +34,13 @@ async def test_rollback_undoes_insert(db_connection: Any, db_cursor: Any, test_i
         entry_price=Decimal("50000"),
         opened_at=datetime.now(UTC),
     )
-    leg_id = await repo.insert_leg(leg)
-    assert leg_id > 0
 
-    # Rollback the transaction
-    await db_connection.rollback()
+    with pytest.raises(RuntimeError, match="boom"):
+        async with uow.transaction():
+            leg_id = await repo.insert_leg(leg)
+            assert leg_id > 0
+            raise RuntimeError("boom")
 
-    # The row should not be visible
     await db_cursor.execute("SELECT COUNT(*) FROM position_legs WHERE account = 'rollback-test'")
     row: tuple[object, ...] | None = await db_cursor.fetchone()
     assert row is not None

@@ -257,6 +257,13 @@ class EntryPriceModel(StrEnum):
     WORST_CASE = "worst_case"
 
 
+class FundingMode(StrEnum):
+    """Backtest funding model: signed historical rates, or none (tests/quick runs)."""
+
+    HISTORICAL = "historical"
+    NONE = "none"
+
+
 class SubmissionStatus(StrEnum):
     """Order submission acknowledgement status."""
 

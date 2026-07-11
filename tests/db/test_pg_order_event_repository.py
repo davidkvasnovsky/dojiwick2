@@ -20,8 +20,8 @@ async def test_order_request_id(db_cursor: DbCursor, test_instrument_id: int) ->
     await db_cursor.execute(
         """
         INSERT INTO order_requests (
-            client_order_id, instrument_id, account, side, order_type, quantity
-        ) VALUES ('cli-1', %s, 'test-acct', 'buy', 'market', 1.0)
+            venue, product, client_order_id, instrument_id, account, side, order_type, quantity
+        ) VALUES ('binance', 'usd_c', 'cli-1', %s, 'test-acct', 'buy', 'market', 1.0)
         RETURNING id
         """,
         (test_instrument_id,),

@@ -424,6 +424,22 @@ CREATE TABLE candles (
 CREATE INDEX idx_candles_pair_timeframe_time
     ON candles (pair, timeframe, open_time DESC);
 
+-- Funding rates (settled perpetual funding history -- immutable exchange facts)
+CREATE TABLE funding_rates (
+    id              BIGSERIAL PRIMARY KEY,
+    venue           TEXT             NOT NULL,
+    product         TEXT             NOT NULL,
+    symbol          TEXT             NOT NULL,
+    funding_time    TIMESTAMPTZ      NOT NULL,
+    funding_rate    NUMERIC(12,10)   NOT NULL,
+    created_at      TIMESTAMPTZ      NOT NULL DEFAULT now(),
+    CONSTRAINT funding_rates_unique     UNIQUE (venue, product, symbol, funding_time),
+    CONSTRAINT funding_rates_rate_check CHECK (funding_rate > -1 AND funding_rate < 1)
+);
+
+CREATE INDEX idx_funding_rates_symbol_time
+    ON funding_rates (symbol, funding_time DESC);
+
 -- Signals (detected market events)
 CREATE TABLE signals (
     id                  BIGSERIAL PRIMARY KEY,

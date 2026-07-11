@@ -14,9 +14,57 @@ from dojiwick.domain.models.value_objects.batch_models import (
     BatchPortfolioSnapshot,
 )
 from dojiwick.domain.models.value_objects.candle import Candle
+from dojiwick.domain.models.value_objects.funding_rate import FundingRate
 from dojiwick.domain.numerics import candles_to_ohlc, decimals_to_array
 
 log = logging.getLogger(__name__)
+
+_FUNDING_COVERAGE_TOLERANCE_SEC = 8 * 3600.0
+
+
+def _bin_funding(
+    pair: str,
+    rates: tuple[FundingRate, ...],
+    candle_times: list[datetime],
+) -> np.ndarray:
+    """Sum signed funding rates into per-candle bins aligned to *candle_times*.
+
+    A candle's bin carries every funding event settling from its open (inclusive)
+    to the next open (exclusive). Coverage is validated against the pair's own
+    candle range: missing head/tail beyond one funding interval (8h) means the
+    cache/fetch is broken, not a late listing — late-listed pairs already have a
+    matching shorter candle range.
+    """
+    n = len(candle_times)
+    binned = np.zeros(n, dtype=np.float64)
+    if not rates:
+        raise ValueError(f"{pair}: no funding events for candle range — historical funding fetch returned nothing")
+
+    open_epochs = np.array([t.timestamp() for t in candle_times], dtype=np.float64)
+    first_open = open_epochs[0]
+    last_open = open_epochs[-1]
+    first_event = rates[0].funding_time.timestamp()
+    last_event = rates[-1].funding_time.timestamp()
+    if first_event > first_open + _FUNDING_COVERAGE_TOLERANCE_SEC:
+        raise ValueError(
+            f"{pair}: funding history starts {first_event - first_open:.0f}s after candles — incomplete fetch"
+        )
+    if last_event < last_open - _FUNDING_COVERAGE_TOLERANCE_SEC:
+        raise ValueError(
+            f"{pair}: funding history ends {last_open - last_event:.0f}s before candles — incomplete fetch"
+        )
+
+    event_epochs = np.array([r.funding_time.timestamp() for r in rates], dtype=np.float64)
+    gaps = np.diff(event_epochs)
+    oversized = gaps > _FUNDING_COVERAGE_TOLERANCE_SEC * 1.5
+    if np.any(oversized):
+        log.warning("%s: %d interior funding gaps > 12h (exchange incidents?)", pair, int(np.sum(oversized)))
+
+    idx = np.searchsorted(open_epochs, event_epochs, side="right") - 1
+    values = np.array([float(r.rate) for r in rates], dtype=np.float64)
+    in_range = idx >= 0
+    np.add.at(binned, idx[in_range], values[in_range])
+    return binned
 
 
 def build_backtest_time_series(
@@ -36,6 +84,7 @@ def build_backtest_time_series(
     bb_std: float = 2.0,
     volume_ema_period: int = 20,
     history_alignment: HistoryAlignment = HistoryAlignment.INTERSECTION,
+    funding_by_pair: dict[str, tuple[FundingRate, ...]] | None = None,
 ) -> BacktestTimeSeries:
     """Convert historical candles into a BacktestTimeSeries for replay.
 
@@ -50,12 +99,16 @@ def build_backtest_time_series(
     pair_low: dict[str, np.ndarray] = {}
     pair_indicators: dict[str, np.ndarray] = {}
     pair_volume: dict[str, np.ndarray] = {}
+    pair_funding: dict[str, np.ndarray] = {}
     pair_times: dict[str, list[datetime]] = {}
 
     for pair in pairs:
         candles = candles_by_pair[pair]
         candles = _deduplicate_candles(candles)
         _warn_time_gaps(pair, candles)
+        if funding_by_pair is not None:
+            candle_open_times = [c.open_time for c in candles]
+            pair_funding[pair] = _bin_funding(pair, funding_by_pair[pair], candle_open_times)[warmup_bars:]
         close, high, low = candles_to_ohlc(candles)
         open_arr = decimals_to_array([c.open for c in candles])
         volume = decimals_to_array([c.volume for c in candles])
@@ -125,6 +178,8 @@ def build_backtest_time_series(
                 pair_low[pair] = pair_low[pair][indices]
                 pair_indicators[pair] = pair_indicators[pair][indices]
                 pair_volume[pair] = pair_volume[pair][indices]
+                if funding_by_pair is not None:
+                    pair_funding[pair] = pair_funding[pair][indices]
                 pair_times[pair] = list(common_times)
             min_bars = len(common_times)
         n_bars = min_bars - 1
@@ -151,6 +206,7 @@ def build_backtest_time_series(
             new_high = np.zeros(len(union_times), dtype=np.float64)
             new_low = np.zeros(len(union_times), dtype=np.float64)
             new_vol = np.zeros(len(union_times), dtype=np.float64)
+            new_fund = np.zeros(len(union_times), dtype=np.float64)
             new_ind = np.zeros((len(union_times), n_indicators), dtype=np.float64)
 
             for u_idx, t in enumerate(union_times):
@@ -161,6 +217,8 @@ def build_backtest_time_series(
                     new_high[u_idx] = pair_high[pair][src_idx]
                     new_low[u_idx] = pair_low[pair][src_idx]
                     new_vol[u_idx] = pair_volume[pair][src_idx]
+                    if funding_by_pair is not None:
+                        new_fund[u_idx] = pair_funding[pair][src_idx]
                     new_ind[u_idx] = pair_indicators[pair][src_idx]
                     has_data_mask[u_idx, p_idx] = True
 
@@ -169,6 +227,8 @@ def build_backtest_time_series(
             pair_high[pair] = new_high
             pair_low[pair] = new_low
             pair_volume[pair] = new_vol
+            if funding_by_pair is not None:
+                pair_funding[pair] = new_fund
             pair_indicators[pair] = new_ind
             pair_times[pair] = list(union_times)
 
@@ -193,6 +253,7 @@ def build_backtest_time_series(
     high_matrix = np.column_stack([pair_high[p] for p in pairs])
     low_matrix = np.column_stack([pair_low[p] for p in pairs])
     volume_matrix = np.column_stack([pair_volume[p] for p in pairs])
+    funding_matrix = np.column_stack([pair_funding[p] for p in pairs]) if funding_by_pair is not None else None
     indicator_cube = np.stack([pair_indicators[p] for p in pairs], axis=0)
 
     # All pairs now share the same timestamp sequence (intersection or single pair)
@@ -213,6 +274,7 @@ def build_backtest_time_series(
     next_open_list: list[np.ndarray] = []
     next_high_list: list[np.ndarray] = []
     next_low_list: list[np.ndarray] = []
+    next_funding_list: list[np.ndarray] = []
 
     for t in range(n_bars):
         ind_rows = indicator_cube[:, t, :]
@@ -232,6 +294,8 @@ def build_backtest_time_series(
         next_open_list.append(open_matrix[t + 1])
         next_high_list.append(high_matrix[t + 1])
         next_low_list.append(low_matrix[t + 1])
+        if funding_matrix is not None:
+            next_funding_list.append(funding_matrix[t + 1])
 
     return BacktestTimeSeries(
         contexts=tuple(contexts),
@@ -240,6 +304,7 @@ def build_backtest_time_series(
         next_open=tuple(next_open_list),
         next_high=tuple(next_high_list),
         next_low=tuple(next_low_list),
+        next_funding=tuple(next_funding_list) if funding_matrix is not None else None,
     )
 
 

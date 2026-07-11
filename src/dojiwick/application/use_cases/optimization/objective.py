@@ -1,4 +1,4 @@
-"""Vectorized optimization objective built on shared backtest service."""
+"""Optimization objectives built on the shared sequential backtest service."""
 
 import math
 from collections.abc import Callable
@@ -19,7 +19,6 @@ from dojiwick.application.use_cases.optimization.search_space import (
 )
 from dojiwick.application.use_cases.run_backtest import BacktestService, BacktestTimeSeries, PruningConfig
 from dojiwick.domain.models.value_objects.outcome_models import BacktestSummary
-from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext
 
 
 def _init_cached_fields(obj: object, settings: PipelineSettings) -> None:
@@ -34,42 +33,6 @@ def _init_cached_fields(obj: object, settings: PipelineSettings) -> None:
         "_risk_engine",
         build_default_risk_engine(settings.risk),
     )
-
-
-@dataclass(slots=True, frozen=True, kw_only=True)
-class VectorObjective:
-    """Optimization objective for deterministic strategy tuning."""
-
-    settings: PipelineSettings
-    apply_tuned: Callable[[ParamSet], PipelineSettings]
-    base_context: BatchDecisionContext
-    next_prices: np.ndarray
-    target_ids: tuple[str, ...]
-    venue: str
-    product: str
-    _strategy_registry: StrategyRegistry = field(init=False, repr=False)
-    _risk_engine: RiskPolicyEngine = field(init=False, repr=False)
-
-    def __post_init__(self) -> None:
-        _init_cached_fields(self, self.settings)
-
-    async def evaluate(self, params: ParamSet, *, pruning_callback: PruningCallback | None = None) -> float:
-        """Score one sampled parameter set."""
-
-        tuned = self.apply_tuned(params)
-
-        summary = await BacktestService(
-            settings=tuned,
-            strategy_registry=self._strategy_registry,
-            risk_engine=self._risk_engine,
-            target_ids=self.target_ids,
-            venue=self.venue,
-            product=self.product,
-        ).run(self.base_context, self.next_prices)
-        equity_start = float(self.base_context.portfolio.equity_usd[0])
-        base = _base_score(tuned.optimization, summary, equity_start, n_bars=len(self.next_prices))
-        # Regularization skipped — VectorObjective has no stored baseline
-        return base
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

@@ -57,13 +57,12 @@ class StrategyRegistry:
         prices = context.market.price
         indicators = context.market.indicators
 
-        # 0. Pre-extract all param vectors once (avoids repeated extraction
-        #    in each kernel and in the stop/TP block below).
+        # Pre-extract param vectors once — repeated per-kernel extraction is
+        # the dominant cost of per-pair params in the optimizer hot path.
         pre_extracted: dict[str, np.ndarray] | None = None
         if per_pair_params is not None:
             pre_extracted = {f: extract_param_vector(per_pair_params, f) for f in _EXTRACTABLE_FIELDS}
 
-        # 1. Collect BatchSignalFragment from each registered plugin
         fragments: list[BatchSignalFragment] = [
             plugin.signal(
                 states=regime.coarse_state,
@@ -77,20 +76,24 @@ class StrategyRegistry:
             for plugin in self._plugins
         ]
 
-        # 2. OR-merge buy/short masks across all fragments
-        #    Per-strategy deconfliction: within each strategy, short is
-        #    suppressed where buy is also True. But different strategies
-        #    can independently emit buy and short (e.g. trend_follow SHORT
-        #    + mean_revert BUY can coexist). Risk engine's max_open_positions
-        #    handles position limits.
+        # Merge fragments with first-registered-wins priority: on a
+        # cross-strategy BUY/SHORT conflict the earlier plugin claims the
+        # row — both the action and the attribution — so recorded strategy
+        # names always match the side that actually traded. Within one
+        # plugin, short yields to buy on the same row.
         buy_mask = np.zeros(size, dtype=np.bool_)
         short_mask = np.zeros(size, dtype=np.bool_)
+        strategy_name = np.full(size, "none", dtype=object)
+        claimed = np.zeros(size, dtype=np.bool_)
 
         for frag in fragments:
-            # Per-strategy: short only where this strategy didn't also buy
-            frag_short = frag.short_mask & ~frag.buy_mask
-            buy_mask |= frag.buy_mask
+            frag_buy = frag.buy_mask & ~claimed
+            claimed |= frag_buy
+            frag_short = frag.short_mask & ~frag.buy_mask & ~claimed
+            claimed |= frag_short
+            buy_mask |= frag_buy
             short_mask |= frag_short
+            strategy_name[frag_buy | frag_short] = frag.strategy_name
 
         if not regime.valid_mask.all():
             suppressed_count = int(np.sum((buy_mask | short_mask) & ~regime.valid_mask))
@@ -101,27 +104,11 @@ class StrategyRegistry:
         short_mask &= regime.valid_mask
         valid = buy_mask | short_mask
 
-        # 3. Priority-based strategy name assignment
-        #    First registered plugin whose buy or short mask is True for a
-        #    given row wins the name. Iteration order = registration order,
-        #    which mirrors the old router: last writer wins -> reversed here
-        #    so that *first* registered has highest priority (matches old
-        #    trend > mean > vol ordering where trend overwrote earlier names).
-        strategy_name = np.full(size, "none", dtype=object)
         reason_codes = np.full(size, STRATEGY_HOLD, dtype=object)
-
-        # Walk fragments in *reverse* registration order so that the
-        # first-registered plugin (highest priority) writes last and wins.
-        for frag in reversed(fragments):
-            active = frag.buy_mask | frag.short_mask
-            strategy_name[active] = frag.strategy_name
-
         reason_codes[valid] = STRATEGY_SIGNAL
 
-        # 4. Build action / entry / stop / take-profit vectors
-        #    ATR-based stop and take-profit logic.
-        #    NOTE: keep formula in sync with the scalar version in
-        #    ``decision_pipeline.py:_compute_stop_tp_scalar``.
+        # NOTE: keep the stop/TP formula in sync with the scalar version in
+        # ``decision_pipeline.py:_compute_stop_tp_scalar``.
         action = np.full(size, TradeAction.HOLD.value, dtype=np.int64)
         entry = prices.copy()
         stop = np.zeros(size, dtype=np.float64)
@@ -158,7 +145,6 @@ class StrategyRegistry:
         np.maximum(stop, 0.0, out=stop)
         np.maximum(take_profit, 0.0, out=take_profit)
 
-        # 5. Confluence filter — gate low-quality entries
         if settings.confluence_filter_enabled:
             scores = compute_confluence_score(indicators, prices, action, settings)
             low_score = scores < settings.min_confluence_score
@@ -169,7 +155,6 @@ class StrategyRegistry:
             strategy_name[low_score] = "none"
             reason_codes[low_score] = STRATEGY_HOLD
 
-        # 6. Return BatchTradeCandidate
         return BatchTradeCandidate(
             action=action,
             entry_price=entry,

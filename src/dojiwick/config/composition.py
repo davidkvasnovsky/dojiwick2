@@ -27,7 +27,9 @@ from dojiwick.domain.errors import ConfigurationError
 from dojiwick.config.targets import resolve_execution_symbols
 
 from dojiwick.domain.contracts.gateways.historical_candle_source import HistoricalCandleSourcePort
+from dojiwick.domain.contracts.gateways.historical_funding_source import HistoricalFundingSourcePort
 from dojiwick.domain.contracts.gateways.market_data_feed import MarketDataFeedPort
+from dojiwick.domain.enums import FundingMode
 
 log = logging.getLogger(__name__)
 
@@ -170,21 +172,30 @@ _VENUE_BUILDERS: dict[VenueCode, AdapterBuilder] = {
 }
 
 
+@dataclass(slots=True, frozen=True)
+class MarketDataFetchers:
+    """Historical data sources for backtest CLIs."""
+
+    candles: HistoricalCandleSourcePort
+    funding: HistoricalFundingSourcePort | None
+
+
 async def build_market_data_fetcher(
     settings: Settings,
     clock: ClockPort | None = None,
     *,
     use_cache: bool = True,
-) -> tuple[HistoricalCandleSourcePort, Callable[[], Awaitable[None]]]:
-    """Build a market data fetcher + cleanup callback for backtest CLIs.
+) -> tuple[MarketDataFetchers, Callable[[], Awaitable[None]]]:
+    """Build historical data fetchers + cleanup callback for backtest CLIs.
 
-    Returns ``(provider, cleanup)`` where *provider* satisfies
-    ``MarketDataFetcher`` and *cleanup* closes the HTTP client.
-
-    When *use_cache* is True, wraps the provider with a Postgres-backed
-    ``CachingCandleFetcher`` for DB-first candle retrieval.
+    The funding fetcher is built only when ``backtest.funding_mode`` is
+    HISTORICAL; it shares the HTTP client and DB connection with the candle
+    fetcher. When *use_cache* is True both are wrapped with Postgres-backed
+    caching. Cache setup failure falls back to direct exchange fetch only
+    for connection-level errors — programming errors must surface.
     """
     from dojiwick.infrastructure.exchange.binance.readiness import assert_binance_ready
+    from dojiwick.infrastructure.exchange.binance.funding import BinanceFundingRateProvider
     from dojiwick.infrastructure.exchange.binance.market_data import BinanceMarketDataProvider
     from dojiwick.infrastructure.system.clock import SystemClock
 
@@ -194,36 +205,50 @@ async def build_market_data_fetcher(
         api_secret_env=settings.exchange.api_secret_env,
     )
     http_client = _build_http_client(settings, effective_clock, api_key=api_key, api_secret=api_secret)
-    provider: HistoricalCandleSourcePort = BinanceMarketDataProvider(client=http_client)
+    candle_provider: HistoricalCandleSourcePort = BinanceMarketDataProvider(client=http_client)
+    include_funding = settings.backtest.funding_mode == FundingMode.HISTORICAL
+    funding_provider: HistoricalFundingSourcePort | None = (
+        BinanceFundingRateProvider(client=http_client) if include_funding else None
+    )
 
     if use_cache:
-        db_conn = None
-        try:
-            from dojiwick.infrastructure.postgres.connection import connect
-            from dojiwick.infrastructure.postgres.repositories.candle import PgCandleRepository
-            from dojiwick.application.services.caching_candle_fetcher import CachingCandleFetcher
+        from psycopg import OperationalError
 
+        from dojiwick.infrastructure.postgres.connection import connect
+        from dojiwick.infrastructure.postgres.repositories.candle import PgCandleRepository
+        from dojiwick.infrastructure.postgres.repositories.funding_rate import PgFundingRateRepository
+        from dojiwick.application.services.caching_candle_fetcher import CachingCandleFetcher
+        from dojiwick.application.services.caching_funding_fetcher import CachingFundingRateFetcher
+
+        try:
             db_conn = await connect(settings.database)
-            candle_repo = PgCandleRepository(connection=db_conn)
-            provider = CachingCandleFetcher(
-                candle_repo=candle_repo,
-                fetcher=provider,
-                venue=str(settings.exchange.venue),
-                product=str(settings.exchange.product),
+        except OperationalError:
+            log.warning("postgres cache unavailable, falling back to direct exchange fetch", exc_info=True)
+        else:
+            venue = str(settings.exchange.venue)
+            product = str(settings.exchange.product)
+            candle_provider = CachingCandleFetcher(
+                candle_repo=PgCandleRepository(connection=db_conn),
+                fetcher=candle_provider,
+                venue=venue,
+                product=product,
             )
-            log.info("postgres candle cache enabled")
+            if funding_provider is not None:
+                funding_provider = CachingFundingRateFetcher(
+                    funding_repo=PgFundingRateRepository(connection=db_conn),
+                    fetcher=funding_provider,
+                    venue=venue,
+                    product=product,
+                )
+            log.info("postgres market data cache enabled")
 
             async def _cleanup_with_db() -> None:
                 await db_conn.close()
                 await http_client.close()
 
-            return provider, _cleanup_with_db
-        except Exception:
-            if db_conn is not None:
-                await db_conn.close()
-            log.warning("postgres cache unavailable, falling back to direct exchange fetch", exc_info=True)
+            return MarketDataFetchers(candles=candle_provider, funding=funding_provider), _cleanup_with_db
 
-    return provider, http_client.close
+    return MarketDataFetchers(candles=candle_provider, funding=funding_provider), http_client.close
 
 
 def build_adapters(settings: Settings, *, clock: ClockPort) -> ComposedAdapters:

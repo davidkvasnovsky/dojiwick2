@@ -113,6 +113,13 @@ class TestDailyLossRule:
         result = self.rule.evaluate(context=ctx, candidate=cand, risk_params=(_PARAMS,))
         assert not result.blocked_mask[0]
 
+    def test_blocks_blown_account(self) -> None:
+        # day_start=0 must block, not divide to nan and silently pass
+        ctx = ContextBuilder(pairs=("BTC/USDC",)).with_equity([0.0]).with_day_start_equity([0.0]).build()
+        cand = _candidate()
+        result = self.rule.evaluate(context=ctx, candidate=cand, risk_params=(_PARAMS,))
+        assert result.blocked_mask[0]
+
 
 class TestPerPairRiskEngine:
     """Test that per_pair_risk applies different thresholds per pair."""

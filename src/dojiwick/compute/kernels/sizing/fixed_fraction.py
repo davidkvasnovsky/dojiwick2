@@ -59,9 +59,10 @@ def size_intents(
     risk_usd = equity * risk_pct / 100.0
     stop_distance = np.abs(candidate.entry_price - candidate.stop_price)
 
-    # Defense-in-depth: deactivate rows with zero stop distance
+    # Defense-in-depth: deactivate rows with zero stop distance or a
+    # non-positive price before any division uses them
     zero_stop = stop_distance == 0.0
-    active = active & ~zero_stop
+    active = active & ~zero_stop & (prices > 0.0)
 
     raw_quantity = np.divide(
         risk_usd,
@@ -100,7 +101,7 @@ def size_intents(
     notional[oversized] = 0.0
     active[oversized] = False
 
-    invalid = active & ((prices <= 0.0) | ~np.isfinite(quantity) | ~np.isfinite(notional))
+    invalid = active & (~np.isfinite(quantity) | ~np.isfinite(notional))
     if np.any(invalid):
         invalid_pairs = [context.market.pairs[i] for i in np.flatnonzero(invalid)]
         log.warning("deactivated rows with invalid sizing: %s", invalid_pairs)

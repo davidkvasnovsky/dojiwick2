@@ -12,7 +12,7 @@ from dojiwick.application.orchestration.execution_planner import DefaultExecutio
 from dojiwick.application.policies.adaptive.service import AdaptiveService
 from dojiwick.application.policies.risk.defaults import build_default_risk_engine
 from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
-from dojiwick.application.use_cases.run_backtest import BacktestService
+from dojiwick.application.use_cases.run_backtest import BacktestService, BacktestTimeSeries
 from dojiwick.application.use_cases.run_tick import TickService
 from dojiwick.compute.kernels.regime.classify import classify_regime_batch
 from fixtures.factories.infrastructure import default_instrument_map, default_risk_settings, default_settings
@@ -227,14 +227,19 @@ async def test_live_backtest_parity() -> None:
     )
     live_outcomes = await live_service.run_tick(context.market.pairs)
 
-    # Backtest path (same registry and engine)
+    # Backtest path (same registry and engine): 1-bar series, entries force-close at end
     bt_service = BacktestService(
         settings=settings,
         strategy_registry=registry,
         risk_engine=engine,
     )
     next_prices = context.market.price + np.ones(context.size, dtype=np.float64)
-    bt_summary = await bt_service.run(context, next_prices)
+    series = BacktestTimeSeries(
+        contexts=(context,),
+        next_prices=(next_prices,),
+        active_mask=np.ones((1, context.size), dtype=np.bool_),
+    )
+    bt_summary, _ = await bt_service.run_with_hysteresis_summary_only(series, skip_benchmark=True)
 
     # Trade count parity: both pipelines should accept/reject the same rows
     live_trades = sum(1 for o in live_outcomes if o.status == DecisionStatus.EXECUTED)

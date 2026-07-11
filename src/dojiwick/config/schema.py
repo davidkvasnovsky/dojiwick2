@@ -10,6 +10,7 @@ from dojiwick.domain.enums import (
     BacktestGapPolicy,
     BenchmarkMode,
     EntryPriceModel,
+    FundingMode,
     HistoryAlignment,
     MissingBarPolicy,
     ObjectiveMode,
@@ -356,8 +357,7 @@ class BacktestSettings(BaseModel):
     slippage_bps: float
     fee_multiplier: float
     leverage: float
-    funding_rate_per_bar: float
-    impact_bps: float
+    funding_mode: FundingMode
     max_volume_pct: float
     equity_usd: float
     warmup_bars: int
@@ -382,10 +382,6 @@ class BacktestSettings(BaseModel):
             raise ValueError("fee_multiplier must be > 0")
         if self.leverage < 1.0:
             raise ValueError("leverage must be >= 1.0")
-        if self.funding_rate_per_bar < 0:
-            raise ValueError("funding_rate_per_bar must be >= 0")
-        if self.impact_bps < 0:
-            raise ValueError("impact_bps must be >= 0")
         if not (0.0 < self.max_volume_pct <= 1.0):
             raise ValueError("max_volume_pct must be in (0, 1]")
         if self.equity_usd <= 0:
@@ -398,6 +394,8 @@ class BacktestSettings(BaseModel):
             raise ValueError("partial_fill_min_ratio must be in (0, 1]")
         if self.maintenance_margin_rate < 0:
             raise ValueError("maintenance_margin_rate must be >= 0")
+        if self.leverage > 1.0 and self.maintenance_margin_rate <= 0.0:
+            raise ValueError("maintenance_margin_rate must be > 0 when leverage > 1 (liquidation modeling)")
         if self.leverage > 1.0 and self.maintenance_margin_rate >= 1.0 / self.leverage:
             raise ValueError("maintenance_margin_rate must be < 1/leverage (initial margin rate)")
         if (
@@ -416,8 +414,6 @@ class BacktestSettings(BaseModel):
             fee_bps=self.fee_bps,
             fee_multiplier=self.fee_multiplier,
             slippage_bps=self.slippage_bps,
-            impact_bps=self.impact_bps,
-            funding_rate_per_bar=self.funding_rate_per_bar,
             leverage=self.leverage,
             maintenance_margin_rate=self.maintenance_margin_rate,
         )

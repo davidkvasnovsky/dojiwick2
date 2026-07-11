@@ -106,6 +106,7 @@ class TradeDetail:
     quantity: float
     notional_usd: float
     pnl_usd: float
+    funding_usd: float = 0.0
     regime: MarketState | None = None
     regime_confidence: float = 0.0
     atr_at_entry: float = 0.0

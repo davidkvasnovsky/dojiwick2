@@ -2,13 +2,11 @@
 
 import math
 
-import numpy as np
 import pytest
 
 from dojiwick.application.use_cases.optimization.objective import (
     _base_score as base_score_fn,  # pyright: ignore[reportPrivateUsage]
     _regularization as regularization_fn,  # pyright: ignore[reportPrivateUsage]
-    VectorObjective,
     WalkForwardObjective,
 )
 from dojiwick.application.use_cases.optimization.search_space import ParamSet, extract_regularization_baseline
@@ -21,7 +19,6 @@ from dojiwick.config.scope import (
     StrategyScopeRule,
 )
 from dojiwick.domain.enums import ObjectiveMode
-from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext
 from dojiwick.domain.models.value_objects.params import StrategyParams
 from fixtures.factories.domain import TimeSeriesBuilder
 from fixtures.factories.infrastructure import default_optimization_settings, default_settings, default_strategy_params
@@ -86,45 +83,6 @@ def _make_apply_tuned(settings: object) -> object:
         return apply_params(s, params, baseline=s)
 
     return _apply
-
-
-async def test_vector_objective_returns_float(sample_context: BatchDecisionContext) -> None:
-    settings = default_settings().model_copy(update={"strategy": _config_strategy()})
-    objective = VectorObjective(
-        settings=settings,
-        apply_tuned=_make_apply_tuned(settings),  # pyright: ignore[reportArgumentType]
-        base_context=sample_context,
-        next_prices=sample_context.market.price + np.array([1.0, -0.2], dtype=np.float64),
-        target_ids=("btc_usdc", "eth_usdc"),
-        venue="binance",
-        product="usd_c",
-    )
-
-    score = await objective.evaluate(
-        {
-            "stop_atr_mult": 2.5,
-            "rr_ratio": 2.0,
-            "min_stop_distance_pct": 0.5,
-            "mean_rsi_oversold": 35.0,
-            "mean_rsi_overbought": 70.0,
-            "vol_extreme_oversold": 30.0,
-            "vol_extreme_overbought": 75.0,
-            "trend_pullback_rsi_max": 45.0,
-            "adx_trend_min": 20.0,
-            "atr_high_pct": 0.9,
-            "min_confidence": 0.55,
-            "ema_spread_weak_bps": 8.0,
-            "atr_low_pct": 0.30,
-            "trailing_stop_activation_rr": 1.0,
-            "trailing_stop_atr_mult": 1.0,
-            "breakeven_after_rr": 1.0,
-            "max_hold_bars": 48,
-            "min_volume_ratio": 0.8,
-            "trend_max_regime_confidence": 0.90,
-        }
-    )
-
-    assert isinstance(score, float)
 
 
 def test_apply_params_scales_scope_rules() -> None:

@@ -160,7 +160,6 @@ def summarize(
     equity_curve = eq if compute_curves else None
     drawdowns = dd_arr if compute_curves else None
 
-    # Sortino: mean return / downside std
     downside = returns[returns < 0.0]
     downside_std = float(np.std(downside)) if len(downside) > 0 else 0.0
     sortino = 0.0 if downside_std == 0.0 else mean_return / downside_std
@@ -178,17 +177,15 @@ def summarize(
         year_fraction = n_bars / bars_per_year
         annualized_return = total_return_pct / year_fraction if year_fraction > 0 else 0.0
     else:
-        annualized_return = mean_return * np.sqrt(252.0) if trades > 0 else 0.0
+        # Without a bar count there is no time axis — report the un-annualized total
+        annualized_return = mean_return * trades if trades > 0 else 0.0
     calmar = 0.0 if max_drawdown == 0.0 else float(annualized_return) / max_drawdown
 
-    # Profit factor: sum(wins) / sum(losses)
     sum_losses = float(np.abs(np.sum(losses))) if len(losses) > 0 else 0.0
     profit_factor = float(np.sum(wins)) / sum_losses if sum_losses > 0.0 else float("inf") if len(wins) > 0 else 0.0
 
-    # Max consecutive losses
     max_consecutive_losses = _max_consecutive(loss_mask.astype(np.int64))
 
-    # Payoff ratio: avg win / avg loss
     avg_win = float(np.mean(wins)) if len(wins) > 0 else 0.0
     avg_loss = float(np.abs(np.mean(losses))) if len(losses) > 0 else 0.0
     payoff_ratio = avg_win / avg_loss if avg_loss > 0.0 else 0.0
