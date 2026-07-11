@@ -88,9 +88,6 @@ def build_sampler(spec: OptimizationRunSpec) -> optuna.samplers.BaseSampler:
     import optuna
     from optuna.exceptions import ExperimentalWarning
 
-    # multivariate/group/constant_liar are experimental but load-bearing for
-    # parallel TPE quality. Optuna forces the warning to "always", so each of the
-    # N workers reprints it on construction — silence it locally instead.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ExperimentalWarning)
         return optuna.samplers.TPESampler(
@@ -118,17 +115,15 @@ def build_storage(url: str) -> optuna.storages.RDBStorage:
     """Build an Optuna RDBStorage with heartbeat-based stale-trial recovery.
 
     Without a heartbeat, a SIGKILL'd worker leaves its trial RUNNING in the
-    database forever; with one, the next worker marks it FAILED and the
+    database forever; with one, the next worker marks it stale and the
     retry callback re-enqueues it once.
     """
     import warnings
 
     import optuna
     from optuna.exceptions import ExperimentalWarning
-    from optuna.storages import RetryFailedTrialCallback
+    from optuna.storages import RetryHeartbeatStaleTrialCallback
 
-    # heartbeat/grace_period/RetryFailedTrialCallback are experimental but required
-    # for stale-trial recovery; silence the forced-"always" warning per worker.
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", ExperimentalWarning)
         return optuna.storages.RDBStorage(
@@ -136,7 +131,7 @@ def build_storage(url: str) -> optuna.storages.RDBStorage:
             engine_kwargs={"pool_pre_ping": True},
             heartbeat_interval=60,
             grace_period=180,
-            failed_trial_callback=RetryFailedTrialCallback(max_retry=1),
+            heartbeat_stale_trial_callback=RetryHeartbeatStaleTrialCallback(max_retry=1),
         )
 
 
