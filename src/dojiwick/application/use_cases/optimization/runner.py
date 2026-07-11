@@ -83,14 +83,22 @@ class _OptunaTrialAdapter:
 
 def build_sampler(spec: OptimizationRunSpec) -> optuna.samplers.BaseSampler:
     """Build an Optuna TPE sampler from run spec."""
-    import optuna
+    import warnings
 
-    return optuna.samplers.TPESampler(
-        multivariate=spec.multivariate_sampler,
-        group=spec.multivariate_sampler,
-        constant_liar=spec.constant_liar,
-        seed=spec.sampler_seed,
-    )
+    import optuna
+    from optuna.exceptions import ExperimentalWarning
+
+    # multivariate/group/constant_liar are experimental but load-bearing for
+    # parallel TPE quality. Optuna forces the warning to "always", so each of the
+    # N workers reprints it on construction — silence it locally instead.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ExperimentalWarning)
+        return optuna.samplers.TPESampler(
+            multivariate=spec.multivariate_sampler,
+            group=spec.multivariate_sampler,
+            constant_liar=spec.constant_liar,
+            seed=spec.sampler_seed,
+        )
 
 
 def build_pruner(spec: OptimizationRunSpec) -> optuna.pruners.BasePruner | None:
@@ -113,16 +121,23 @@ def build_storage(url: str) -> optuna.storages.RDBStorage:
     database forever; with one, the next worker marks it FAILED and the
     retry callback re-enqueues it once.
     """
+    import warnings
+
     import optuna
+    from optuna.exceptions import ExperimentalWarning
     from optuna.storages import RetryFailedTrialCallback
 
-    return optuna.storages.RDBStorage(
-        url=url,
-        engine_kwargs={"pool_pre_ping": True},
-        heartbeat_interval=60,
-        grace_period=180,
-        failed_trial_callback=RetryFailedTrialCallback(max_retry=1),
-    )
+    # heartbeat/grace_period/RetryFailedTrialCallback are experimental but required
+    # for stale-trial recovery; silence the forced-"always" warning per worker.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ExperimentalWarning)
+        return optuna.storages.RDBStorage(
+            url=url,
+            engine_kwargs={"pool_pre_ping": True},
+            heartbeat_interval=60,
+            grace_period=180,
+            failed_trial_callback=RetryFailedTrialCallback(max_retry=1),
+        )
 
 
 def create_study_from_spec(spec: OptimizationRunSpec, storage_url: str | None = None) -> optuna.study.Study:
