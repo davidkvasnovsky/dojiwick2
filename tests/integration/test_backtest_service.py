@@ -114,3 +114,35 @@ async def test_hysteresis_bars_1_matches_single_bar() -> None:
     assert bt_result.summary.trades == result_single.trades
     np.testing.assert_allclose(bt_result.summary.total_pnl_usd, result_single.total_pnl_usd, atol=1e-10)
     np.testing.assert_allclose(bt_result.summary.win_rate, result_single.win_rate, atol=1e-10)
+
+
+async def test_regime_profit_factors_consistent_across_paths() -> None:
+    """summary-only path regime PFs match gate-style accumulation over trade details."""
+    from dojiwick.compute.kernels.metrics.summarize import scalar_profit_factor
+    from dojiwick.domain.enums import regime_group
+
+    series = TimeSeriesBuilder(n_bars=40).build()
+    service = _service()
+
+    full = await service.run_with_hysteresis(series)
+    summary_only, _ = await service.run_with_hysteresis_summary_only(series, skip_benchmark=True)
+
+    # Recompute regime PFs from trade details the way the gate does.
+    wins: dict[str, float] = {}
+    losses: dict[str, float] = {}
+    counts: dict[str, int] = {}
+    for t in full.trade_details:
+        key = regime_group(t.regime)
+        if t.pnl_usd > 0:
+            wins[key] = wins.get(key, 0.0) + t.pnl_usd
+        elif t.pnl_usd < 0:
+            losses[key] = losses.get(key, 0.0) + abs(t.pnl_usd)
+        counts[key] = counts.get(key, 0) + 1
+    expected = {k: scalar_profit_factor(wins.get(k, 0.0), losses.get(k, 0.0)) for k in counts}
+
+    assert summary_only.regime_trade_counts == counts
+    assert full.summary.regime_trade_counts == counts
+    got = summary_only.regime_profit_factors or {}
+    assert set(got) == set(expected)
+    for k, pf in expected.items():
+        assert got[k] == pf

@@ -33,6 +33,7 @@ from dojiwick.compute.kernels.metrics.summarize import (
     compute_daily_sharpe,
     interval_to_bars_per_year,
     quick_sharpe,
+    scalar_profit_factor,
     summarize,
 )
 from dojiwick.compute.kernels.pnl.entry_price import resolve_entry_price
@@ -52,6 +53,7 @@ from dojiwick.domain.enums import (
     MarketState,
     RegimeExitProfile,
     TradeAction,
+    regime_group,
     safe_market_state,
 )
 from dojiwick.domain.indicator_schema import INDICATOR_INDEX
@@ -185,6 +187,17 @@ class _BarCollectionResult:
     max_portfolio_drawdown_pct: float
     portfolio_equity: np.ndarray  # shape (n_bars,)
     initial_equity: float
+    regime_wins: dict[str, float]
+    regime_losses: dict[str, float]
+    regime_counts: dict[str, int]
+
+    def regime_profit_factors(self, min_trades: int = 0) -> dict[str, float]:
+        """Per-regime-group PF for groups with at least *min_trades* trades."""
+        return {
+            key: scalar_profit_factor(self.regime_wins.get(key, 0.0), self.regime_losses.get(key, 0.0))
+            for key, count in self.regime_counts.items()
+            if count >= min_trades
+        }
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -331,6 +344,8 @@ class BacktestService:
             portfolio_equity_curve=peq,
             portfolio_drawdown_curve=pdd,
             daily_sharpe=daily_sharpe,
+            regime_profit_factors=collected.regime_profit_factors(),
+            regime_trade_counts=dict(collected.regime_counts),
         )
 
         # Monthly PnL breakdown (bar_totals already computed above)
@@ -369,7 +384,12 @@ class BacktestService:
             summary = result.summary
         else:
             summary = self._apply_benchmark(result.summary, series, collected.config_hash)
-        summary = replace(summary, max_portfolio_drawdown_pct=collected.max_portfolio_drawdown_pct)
+        summary = replace(
+            summary,
+            max_portfolio_drawdown_pct=collected.max_portfolio_drawdown_pct,
+            regime_profit_factors=collected.regime_profit_factors(),
+            regime_trade_counts=dict(collected.regime_counts),
+        )
         return summary, result.trade_returns
 
     async def _collect_bars(
@@ -399,6 +419,20 @@ class BacktestService:
         bar_notionals = np.zeros((series.n_bars, series.n_pairs), dtype=np.float64)
         trade_details: list[TradeDetail] = []
         cost = settings.backtest.cost_model
+
+        # Per-regime-group PnL accumulators (kept regardless of collect_details
+        # so the optimizer's summary-only path can score per-regime PF).
+        regime_wins: dict[str, float] = {}
+        regime_losses: dict[str, float] = {}
+        regime_counts: dict[str, int] = {}
+
+        def record_regime_pnl(state: MarketState | None, pnl: float) -> None:
+            key = regime_group(state)
+            if pnl > 0:
+                regime_wins[key] = regime_wins.get(key, 0.0) + pnl
+            elif pnl < 0:
+                regime_losses[key] = regime_losses.get(key, 0.0) + abs(pnl)
+            regime_counts[key] = regime_counts.get(key, 0) + 1
 
         portfolio = series.contexts[0].portfolio
         prev_time = None
@@ -622,6 +656,7 @@ class BacktestService:
                             tp1_pnl = _realized_pnl(pos, pos.tp1_price, cost, pos.observed_bars, quantity=tp1_qty)
                             bar_pnl_buf[pair_idx] += tp1_pnl
                             bar_notional_buf[pair_idx] = _full_notional(pos)
+                            record_regime_pnl(pos.regime, tp1_pnl)
                             if collect_details:
                                 trade_details.append(
                                     TradeDetail(
@@ -672,6 +707,7 @@ class BacktestService:
                         pnl = _realized_pnl(pos, close_price, cost, pos.observed_bars)
                         bar_pnl_buf[pair_idx] += pnl
                         bar_notional_buf[pair_idx] = _full_notional(pos)
+                        record_regime_pnl(pos.regime, pnl)
                         if collect_details:
                             trade_details.append(_build_trade_detail(pos, bar_idx, close_price, close_reason, pnl))
                         if pnl < 0:
@@ -816,6 +852,7 @@ class BacktestService:
                 close_bar = int(last_active_bar[pair_idx]) if last_active_bar[pair_idx] >= 0 else series.n_bars - 1
                 exit_price = float(series.next_prices[close_bar][pair_idx])
                 pnl = _realized_pnl(pos, exit_price, cost, pos.observed_bars)
+                record_regime_pnl(pos.regime, pnl)
                 if collect_details:
                     trade_details.append(
                         _build_trade_detail(pos, close_bar, exit_price, CloseReason.END_OF_BACKTEST, pnl)
@@ -831,6 +868,9 @@ class BacktestService:
             max_portfolio_drawdown_pct=max_portfolio_dd,
             portfolio_equity=portfolio_equity,
             initial_equity=initial_equity,
+            regime_wins=regime_wins,
+            regime_losses=regime_losses,
+            regime_counts=regime_counts,
         )
 
     @staticmethod

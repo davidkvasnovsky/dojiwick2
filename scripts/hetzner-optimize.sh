@@ -15,11 +15,19 @@
 #   ./scripts/hetzner-optimize.sh --config config.toml --start 2019-09-08 --end 2026-03-17
 #   ./scripts/hetzner-optimize.sh --config config.toml --start 2019-09-08 --end 2026-03-17 --gate
 #   ./scripts/hetzner-optimize.sh --config config.toml --start 2019-09-08 --end 2026-03-17 --dry-run
+#
+# SSH: connections pin a single identity (--identity, default ~/.ssh/id_ed25519)
+# with IdentitiesOnly=yes — the private key must match the Hetzner key (--ssh-key).
 
 set -euo pipefail
 
 # Wrap hcloud with 1Password plugin (alias doesn't work in scripts)
 hcloud() { op plugin run -- hcloud "$@"; }
+
+# Pin the SSH identity: without IdentitiesOnly the agent offers every loaded
+# key and the server disconnects on MaxAuthTries before the right one is tried.
+ssh() { command ssh -o IdentitiesOnly=yes -i "$SSH_IDENTITY" "$@"; }
+scp() { command scp -o IdentitiesOnly=yes -i "$SSH_IDENTITY" "$@"; }
 
 # Defaults
 CONFIG_PATH=""
@@ -33,6 +41,7 @@ OP_DEPLOY_KEY_REF="op://Personal/Dojiwick Deploy Key/private key"
 OP_BINANCE_API_KEY_REF="op://Personal/Binance API/api_key"
 OP_BINANCE_API_SECRET_REF="op://Personal/Binance API/api_secret"
 SSH_KEY_NAME=""
+SSH_IDENTITY="$HOME/.ssh/id_ed25519"
 DRY_RUN=false
 
 # Resource tracking (used by cleanup)
@@ -58,6 +67,7 @@ parse_args() {
             --pg-port)     LOCAL_PG_PORT="$2"; shift 2 ;;
             --op-key-ref)  OP_DEPLOY_KEY_REF="$2"; shift 2 ;;
             --ssh-key)     SSH_KEY_NAME="$2"; shift 2 ;;
+            --identity)    SSH_IDENTITY="$2"; shift 2 ;;
             --dry-run)     DRY_RUN=true; shift ;;
             *) die "Unknown argument: $1" ;;
         esac
@@ -103,6 +113,9 @@ preflight_checks() {
         hcloud ssh-key list -o noheader | grep -q "$SSH_KEY_NAME" \
             || die "SSH key '$SSH_KEY_NAME' not found in Hetzner project"
     fi
+
+    [[ -f "$SSH_IDENTITY" ]] \
+        || die "SSH identity file not found: $SSH_IDENTITY (pass --identity <path> matching Hetzner key '$SSH_KEY_NAME')"
 
     info "Pre-flight checks passed"
 }

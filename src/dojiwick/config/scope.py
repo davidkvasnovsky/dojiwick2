@@ -133,6 +133,11 @@ class StrategyScopeRule:
             raise ValueError(f"scope.strategy.priority must be in [0, {_MAX_PRIORITY}]")
         if not self.values.has_any():
             raise ValueError("scope.strategy must set at least one override field")
+        # Scope overrides bypass StrategyParams validators (model_copy does not
+        # re-validate), so hard invariants must be enforced here.
+        score = self.values.min_confluence_score
+        if score is not None and not (0.0 <= score <= 100.0):
+            raise ValueError(f"scope.strategy '{self.id}': min_confluence_score must be in [0, 100], got {score}")
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

@@ -1,5 +1,7 @@
 """Optimization objective tests."""
 
+import math
+
 import numpy as np
 import pytest
 
@@ -423,3 +425,81 @@ def test_objective_mode_enum() -> None:
         }
     )
     assert settings_wf.optimization.objective_mode == ObjectiveMode.WALK_FORWARD
+
+
+def test_base_score_regime_pf_penalty_applied() -> None:
+    """Regimes below target PF with enough trades reduce the score."""
+    settings = default_settings().model_copy(update={"strategy": _config_strategy()})
+    opt = settings.optimization
+    base_summary = BacktestSummary(
+        trades=100,
+        total_pnl_usd=0.0,
+        win_rate=0.6,
+        expectancy_usd=0.0,
+        sharpe_like=2.0,
+        max_drawdown_pct=10.0,
+        sortino=0.5,
+        profit_factor=1.5,
+    )
+    clean = base_score_fn(opt, base_summary, equity_start=0.0)
+
+    from dataclasses import replace
+
+    bad_volatile = replace(
+        base_summary,
+        regime_profit_factors={"volatile": 0.75, "trending": 1.4},
+        regime_trade_counts={"volatile": 50, "trending": 200},
+    )
+    penalized = base_score_fn(opt, bad_volatile, equity_start=0.0)
+    expected_delta = opt.objective_regime_pf_penalty * (opt.objective_regime_pf_target - 0.75)
+    assert math.isclose(penalized, clean - expected_delta, rel_tol=1e-9)
+
+
+def test_base_score_regime_pf_penalty_skips_thin_regimes() -> None:
+    """Regimes with fewer trades than the floor do not contribute penalty."""
+    settings = default_settings().model_copy(update={"strategy": _config_strategy()})
+    opt = settings.optimization
+    from dataclasses import replace
+
+    base_summary = BacktestSummary(
+        trades=100,
+        total_pnl_usd=0.0,
+        win_rate=0.6,
+        expectancy_usd=0.0,
+        sharpe_like=2.0,
+        max_drawdown_pct=10.0,
+        sortino=0.5,
+        profit_factor=1.5,
+    )
+    clean = base_score_fn(opt, base_summary, equity_start=0.0)
+    thin = replace(
+        base_summary,
+        regime_profit_factors={"volatile": 0.2},
+        regime_trade_counts={"volatile": opt.objective_regime_pf_min_trades - 1},
+    )
+    assert math.isclose(base_score_fn(opt, thin, equity_start=0.0), clean, rel_tol=1e-9)
+
+
+def test_base_score_regime_pf_above_target_no_penalty() -> None:
+    """Regimes at or above target PF are not penalized."""
+    settings = default_settings().model_copy(update={"strategy": _config_strategy()})
+    opt = settings.optimization
+    from dataclasses import replace
+
+    base_summary = BacktestSummary(
+        trades=100,
+        total_pnl_usd=0.0,
+        win_rate=0.6,
+        expectancy_usd=0.0,
+        sharpe_like=2.0,
+        max_drawdown_pct=10.0,
+        sortino=0.5,
+        profit_factor=1.5,
+    )
+    clean = base_score_fn(opt, base_summary, equity_start=0.0)
+    good = replace(
+        base_summary,
+        regime_profit_factors={"volatile": 1.3, "trending": 2.0},
+        regime_trade_counts={"volatile": 100, "trending": 100},
+    )
+    assert math.isclose(base_score_fn(opt, good, equity_start=0.0), clean, rel_tol=1e-9)

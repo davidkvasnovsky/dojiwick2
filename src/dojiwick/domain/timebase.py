@@ -4,6 +4,28 @@ from datetime import datetime, timezone
 
 from dojiwick.domain.errors import DataQualityError
 
+_INTERVAL_UNIT_SECONDS = {"m": 60, "h": 3_600, "d": 86_400, "w": 604_800}
+
+
+def interval_to_seconds(interval: str) -> int:
+    """Convert a candle interval string (``1m``, ``1h``, ``4h``, ``1d``, ``1w``) to seconds.
+
+    Month intervals (``1M``) are rejected: months have no fixed duration.
+    """
+    if len(interval) < 2:
+        raise ValueError(f"invalid candle interval: {interval!r}")
+    unit = interval[-1]
+    seconds = _INTERVAL_UNIT_SECONDS.get(unit)
+    if seconds is None:
+        raise ValueError(f"unsupported candle interval unit: {interval!r}")
+    try:
+        count = int(interval[:-1])
+    except ValueError:
+        raise ValueError(f"invalid candle interval: {interval!r}") from None
+    if count <= 0:
+        raise ValueError(f"invalid candle interval: {interval!r}")
+    return count * seconds
+
 
 def last_confirmed_bar_close(observed_at: datetime, interval_sec: int) -> datetime:
     """Return the most recent confirmed bar close via floor-division epoch math.

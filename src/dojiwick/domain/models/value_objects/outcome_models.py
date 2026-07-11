@@ -143,6 +143,11 @@ class BacktestSummary:
     portfolio_equity_curve: np.ndarray | None = field(default=None, repr=False)
     portfolio_drawdown_curve: np.ndarray | None = field(default=None, repr=False)
     daily_sharpe: float = 0.0
+    # Per-regime-group ("trending"/"ranging"/"volatile") profit factors and
+    # trade counts, populated by the backtest bar-collection loop. None when
+    # the producing path does not track regimes (e.g. bare summarize()).
+    regime_profit_factors: dict[str, float] | None = field(default=None, repr=False)
+    regime_trade_counts: dict[str, int] | None = field(default=None, repr=False)
 
     @property
     def effective_max_drawdown_pct(self) -> float:

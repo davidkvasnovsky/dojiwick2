@@ -64,8 +64,8 @@ _BASE_BOUNDS: dict[str, tuple[float, float]] = {
     "mean_rsi_oversold": (25.0, 45.0),
     "mean_rsi_overbought": (55.0, 80.0),
     "mean_revert_max_bb_width": (0.02, 0.08),
-    "vol_extreme_oversold": (25.0, 45.0),
-    "vol_extreme_overbought": (55.0, 80.0),
+    "vol_extreme_oversold": (25.0, 48.0),
+    "vol_extreme_overbought": (52.0, 80.0),
     "min_volume_ratio": (0.1, 1.2),
     "trend_max_regime_confidence": (0.70, 0.98),
     # Regime-adaptive exit params
@@ -104,6 +104,12 @@ REGIME_SCOPE_FIELDS: dict[str, dict[str, tuple[float, float]]] = {
         "max_hold_bars": (8, 60),
         "trailing_stop_atr_mult": (0.3, 1.5),
         "breakeven_after_rr": (0.3, 2.0),
+        # Entry throttles for trend_follow inside the volatile regime. Resolved
+        # per-pair in phase-1 scope resolution (regime-only rule), so unlike
+        # min_confluence_score they actually gate entries. The upper bound is
+        # high enough to act as a de-facto disable of volatile trend entries.
+        "trend_breakout_adx_min": (25.0, 60.0),
+        "trend_pullback_adx_min": (15.0, 55.0),
     },
 }
 

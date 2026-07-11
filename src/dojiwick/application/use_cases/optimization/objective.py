@@ -363,7 +363,30 @@ def _base_score(
         raw_return = summary.total_pnl_usd / equity_start
         score += opt.objective_pnl_weight * math.log1p(max(-0.9999, min(raw_return, opt.objective_pnl_cap)))
 
+    # Per-regime PF penalty — aligns the objective with the research gate's
+    # per-regime criterion so the search cannot converge on gate-failing optima.
+    if opt.objective_regime_pf_penalty > 0 and summary.regime_profit_factors:
+        counts = summary.regime_trade_counts or {}
+        min_trades = effective_min_trades_for_regime(opt, min_trades_override)
+        for key, pf in summary.regime_profit_factors.items():
+            if counts.get(key, 0) < min_trades or math.isinf(pf):
+                continue
+            score -= opt.objective_regime_pf_penalty * max(0.0, opt.objective_regime_pf_target - pf)
+
     return score
+
+
+def effective_min_trades_for_regime(opt: OptimizationSettingsPort, min_trades_override: int | None) -> int:
+    """Per-regime min-trade floor, fold-scaled in proportion to the global floor.
+
+    ``min_trades_override`` is the fold-scaled global floor (objective_min_trades
+    // n_folds); the regime floor scales by the same ratio so a 30-trade
+    full-window requirement becomes 30 // n_folds inside a fold.
+    """
+    base = opt.objective_regime_pf_min_trades
+    if min_trades_override is None or opt.objective_min_trades <= 0:
+        return base
+    return max(1, base * min_trades_override // max(1, opt.objective_min_trades))
 
 
 def _regularization(params: ParamSet, baseline: dict[str, float]) -> float:

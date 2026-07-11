@@ -348,6 +348,9 @@ def default_optimization_settings(**overrides: Any) -> OptimizationSettings:
         "objective_consecutive_loss_threshold": 3,
         "objective_pnl_weight": 0.5,
         "objective_pnl_cap": 3.0,
+        "objective_regime_pf_penalty": 10.0,
+        "objective_regime_pf_target": 0.95,
+        "objective_regime_pf_min_trades": 30,
     }
     defaults.update(overrides)
     return OptimizationSettings(**defaults)

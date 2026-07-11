@@ -20,6 +20,19 @@ def safe_market_state(code: int) -> MarketState | None:
         return None
 
 
+def regime_group(state: "MarketState | None") -> str:
+    """Map MarketState to the 3-regime model key used by gate and objective.
+
+    TRENDING_UP and TRENDING_DOWN collapse into "trending" so per-regime
+    statistics match the optimizer's scope_<regime>__* parameter groups.
+    """
+    if state is None:
+        return "unknown"
+    if state in (MarketState.TRENDING_UP, MarketState.TRENDING_DOWN):
+        return "trending"
+    return state.name.lower()
+
+
 MARKET_STATE_TO_SQL: dict[int, str] = {1: "trending_up", 2: "trending_down", 3: "ranging", 4: "volatile"}
 SQL_TO_MARKET_STATE: dict[str, MarketState] = {v: MarketState(k) for k, v in MARKET_STATE_TO_SQL.items()}
 

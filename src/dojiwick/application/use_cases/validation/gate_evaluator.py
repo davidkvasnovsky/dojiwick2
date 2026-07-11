@@ -28,7 +28,7 @@ from dojiwick.application.use_cases.validation.research_gate import (
 from dojiwick.application.use_cases.validation.walk_forward_validator import WalkForwardResult, walk_forward_validate
 from dojiwick.compute.kernels.metrics.summarize import scalar_profit_factor
 from dojiwick.compute.kernels.validation.cscv import compute_pbo
-from dojiwick.domain.enums import MarketState
+from dojiwick.domain.enums import regime_group
 from dojiwick.domain.models.value_objects.outcome_models import TradeDetail
 
 log = logging.getLogger(__name__)
@@ -339,15 +339,6 @@ class DefaultGateEvaluator:
 # --- Single-pass trade analysis ---
 
 
-def _regime_key(regime: MarketState | None) -> str:
-    """Map MarketState to the 3-regime model key."""
-    if regime is None:
-        return "unknown"
-    if regime in (MarketState.TRENDING_UP, MarketState.TRENDING_DOWN):
-        return "trending"
-    return regime.name.lower()
-
-
 class _TradeAnalysis(NamedTuple):
     """Single-pass aggregates over all trades."""
 
@@ -382,7 +373,7 @@ def _analyze_trades(
 
     for t in trades:
         pnl = t.pnl_usd
-        rk = _regime_key(t.regime)
+        rk = regime_group(t.regime)
         pair = t.pair
 
         # Shock test aggregation

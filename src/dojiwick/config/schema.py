@@ -504,6 +504,10 @@ class OptimizationSettings(BaseModel):
     # PnL return term weight and cap
     objective_pnl_weight: float
     objective_pnl_cap: float
+    # Per-regime PF penalty (objective/gate alignment)
+    objective_regime_pf_penalty: float
+    objective_regime_pf_target: float
+    objective_regime_pf_min_trades: int
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
@@ -535,6 +539,12 @@ class OptimizationSettings(BaseModel):
             raise ValueError("objective_consistency_penalty must be >= 0")
         if self.objective_min_trades_penalty >= self.objective_min_trades_penalty_start:
             raise ValueError("objective_min_trades_penalty must be < objective_min_trades_penalty_start")
+        if self.objective_regime_pf_penalty < 0:
+            raise ValueError("objective_regime_pf_penalty must be >= 0")
+        if self.objective_regime_pf_target <= 0:
+            raise ValueError("objective_regime_pf_target must be > 0")
+        if self.objective_regime_pf_min_trades < 1:
+            raise ValueError("objective_regime_pf_min_trades must be >= 1")
         return self
 
 

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import pytest
 
 from dojiwick.domain.errors import DataQualityError
-from dojiwick.domain.timebase import assert_timebase_valid, last_confirmed_bar_close
+from dojiwick.domain.timebase import assert_timebase_valid, interval_to_seconds, last_confirmed_bar_close
 
 
 def _utc(epoch: int) -> datetime:
@@ -51,3 +51,28 @@ class TestAssertTimebaseValid:
         observed_at = _utc(900)
         bar_close = _utc(900 - 2 * 90)  # exactly 2 bars old, max_staleness_bars=2
         assert_timebase_valid(observed_at, bar_close, interval, max_staleness_bars=2)
+
+
+class TestIntervalToSeconds:
+    def test_common_intervals(self) -> None:
+        assert interval_to_seconds("1m") == 60
+        assert interval_to_seconds("15m") == 900
+        assert interval_to_seconds("1h") == 3_600
+        assert interval_to_seconds("4h") == 14_400
+        assert interval_to_seconds("1d") == 86_400
+        assert interval_to_seconds("1w") == 604_800
+
+    def test_month_rejected(self) -> None:
+        """Months have no fixed duration."""
+        with pytest.raises(ValueError, match="unsupported candle interval"):
+            interval_to_seconds("1M")
+
+    def test_garbage_rejected(self) -> None:
+        with pytest.raises(ValueError):
+            interval_to_seconds("h")
+        with pytest.raises(ValueError):
+            interval_to_seconds("xh")
+        with pytest.raises(ValueError):
+            interval_to_seconds("0h")
+        with pytest.raises(ValueError):
+            interval_to_seconds("-1h")
