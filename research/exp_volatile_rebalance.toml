@@ -71,8 +71,8 @@ mean_revert_disable_breakeven = true
 mean_revert_disable_ema_filter = true
 mean_revert_max_bb_width = 0.023517913203179884
 # Volatility revert
-vol_extreme_oversold = 33.27800451592494
-vol_extreme_overbought = 62.708299557389786
+vol_extreme_oversold = 40.0
+vol_extreme_overbought = 57.0
 # Partial take profit
 partial_tp_enabled = true
 partial_tp1_rr = 0.5473908662112019
@@ -204,7 +204,7 @@ max_connections = 5
 [optimization]
 # Study
 enabled = false
-study_name = "dojiwick_v40"
+study_name = "dojiwick_v39"
 storage_url = ""
 trials = 10000
 trial_timeout_sec = 120.0
@@ -424,3 +424,11 @@ rr_ratio = 2.170457991522851
 max_hold_bars = 17
 trailing_stop_atr_mult = 0.3002039452533359
 breakeven_after_rr = 0.9587587398797511
+
+# Experiment: throttle trend_follow entries in volatile regime (ADX gates), regime-only rule
+[[scope.strategy]]
+id = "volatile_throttle"
+priority = 100
+regime = "volatile"
+trend_breakout_adx_min = 35.0
+trend_pullback_adx_min = 30.0

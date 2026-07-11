@@ -1,0 +1,213 @@
+ Container dojiwick2-postgres-1 Running 
+ Container dojiwick2-postgres-1 Waiting 
+ Container dojiwick2-postgres-1 Healthy 
+ Container dojiwick2-tooling-run-c7cd7243cb39 Creating 
+ Container dojiwick2-tooling-run-c7cd7243cb39 Created 
+
+======================================================================
+  DOJIWICK POST-OPTIMIZATION ANALYSIS: dojiwick_v39
+======================================================================
+
+======================================================================
+  1. OPTUNA STUDY OVERVIEW
+======================================================================
+Total: 10000 | Completed: 3739 | Pruned: 6261
+Prune rate: 63%
+Top 10: [61.2, 59.7, 59.6, 59.4, 59.0, 58.9, 58.8, 58.5, 58.4, 58.3]
+Scores > 0: 3736 | = -20: 3
+Pruned with intermediate values: 6261/6261 (OK)
+
+======================================================================
+  2. TOP 20 PARAM CONVERGENCE
+======================================================================
+  adaptive_ranging_max_bars                avg=   14.7000 [11.000 - 17.000]
+  adaptive_trending_trail_scale            avg=    0.8202 [0.800 - 0.879]
+  adaptive_volatile_max_bars               avg=   26.6500 [25.000 - 28.000]
+  adaptive_volatile_rr_mult                avg=    1.9359 [1.825 - 2.070]
+  adaptive_volatile_stop_scale             avg=    1.0537 [1.000 - 1.103]
+  adx_trend_min                            avg=   21.0607 [20.004 - 22.180]
+  atr_high_pct                             avg=    1.1063 [1.017 - 1.169]
+  atr_low_pct                              avg=    0.2207 [0.192 - 0.254]
+  breakeven_after_rr                       avg=    1.1489 [0.669 - 1.480]
+  ema_spread_weak_bps                      avg=    7.5871 [6.996 - 8.254]
+  leverage                                 avg=    2.9475 [2.885 - 3.000]
+  max_hold_bars                            avg=   55.3500 [50.000 - 65.000]
+  max_loss_per_trade_pct                   avg=    7.6543 [6.852 - 7.999]
+  max_portfolio_risk_pct                   avg=   17.8375 [8.599 - 22.332]
+  mean_revert_max_bb_width                 avg=    0.0302 [0.027 - 0.033]
+  mean_rsi_overbought                      avg=   78.6906 [76.597 - 79.998]
+  mean_rsi_oversold                        avg=   26.9036 [25.650 - 27.868]
+  min_confidence                           avg=    0.2502 [0.226 - 0.282]
+  min_confluence_score                     avg=   37.9205 [33.085 - 42.030]
+  min_stop_distance_pct                    avg=    0.4624 [0.371 - 0.495]
+  min_volume_ratio                         avg=    0.2903 [0.184 - 0.488]
+  partial_tp1_fraction                     avg=    0.3195 [0.300 - 0.356]
+  partial_tp1_rr                           avg=    0.5917 [0.547 - 0.683]
+  risk_per_trade_pct                       avg=    3.7167 [3.413 - 3.926]
+  rr_ratio                                 avg=    2.0225 [1.382 - 2.659]
+  scope_ranging__breakeven_after_rr        avg=    1.0473 [0.396 - 1.474]
+  scope_ranging__max_hold_bars             avg=   58.0000 [41.000 - 60.000]
+  scope_ranging__rr_ratio                  avg=    1.6672 [1.227 - 2.498]
+  scope_ranging__stop_atr_mult             avg=    1.8031 [1.668 - 2.328]
+  scope_ranging__trailing_stop_atr_mult    avg=    0.5422 [0.460 - 0.623]
+  scope_trending__breakeven_after_rr       avg=    0.9483 [0.591 - 1.402]
+  scope_trending__max_hold_bars            avg=   61.7500 [53.000 - 74.000]
+  scope_trending__rr_ratio                 avg=    3.7775 [3.007 - 4.000]
+  scope_trending__stop_atr_mult            avg=    2.3974 [2.308 - 2.504]
+  scope_trending__trailing_stop_atr_mult   avg=    0.5377 [0.500 - 0.609]
+  scope_volatile__breakeven_after_rr       avg=    1.4393 [1.360 - 1.570]
+  scope_volatile__max_hold_bars            avg=   31.8000 [28.000 - 35.000]
+  scope_volatile__rr_ratio                 avg=    1.7602 [1.680 - 1.944]
+  scope_volatile__stop_atr_mult            avg=    1.5258 [1.500 - 1.591]
+  scope_volatile__trailing_stop_atr_mult   avg=    0.3633 [0.323 - 0.406]
+  stop_atr_mult                            avg=    4.4191 [4.279 - 4.500]
+  trailing_stop_activation_rr              avg=    0.5356 [0.513 - 0.564]
+  trailing_stop_atr_mult                   avg=    0.7836 [0.743 - 0.846]
+  trend_breakout_adx_min                   avg=   25.6397 [25.007 - 27.067]
+  trend_max_regime_confidence              avg=    0.9256 [0.874 - 0.962]
+  trend_overbought_rsi_min                 avg=   45.4978 [45.001 - 46.520]
+  trend_pullback_rsi_max                   avg=   64.4419 [63.251 - 64.993]
+  vol_extreme_overbought                   avg=   65.6985 [63.255 - 67.563]
+  vol_extreme_oversold                     avg=   42.9057 [34.607 - 44.587]
+  risk x leverage                          avg=     10.96% [10.0% - 11.7%]
+
+Best trial #9671 fold scores:
+  Fold 0: 76.67
+  Fold 1: 70.56
+  Fold 2: 46.39
+  Fold 3: 46.66
+  Fold 4: 44.89
+
+======================================================================
+  3. PnL VALIDATION
+======================================================================
+Trades: 514 | PnL: $-1,459.47 | WR: 73.9%
+Per-trade return: mean=1.066% median=2.410% std=4.464%
+  Min: -10.858% | Max: 16.334%
+
+Position sizes:
+  P25: $    2,426.77
+  P50: $    4,345.58
+  P75: $    6,292.30
+  P90: $    7,885.92
+  P95: $    8,890.30
+  P99: $   11,000.21
+  Max:  $   13,274.95
+  > $0M: 0 trades, PnL=$0.00
+  > $1M: 0 trades, PnL=$0.00
+  > $2M: 0 trades, PnL=$0.00
+
+Compounding:
+  After    50 trades: $      7,552.98
+  After   100 trades: $      7,937.67
+  After   200 trades: $      1,680.70
+  After   500 trades: $     11,034.38
+  After   514 trades: $      8,540.53
+
+======================================================================
+  4. MONTHLY PERFORMANCE
+======================================================================
+Month      Trades            PnL       AvgNot    WR
+2022-01       122 $      -606.60 $   4,807.27  75%
+2022-02       148 $    -3,612.66 $   5,116.63  69%
+2022-03       152 $     2,515.10 $   4,064.56  78%
+2022-04        92 $       244.69 $   4,496.10  75%
+
+======================================================================
+  5. EXIT TYPE PERFORMANCE
+======================================================================
+  trailing_stop   n= 194 WR=100% avg=$    192.75 total=$   37,392.85 hold=8bars
+  partial_tp      n= 182 WR=100% avg=$     57.50 total=$   10,464.38 hold=7bars
+  stop_loss       n= 128 WR=0% avg=$   -380.97 total=$  -48,764.56 hold=8bars
+  time_exit       n=   9 WR=44% avg=$    -52.76 total=$     -474.87 hold=33bars
+
+======================================================================
+  6. STOP LOSS DEEP DIVE
+======================================================================
+Stops: 128/514 = 25%
+Avg loss: $-380.97 | Median: $-386.82
+Risk asymmetry: avg_loss/avg_win = 3.01x
+
+Stop timing (bad entry detection):
+  Within 1 bars:  26 (20%) loss=$   -9,618.32
+  Within 2 bars:  39 (30%) loss=$  -14,597.15
+  Within 3 bars:  44 (34%) loss=$  -16,537.55
+  Within 5 bars:  61 (48%) loss=$  -22,996.14
+  Within 8 bars:  80 (62%) loss=$  -30,237.97
+
+Stops by strategy:
+  trend_follow         128/500 (26%)
+
+Stops by regime:
+  trending_down         35 loss=$  -13,288.89
+  trending_up           55 loss=$  -20,974.22
+  volatile              38 loss=$  -14,501.44
+
+======================================================================
+  7. STRATEGY BREAKDOWN
+======================================================================
+  mean_revert          n=  12 WR=100% PnL=$    2,177.30
+  trend_follow         n= 500 WR=73% PnL=$   -3,863.82
+  volatility_revert    n=   2 WR=100% PnL=$      227.04
+
+Direction:
+  Short  n= 225 WR=75.1% PnL=$    1,876.13
+  Long   n= 289 WR=73.0% PnL=$   -3,335.60
+
+======================================================================
+  8. REGIME PERFORMANCE
+======================================================================
+  ranging              n=  12 WR=100% PnL=$    2,177.30
+  trending_down        n= 149 WR=76% PnL=$      832.17
+  trending_up          n= 221 WR=74% PnL=$   -1,370.11
+  volatile             n= 132 WR=69% PnL=$   -3,098.83
+
+======================================================================
+  9. DRAWDOWN ANALYSIS (from equity CSV — includes unrealized P&L)
+======================================================================
+Max DD: 16.25% (at row 1074)
+  DD 16.2%: rows 882-1884 (1002 bars) 0 trades WR=0% stops=0
+  Total DD events > 10%: 1
+
+======================================================================
+  10. CONSECUTIVE LOSS STREAKS
+======================================================================
+Max streak: 8 | Avg: 2.6
+  Streaks >= 3: 23 (theoretical P=1.772%)
+  Streaks >= 5: 7 (theoretical P=0.120%)
+  Streaks >= 7: 3 (theoretical P=0.008%)
+  Streaks >= 10: 0 (theoretical P=0.000%)
+
+======================================================================
+  11. PAIR PERFORMANCE
+======================================================================
+  BNB/USDT     n=  88 WR=73% PnL=$     -302.96
+  BTC/USDT     n=  97 WR=76% PnL=$      400.51
+  DOGE/USDT    n=  94 WR=71% PnL=$   -1,068.70
+  ETH/USDT     n=  79 WR=73% PnL=$      393.84
+  SOL/USDT     n=  81 WR=78% PnL=$      660.59
+  XRP/USDT     n=  75 WR=72% PnL=$   -1,542.76
+
+Simultaneous stops (same bar, 2+ pairs): 22
+
+======================================================================
+  12. POSITION SIZING & COMPOUNDING
+======================================================================
+  2022-H1:  514 trades, avg_notional=$    4,621.01
+
+======================================================================
+  13. LIVE TRADING FEASIBILITY
+======================================================================
+Max position: $13,274.95
+Avg position: $4,621.01
+Trades/month: 137.0
+Avg hold: 8.3 bars (0.3 days)
+Est round-trip cost: $2,375.20 (~10bps per trade)
+Gross wins: $48,089.25 | Gross losses: $49,548.73
+Net PnL: $-1,459.47 (costs already deducted by backtest)
+
+======================================================================
+  14. RECOMMENDATIONS
+======================================================================
+  ! 1-bar stops 20% > 20% -> Widen adaptive_volatile_stop_scale
+  ! Profit factor 0.97 < 1.5 -> Review stop/TP ratio

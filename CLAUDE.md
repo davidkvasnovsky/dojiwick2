@@ -11,10 +11,16 @@ Dojiwick is a batch-first deterministic trading engine for crypto futures. Pytho
 ```bash
 # Setup
 uv sync                # install deps + dojiwick in editable mode
-make onboard           # first-time setup (applies DB migrations)
+make onboard           # first-time setup (starts postgres via Docker + applies DB migrations)
 
 # Quality gate (run before committing — same as CI)
 make ci                # fmt-check + lint + typecheck + unit tests
+make docker-ci         # full gate inside the tooling container + db tests + app image build (exactly what CI runs)
+
+# Docker helpers
+make up                # start postgres (waits for healthy)
+make down              # stop compose services
+make sh                # shell in the tooling container (uv, make, atlas)
 
 # Individual steps
 make fmt               # auto-format
@@ -45,6 +51,8 @@ uv run ruff check --fix .   # auto-fix lint issues
 
 # Note: on host (outside Docker), prefix with `uv run`:
 # uv run dojiwick optimize --config config.toml --start 2022-01-01 --end 2026-03-01 --gate --workers 8
+# Commands needing secrets (`run`) must go through `make run` or `op run --env-file=.env --` —
+# .env holds op:// references that bare `uv run` would pass to the exchange verbatim.
 ```
 
 ## Database
@@ -54,9 +62,9 @@ Atlas manages schema and migrations. Canonical schema: `db/schema.sql`. Migratio
 ```bash
 make db-apply           # apply migrations to local DB
 make db-apply-test      # apply migrations to test DB
-make db-diff name=foo   # generate new migration from schema.sql changes
+make db-diff name=foo   # generate new migration from schema.sql changes (host only — needs docker:// dev DB)
 make db-status          # check migration status
-make db-lint            # lint migrations (Atlas)
+make db-lint            # lint migrations (Atlas; host only — needs docker:// dev DB)
 make db-hash            # rehash migrations directory
 make ci-db              # CI target for DB tests (applies migrations first)
 ```

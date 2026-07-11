@@ -6,14 +6,10 @@ Full verification requires a running database:
     make db-apply-test
     pg_dump --schema-only test_db | diff - db/schema.sql
 
-After tasks 2A, 2B, 2H, the following migrations exist:
-- 20260228_000001_v3_baseline.sql (baseline)
-- 20260314_000001_add_cancelled_execution_status.sql
-- 20260315_000001_remove_order_request_defaults.sql (2A)
-- 20260315_000002_add_native_fee_tracking.sql (2H)
-- 20260315_000003_add_venue_product_provenance.sql (2B)
-
-These were manually verified against db/schema.sql.
+The migration directory was squashed on 2026-07-11 to a single baseline
+regenerated from db/schema.sql (the canonical schema). Historical increments
+had duplicate Atlas 1.x versions and collided with the regenerated baseline
+on fresh databases.
 """
 
 from pathlib import Path
@@ -26,13 +22,7 @@ def test_schema_file_exists() -> None:
 
 
 def test_migration_files_exist() -> None:
-    """All expected migration files must exist."""
+    """Migrations dir must hold the squashed baseline plus the Atlas hash file."""
     migrations_dir = Path(__file__).resolve().parents[2] / "db" / "migrations"
-    expected = [
-        "20260228_000001_v3_baseline.sql",
-        "20260314_000001_add_cancelled_execution_status.sql",
-        "20260315_000001_remove_order_request_defaults.sql",
-        "20260315_000002_add_native_fee_tracking.sql",
-    ]
-    for name in expected:
-        assert (migrations_dir / name).exists(), f"missing migration: {name}"
+    assert any(migrations_dir.glob("*_v3_baseline.sql")), "baseline migration missing"
+    assert (migrations_dir / "atlas.sum").exists(), "atlas.sum missing"

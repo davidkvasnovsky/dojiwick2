@@ -28,15 +28,15 @@ volume_ema_period = 20
 
 # Market regime classification thresholds
 [regime]
-adx_trend_min = 24.63980751574376
+adx_trend_min = 20.144666902672324
 adx_strong_trend_min = 35.0
-ema_spread_weak_bps = 6.6690899800524255
+ema_spread_weak_bps = 7.007648051815927
 ema_spread_strong_bps = 25.0
-atr_low_pct = 0.46493988271303177
-atr_high_pct = 1.0699676530526299
+atr_low_pct = 0.2542915812170785
+atr_high_pct = 1.13039502217862
 atr_extreme_pct = 2.10
 hysteresis_bars = 3
-min_confidence = 0.14436730217681537
+min_confidence = 0.27406246151147984
 truth_trend_return_pct = 0.40
 truth_volatile_return_pct = 1.00
 trend_weight = 0.4
@@ -49,38 +49,38 @@ volume_clip_hi = 1.2
 [strategy]
 default_variant = "baseline"
 # Core exit geometry
-stop_atr_mult = 3.8015311099604014
-rr_ratio = 3.7787482084199886
-min_stop_distance_pct = 0.37000691530463137
-max_hold_bars = 35
-trailing_stop_activation_rr = 0.5297709798209264
-trailing_stop_atr_mult = 0.5124430108736975
-breakeven_after_rr = 0.8290894620158371
+stop_atr_mult = 4.359274254902442
+rr_ratio = 2.494971862050703
+min_stop_distance_pct = 0.3709709251119295
+max_hold_bars = 53
+trailing_stop_activation_rr = 0.5345260497673204
+trailing_stop_atr_mult = 0.8462642069747608
+breakeven_after_rr = 1.3103078573725488
 # Trend follow
-trend_pullback_rsi_max = 64.99580605878185
-trend_overbought_rsi_min = 57.917530221598454
-trend_breakout_adx_min = 25.016001457771072
+trend_pullback_rsi_max = 63.84200049104353
+trend_overbought_rsi_min = 45.00616923813546
+trend_breakout_adx_min = 26.30218920140927
 trend_pullback_adx_min = 20.0
-trend_max_regime_confidence = 0.897602852406991
+trend_max_regime_confidence = 0.9572145838108829
 trend_volatile_ema_enabled = true
 # Mean revert
-mean_rsi_oversold = 25.35515518868417
-mean_rsi_overbought = 75.82678686943942
+mean_rsi_oversold = 27.262080257184724
+mean_rsi_overbought = 79.99810653275719
 mean_revert_use_bb_mid_tp = true
 mean_revert_disable_breakeven = true
 mean_revert_disable_ema_filter = true
-mean_revert_max_bb_width = 0.023517913203179884
+mean_revert_max_bb_width = 0.02833216003163486
 # Volatility revert
-vol_extreme_oversold = 33.27800451592494
-vol_extreme_overbought = 62.708299557389786
+vol_extreme_oversold = 39.927777292743976
+vol_extreme_overbought = 64.36501324082855
 # Partial take profit
 partial_tp_enabled = true
-partial_tp1_rr = 0.5473908662112019
-partial_tp1_fraction = 0.3128457991144847
+partial_tp1_rr = 0.5570065776649455
+partial_tp1_fraction = 0.33535869299861804
 partial_tp_stop_ratio = 0.5
 # Confluence scoring
 confluence_filter_enabled = true
-min_confluence_score = 39.54537820249344
+min_confluence_score = 34.69007902660279
 confluence_rsi_midpoint = 50.0
 confluence_rsi_range = 20.0
 confluence_volume_baseline = 1.0
@@ -91,21 +91,21 @@ confluence_adx_range = 20.0
 macd_filter_enabled = true
 # Regime-adaptive exits
 regime_exit_profile = "adaptive"
-adaptive_volatile_stop_scale = 1.042657653857644
-adaptive_volatile_rr_mult = 1.6432331949185996
-adaptive_trending_trail_scale = 0.8203683986179638
-adaptive_volatile_max_bars = 18
-adaptive_ranging_max_bars = 10
+adaptive_volatile_stop_scale = 1.042395098331969
+adaptive_volatile_rr_mult = 2.0328534294856486
+adaptive_trending_trail_scale = 0.8004295867351537
+adaptive_volatile_max_bars = 26
+adaptive_ranging_max_bars = 13
 # Volume filter
-min_volume_ratio = 0.2825542652442313
+min_volume_ratio = 0.20901299960433156
 
 # Position sizing, exposure limits, drawdown protection
 [risk]
 # Per-trade sizing
-risk_per_trade_pct = 2.4713987317883466
-max_loss_per_trade_pct = 3.850224037687614
+risk_per_trade_pct = 3.6047726614869555
+max_loss_per_trade_pct = 6.867709830705124
 # Portfolio limits
-max_portfolio_risk_pct = 19.71276015244258
+max_portfolio_risk_pct = 11.164255300924406
 portfolio_risk_baseline_pairs = 2
 max_daily_loss_pct = 6.0
 max_open_positions = 5
@@ -167,7 +167,7 @@ output_cost_per_million = 15.0
 [backtest]
 # Capital
 equity_usd = 10000.0
-leverage = 2.852844921662174
+leverage = 2.885326487675089
 # Costs
 fee_bps = 4.0
 slippage_bps = 2.0
@@ -204,7 +204,7 @@ max_connections = 5
 [optimization]
 # Study
 enabled = false
-study_name = "dojiwick_v40"
+study_name = "dojiwick_v39"
 storage_url = ""
 trials = 10000
 trial_timeout_sec = 120.0
@@ -374,7 +374,7 @@ halted_pairs = []
 id = "volatile_conservative"
 priority = 100
 regime = "volatile"
-risk_per_trade_pct = 1.5
+risk_per_trade_pct = 2.1878942166154305
 max_open_positions = 3
 
 [[scope.risk]]
@@ -383,44 +383,45 @@ priority = 100
 regime = "trending_down"
 max_open_positions = 4
 
-# Per-regime strategy overrides (v38 trial #7109, promoted 2026-07-11:
+# Per-regime strategy overrides (v39 trial #7269)
+# (previous:
 # OOS 2026-03-17..07-10 daily_sharpe -0.09 vs prod v34 -0.87; full-window 4.06 vs 3.20, max DD 12.4% vs 24.9%)
 [[scope.strategy]]
 id = "auto_ranging"
 priority = 10
 regime = "ranging"
-stop_atr_mult = 2.194669485187857
-rr_ratio = 1.9975219920445222
-max_hold_bars = 22
-trailing_stop_atr_mult = 0.40153845406310246
-breakeven_after_rr = 0.6902677072731408
+stop_atr_mult = 1.6965375624336023
+rr_ratio = 1.254564309741261
+max_hold_bars = 60
+trailing_stop_atr_mult = 0.46490659715227955
+breakeven_after_rr = 0.3964624090649333
 
 [[scope.strategy]]
 id = "auto_trending_up"
 priority = 10
 regime = "trending_up"
-stop_atr_mult = 2.4917969645374414
-rr_ratio = 2.823196074513888
-max_hold_bars = 53
-trailing_stop_atr_mult = 0.5001805732468058
-breakeven_after_rr = 2.337952923637066
+stop_atr_mult = 2.3079786998561214
+rr_ratio = 3.0752601443659517
+max_hold_bars = 63
+trailing_stop_atr_mult = 0.5223580626884561
+breakeven_after_rr = 0.6895292272380708
 
 [[scope.strategy]]
 id = "auto_trending_down"
 priority = 10
 regime = "trending_down"
-stop_atr_mult = 2.4917969645374414
-rr_ratio = 2.823196074513888
-max_hold_bars = 53
-trailing_stop_atr_mult = 0.5001805732468058
-breakeven_after_rr = 2.337952923637066
+stop_atr_mult = 2.3079786998561214
+rr_ratio = 3.0752601443659517
+max_hold_bars = 63
+trailing_stop_atr_mult = 0.5223580626884561
+breakeven_after_rr = 0.6895292272380708
 
 [[scope.strategy]]
 id = "auto_volatile"
 priority = 10
 regime = "volatile"
-stop_atr_mult = 1.5005062080202574
-rr_ratio = 2.170457991522851
-max_hold_bars = 17
-trailing_stop_atr_mult = 0.3002039452533359
-breakeven_after_rr = 0.9587587398797511
+stop_atr_mult = 1.5906738517721994
+rr_ratio = 1.7651161135590878
+max_hold_bars = 33
+trailing_stop_atr_mult = 0.32305629217878107
+breakeven_after_rr = 1.3692780308778576

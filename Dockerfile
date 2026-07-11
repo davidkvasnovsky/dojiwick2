@@ -1,53 +1,74 @@
-FROM python:3.14-slim AS base
+# syntax=docker/dockerfile:1
+
+ARG PY_IMAGE=python:3.14-slim-trixie
+
+FROM ${PY_IMAGE} AS base
+
+COPY --from=ghcr.io/astral-sh/uv:0.11.28 /uv /uvx /bin/
 
 ENV PYTHONUNBUFFERED=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
-    UV_PROJECT_ENVIRONMENT=/opt/venv
+    UV_PYTHON_DOWNLOADS=0 \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-COPY pyproject.toml uv.lock ./
 
-FROM base AS runtime_deps
-RUN uv sync --locked --no-dev --extra postgres
+FROM base AS builder
 
-FROM base AS qa_deps
-RUN uv sync --locked --extra postgres
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project --no-dev --all-extras
 
-FROM python:3.14-slim AS runtime
+COPY pyproject.toml uv.lock README.md ./
+COPY src src
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked --no-dev --all-extras --no-editable
+
+
+FROM ${PY_IMAGE} AS runtime
+
+LABEL org.opencontainers.image.source="https://github.com/davidkvasnovsky/dojiwick2"
 
 ENV PYTHONUNBUFFERED=1 \
-    PATH="/opt/venv/bin:$PATH" \
-    PYTHONPATH=/app/src
-
-WORKDIR /app
+    PATH="/opt/venv/bin:$PATH"
 
 RUN useradd --create-home --uid 10001 appuser
 
-COPY --from=runtime_deps /opt/venv /opt/venv
-COPY . .
+WORKDIR /app
+
+COPY --from=builder /opt/venv /opt/venv
 
 USER appuser
 
-CMD ["python", "-m", "dojiwick.interfaces.cli.runner", "--config", "config.toml"]
+ENTRYPOINT ["dojiwick"]
+CMD ["run", "--config", "config.toml"]
 
-FROM python:3.14-slim AS tooling
 
-ENV PYTHONUNBUFFERED=1 \
-    PATH="/opt/venv/bin:$PATH" \
-    PYTHONPATH=/app/src
-
-WORKDIR /app
+FROM base AS tooling
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends make \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-COPY --from=qa_deps /opt/venv /opt/venv
-COPY --from=arigaio/atlas:latest /atlas /usr/local/bin/atlas
-COPY . .
+COPY --from=arigaio/atlas:1.2.3-community /atlas /usr/local/bin/atlas
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project
+
+COPY pyproject.toml uv.lock README.md ./
+COPY src src
+
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked
+
+# Editable install resolves /app/src from the compose bind mount; never re-sync at run time.
+ENV UV_NO_SYNC=1
 
 CMD ["sleep", "infinity"]

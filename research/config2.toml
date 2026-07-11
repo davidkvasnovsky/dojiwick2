@@ -28,15 +28,15 @@ volume_ema_period = 20
 
 # Market regime classification thresholds
 [regime]
-adx_trend_min = 18.79264342524515
+adx_trend_min = 24.63980751574376
 adx_strong_trend_min = 35.0
-ema_spread_weak_bps = 7.150316586353704
+ema_spread_weak_bps = 6.6690899800524255
 ema_spread_strong_bps = 25.0
-atr_low_pct = 0.21588676973283358
-atr_high_pct = 0.9597837098377171
+atr_low_pct = 0.46493988271303177
+atr_high_pct = 1.0699676530526299
 atr_extreme_pct = 2.10
 hysteresis_bars = 3
-min_confidence = 0.14266358009086358
+min_confidence = 0.14436730217681537
 truth_trend_return_pct = 0.40
 truth_volatile_return_pct = 1.00
 trend_weight = 0.4
@@ -49,38 +49,38 @@ volume_clip_hi = 1.2
 [strategy]
 default_variant = "baseline"
 # Core exit geometry
-stop_atr_mult = 3.616084009476645
-rr_ratio = 1.4263789157930316
-min_stop_distance_pct = 0.4741525587240532
-max_hold_bars = 17
-trailing_stop_activation_rr = 0.5550949731065216
-trailing_stop_atr_mult = 1.060013825000535
-breakeven_after_rr = 0.709688985047041
+stop_atr_mult = 3.8015311099604014
+rr_ratio = 3.7787482084199886
+min_stop_distance_pct = 0.37000691530463137
+max_hold_bars = 35
+trailing_stop_activation_rr = 0.5297709798209264
+trailing_stop_atr_mult = 0.5124430108736975
+breakeven_after_rr = 0.8290894620158371
 # Trend follow
-trend_pullback_rsi_max = 64.06121191893955
-trend_overbought_rsi_min = 47.32250693001424
-trend_breakout_adx_min = 25.017711408636305
+trend_pullback_rsi_max = 64.99580605878185
+trend_overbought_rsi_min = 57.917530221598454
+trend_breakout_adx_min = 25.016001457771072
 trend_pullback_adx_min = 20.0
-trend_max_regime_confidence = 0.923595732387802
+trend_max_regime_confidence = 0.897602852406991
 trend_volatile_ema_enabled = true
 # Mean revert
-mean_rsi_oversold = 26.795591267609066
-mean_rsi_overbought = 77.86006473563289
+mean_rsi_oversold = 25.35515518868417
+mean_rsi_overbought = 75.82678686943942
 mean_revert_use_bb_mid_tp = true
 mean_revert_disable_breakeven = true
 mean_revert_disable_ema_filter = true
-mean_revert_max_bb_width = 0.020984570602193987
+mean_revert_max_bb_width = 0.023517913203179884
 # Volatility revert
-vol_extreme_oversold = 34.00916633803787
-vol_extreme_overbought = 64.44986791774872
+vol_extreme_oversold = 33.27800451592494
+vol_extreme_overbought = 62.708299557389786
 # Partial take profit
 partial_tp_enabled = true
-partial_tp1_rr = 0.5846226203025284
-partial_tp1_fraction = 0.30039910264273245
+partial_tp1_rr = 0.5473908662112019
+partial_tp1_fraction = 0.3128457991144847
 partial_tp_stop_ratio = 0.5
 # Confluence scoring
 confluence_filter_enabled = true
-min_confluence_score = 34.84157108291029
+min_confluence_score = 39.54537820249344
 confluence_rsi_midpoint = 50.0
 confluence_rsi_range = 20.0
 confluence_volume_baseline = 1.0
@@ -91,21 +91,21 @@ confluence_adx_range = 20.0
 macd_filter_enabled = true
 # Regime-adaptive exits
 regime_exit_profile = "adaptive"
-adaptive_volatile_stop_scale = 1.001904183559354
-adaptive_volatile_rr_mult = 1.5867487218205127
-adaptive_trending_trail_scale = 0.8836892702288337
-adaptive_volatile_max_bars = 24
-adaptive_ranging_max_bars = 12
+adaptive_volatile_stop_scale = 1.042657653857644
+adaptive_volatile_rr_mult = 1.6432331949185996
+adaptive_trending_trail_scale = 0.8203683986179638
+adaptive_volatile_max_bars = 18
+adaptive_ranging_max_bars = 10
 # Volume filter
-min_volume_ratio = 0.1780829854947689
+min_volume_ratio = 0.2825542652442313
 
 # Position sizing, exposure limits, drawdown protection
 [risk]
 # Per-trade sizing
-risk_per_trade_pct = 2.660604571108919
-max_loss_per_trade_pct = 3.0721389827263206
+risk_per_trade_pct = 2.4713987317883466
+max_loss_per_trade_pct = 3.850224037687614
 # Portfolio limits
-max_portfolio_risk_pct = 19.247746297606046
+max_portfolio_risk_pct = 19.71276015244258
 portfolio_risk_baseline_pairs = 2
 max_daily_loss_pct = 6.0
 max_open_positions = 5
@@ -167,7 +167,7 @@ output_cost_per_million = 15.0
 [backtest]
 # Capital
 equity_usd = 10000.0
-leverage = 2.8336098199633755
+leverage = 2.852844921662174
 # Costs
 fee_bps = 4.0
 slippage_bps = 2.0
@@ -220,6 +220,9 @@ objective_profit_factor_weight = 1.0
 objective_expectancy_weight = 2.0
 objective_pnl_weight = 3.0
 objective_pnl_cap = 1000.0
+objective_regime_pf_penalty = 10.0
+objective_regime_pf_target = 0.95
+objective_regime_pf_min_trades = 30
 objective_payoff_ratio_weight = 2.0
 objective_payoff_ratio_cap = 3.0
 objective_trade_freq_weight = 1.5
@@ -380,43 +383,43 @@ priority = 100
 regime = "trending_down"
 max_open_positions = 4
 
-# Per-regime strategy overrides (trial 3)
+# Per-regime strategy overrides (v38 trial #7109)
 [[scope.strategy]]
 id = "auto_ranging"
 priority = 10
 regime = "ranging"
-stop_atr_mult = 2.4554805153627286
-rr_ratio = 1.969568155144766
-max_hold_bars = 40
-trailing_stop_atr_mult = 0.948803437839674
-breakeven_after_rr = 0.7944307877395393
+stop_atr_mult = 2.194669485187857
+rr_ratio = 1.9975219920445222
+max_hold_bars = 22
+trailing_stop_atr_mult = 0.40153845406310246
+breakeven_after_rr = 0.6902677072731408
 
 [[scope.strategy]]
 id = "auto_trending_up"
 priority = 10
 regime = "trending_up"
-stop_atr_mult = 2.2899939750746023
-rr_ratio = 3.2828639621971134
-max_hold_bars = 95
-trailing_stop_atr_mult = 0.5562389868153395
-breakeven_after_rr = 2.4742775003100608
+stop_atr_mult = 2.4917969645374414
+rr_ratio = 2.823196074513888
+max_hold_bars = 53
+trailing_stop_atr_mult = 0.5001805732468058
+breakeven_after_rr = 2.337952923637066
 
 [[scope.strategy]]
 id = "auto_trending_down"
 priority = 10
 regime = "trending_down"
-stop_atr_mult = 2.2899939750746023
-rr_ratio = 3.2828639621971134
-max_hold_bars = 95
-trailing_stop_atr_mult = 0.5562389868153395
-breakeven_after_rr = 2.4742775003100608
+stop_atr_mult = 2.4917969645374414
+rr_ratio = 2.823196074513888
+max_hold_bars = 53
+trailing_stop_atr_mult = 0.5001805732468058
+breakeven_after_rr = 2.337952923637066
 
 [[scope.strategy]]
 id = "auto_volatile"
 priority = 10
 regime = "volatile"
-stop_atr_mult = 1.5006967316358721
-rr_ratio = 1.8437691056754932
-max_hold_bars = 36
-trailing_stop_atr_mult = 0.3200914877696995
-breakeven_after_rr = 0.6439127945569999
+stop_atr_mult = 1.5005062080202574
+rr_ratio = 2.170457991522851
+max_hold_bars = 17
+trailing_stop_atr_mult = 0.3002039452533359
+breakeven_after_rr = 0.9587587398797511

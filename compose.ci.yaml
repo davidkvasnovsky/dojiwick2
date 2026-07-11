@@ -1,0 +1,13 @@
+services:
+  tooling:
+    build:
+      cache_from:
+        - "type=gha,scope=tooling"
+      cache_to:
+        - "type=gha,scope=tooling,mode=max"
+  app:
+    build:
+      cache_from:
+        - "type=gha,scope=runtime"
+      cache_to:
+        - "type=gha,scope=runtime,mode=max"
