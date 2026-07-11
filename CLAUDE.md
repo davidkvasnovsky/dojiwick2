@@ -30,7 +30,7 @@ make test              # pytest -q -m "not db"
 make test-db           # pytest DB tests (applies migrations first)
 
 # CLI (console script via [project.scripts])
-dojiwick run --config config.toml
+dojiwick run --config config.toml   # mainnet (testnet=false) additionally requires DOJIWICK_LIVE_ACK=1
 dojiwick backtest --config config.toml --start 2025-01-01 --end 2025-06-01
 dojiwick backtest --config config.toml --start 2025-01-01 --end 2025-06-01 --trades-csv /tmp/trades.csv --equity-csv /tmp/equity.csv
 dojiwick optimize --config config.toml --start 2025-01-01 --end 2025-06-01
@@ -43,6 +43,8 @@ dojiwick explain --config config.toml --pair BTCUSDT --regime trending --format 
 # Makefile shortcuts (pass args via ARGS=)
 make run ARGS="--config config.toml"
 make optimize ARGS="--config config.toml --start 2025-01-01 --end 2025-06-01"
+# gate/validate targets exist too; secrets (op run) are injected only for run/backtest/optimize/gate/validate
+# CLI exit codes: 0 success, 1 error, 2 research-gate rejection, 130 SIGINT
 
 # Run a single test
 uv run pytest tests/unit/test_hashing.py -q
@@ -75,7 +77,7 @@ Env vars: `DOJIWICK_DB_URL`, `DOJIWICK_TEST_DB_URL`, `ANTHROPIC_API_KEY`, `BINAN
 
 Optuna-based hyperparameter search with anti-overfitting validation. Add `--gate` to any optimize command for CV + PBO + walk-forward validation. Post-optimization analysis: run `/analyze-research` or `uv run python .claude/skills/analyze-research/scripts/analyze_study.py --study <name> --trades /tmp/trades.csv` for a 14-section diagnostic report.
 
-Pipeline: `OptunaRunner` (TPE sampler) → `WalkForwardObjective` (5-fold walk-forward) → composite score with configurable weights plus progressive drawdown cliff, trade frequency bonus, and trade density penalty. Search space: ~41 params (base + conditional + per-regime) in `application/use_cases/optimization/search_space.py`. Per-regime scope params (`scope_ranging__*`, `scope_trending__*`, `scope_volatile__*`) let the optimizer tune exit params independently per market regime. `SearchSpace` takes `enabled_strategies` to skip params for disabled strategies.
+Pipeline: `OptunaRunner` (TPE sampler) → `WalkForwardObjective` (5-fold walk-forward) → composite score with configurable weights plus progressive drawdown cliff, trade frequency bonus, and trade density penalty. Search space: 48 params (31 base + 17 per-regime scope), 51 with partial-TP and confluence enabled, in `application/use_cases/optimization/search_space.py`. Per-regime scope params (`scope_ranging__*`, `scope_trending__*`, `scope_volatile__*`) let the optimizer tune exit params independently per market regime. `SearchSpace` takes `enabled_strategies` to skip params for disabled strategies.
 
 **Drawdown metric**: The objective uses `portfolio_max_drawdown_pct` (actual bar-level portfolio DD from `avg_equity`), NOT the per-trade normalized DD from `summarize()`. The per-trade DD inflates ~5.8× for multi-pair systems due to loss clustering. `BacktestSummary.effective_max_drawdown_pct` property selects the correct metric.
 
@@ -98,7 +100,8 @@ domain/          Pure business logic, zero external deps. Contracts (ports) live
   numerics.py    Semantic numeric types (Price, Money, Quantity) and converters
   symbols.py     Symbol and pair normalization helpers
   timebase.py    Bar-close alignment and anti-leakage validation
-  order_state_machine.py  Order lifecycle state transitions and residual-quantity semantics
+  order_state_machine.py  Order lifecycle state transitions
+  exit_rules.py  Pure trailing-stop and time-exit rules for live protective orders
   reason_codes.py  Stable reason codes for risk, strategy, and pipeline outcomes
   indicator_schema.py  Canonical indicator ordering for batch tensors
   reconciliation_health.py  Reconciliation health state machine
@@ -109,11 +112,12 @@ application/     Use cases and orchestration. Depends on domain only.
     validation/    research_gate.py, cross_validator.py, walk_forward_validator.py, gate_evaluator.py
   models/        PipelineSettings (protocol), StartupResult, and application-layer value objects
   orchestration/ decision_pipeline.py, execution_planner.py, outcome_assembler.py,
-                 regime_hysteresis.py, scanner.py, target_resolver.py
+                 regime_hysteresis.py, target_resolver.py
   services/      OrderLedgerService, PositionTracker, StartupOrchestrator,
+                 InstrumentSyncService, ProtectiveOrderService,
                  BacktestBuilder, build_backtest_time_series(), CachingCandleFetcher,
-                 OrderEventConsumer, StartupOrderCleanupService
-  policies/      Risk engine, adaptive calibration
+                 CachingFundingRateFetcher, OrderEventConsumer, StartupOrderCleanupService
+  policies/      Risk engine
   registry/      Strategy plugin registry
 
 compute/         Stateless numpy kernels. Pure functions, batch-shaped arrays.
@@ -122,10 +126,9 @@ compute/         Stateless numpy kernels. Pure functions, batch-shaped arrays.
 infrastructure/  Adapter implementations.
   postgres/      PgUnitOfWork, typed repositories, connection pooling
   exchange/      Shared: cache.py, cached_context_provider.py, feed.py, indicator_enricher.py, reconciliation.py
-    binance/     HTTP client, market data, execution, order events, readiness guard
-    simulated/   SimulatedExecutionGateway scaffold (not wired — see ARCHITECTURE.md)
+    binance/     HTTP client, market data, execution, order events, funding rates, readiness guard
   ai/            LLM veto service, regime classifier, confidence gate, cost tracker, prompts/
-  observability/ Metrics, alerts, logging
+  observability/ Alert evaluator, log notification
   system/        SystemClock (only place allowed to call datetime.now/time.time)
 
 config/          Pydantic v2 settings, TOML loader, adapter composition
@@ -139,7 +142,7 @@ config/          Pydantic v2 settings, TOML loader, adapter composition
   fingerprint.py fingerprint_settings() — stable config hash for tick lifecycle and backtest summary
   logging.py     Minimal logging bootstrap with JSON output
 
-scripts/         Operational scripts (Hetzner deployment)
+scripts/         hetzner-optimize.sh (remote Optuna runs) — nothing else lives here
 
 interfaces/      CLI entrypoints
   cli/main.py      Dispatcher — `dojiwick <command>` console script entrypoint
@@ -167,7 +170,7 @@ interfaces/      CLI entrypoints
 - **ClockPort**: All time access goes through `ClockPort` protocol. Only `SystemClock` in `infrastructure/system/clock.py` may call `datetime.now` or `time.time`.
 - **Async boundary**: Config loading, compute kernels, and CLI arg parsing are sync. Everything touching database, exchange, or market data is async (`async with`, `await`). Entry points use `asyncio.run()`.
 - **Frozen dataclasses for value objects**: `@dataclass(slots=True, frozen=True, kw_only=True)` with `__post_init__` validation. Pydantic `BaseModel` is used only for config params/settings, never for domain value objects.
-- **Naming**: Postgres repository implementations use `Pg` prefix (`PgOutcomeRepository`, `PgTickRepository`). Enum-to-SQL mapping tables (`TRADE_ACTION_TO_SQL`, `SQL_TO_TRADE_ACTION`) for bidirectional conversion.
+- **Naming**: Postgres repository implementations use `Pg` prefix (`PgOutcomeRepository`, `PgTickRepository`). Enum-to-SQL mapping tables (`TRADE_ACTION_TO_SQL`, `MARKET_STATE_TO_SQL`) for conversion at the persistence boundary.
 - **Strategy plugin system**: Strategies implement `StrategyPlugin` protocol, registered in `StrategyRegistry` via `build_default_strategy_registry()`. Registration order = priority (first registered wins). Signal masks OR-merged across plugins.
 - **PipelineSettings protocol**: Application accesses config through `PipelineSettings` (structural Protocol in `application/models/pipeline_settings.py`), not direct config imports. Config-layer functions needing Pydantic methods (e.g., `model_copy`) live in `config/param_tuning.py` and are injected as callables.
 - **Shared optimization utilities in `search_space.py`**: `extract_regularization_baseline()`, `NON_STRATEGY_PARAMS`, `_STRATEGY_SIGNAL_PARAMS` (strategy→signal-param mapping). Canonical location for cross-layer optimization logic that must work from both application (`objective.py`) and config (`param_tuning.py`) layers via the `PipelineSettings` Protocol.
@@ -177,7 +180,7 @@ interfaces/      CLI entrypoints
 
 - **Builders pattern**: `tests/fixtures/factories/` — `domain.py` (`ContextBuilder`), `infrastructure.py` (`SettingsBuilder`), `compute.py` (`ExecutionReceiptBuilder`), `integration.py`. Fluent API for test data.
 - **Fakes**: `tests/fixtures/fakes/` — one fake per port (e.g., `FakeClockPort`, `FakeExecutionGateway`). Used in unit and integration tests.
-- **Markers**: `unit`, `integration`, `e2e`, `db`, `slow`. Default run excludes `db`.
+- **Markers**: `unit`, `integration`, `e2e`, `db`. Default run excludes `db`.
 - **pytest-asyncio**: `asyncio_mode = "auto"` — async test functions auto-detected.
 - `conftest.py` at test root exposes builder fixtures (`context_builder`, `settings_builder`, etc.).
 - `ruff` line-length 120, `basedpyright` strict mode.
@@ -194,7 +197,7 @@ Adding a new field to `RiskParams` requires updating 6 files in lockstep (archit
 6. `config.toml` — no defaults allowed, must be explicit
 
 Same pattern for `StrategyParams` → `StrategyOverrideValues` (scope.py), but only 4 files: (1) `params.py`, (2) `scope.py` StrategyOverrideValues, (3) `tests/fixtures/factories/infrastructure.py`, (4) `config.toml`. No `schema.py` or `pipeline_settings.py` change needed since `Settings.strategy` IS `StrategyParams` directly.
-Same for `OptimizationSettings` → `OptimizationSettingsPort`, `ResearchGateSettings` → `ResearchSettingsPort`.
+Same for `OptimizationSettings` → `OptimizationSettingsPort`, `ResearchGateSettings` → `ResearchSettingsPort`, `BacktestSettings` → `BacktestSettingsPort` (includes `funding_mode`), and `ExchangeSettings` → `ExchangeSettingsPort` (WS reconnect + protective-order knobs).
 
 ## Backtest Risk Protection Stack (run_backtest.py)
 
@@ -202,7 +205,7 @@ Applied in order per new position entry:
 1. **ECF scaling** — proportional size reduction when equity < SMA (never blocks)
 2. **DD scaling** — sqrt-curve reduction with floor, uses `min(dd_scale, ecf_scale)` not product (never blocks)
 3. **max_loss_per_trade_pct** — caps leveraged risk per individual trade
-4. **max_portfolio_risk_pct** — caps total leveraged risk, scaled by `n_pairs / portfolio_risk_baseline_pairs` for multi-pair fairness
+4. **max_portfolio_risk_pct** — flat fraction of the shared equity pool capping total leveraged risk (no pair-count scaling)
 5. **max_notional_usd** — absolute position size cap (in sizing kernel)
 
 Portfolio risk allocation uses **two-pass fair allocation**: Pass 1 collects all candidate entries (DD/ECF + per-trade cap applied). Pass 2 applies portfolio cap proportionally across ALL pending entries (not first-come-first-served). This eliminates pair ordering bias.
@@ -221,14 +224,20 @@ Portfolio risk allocation uses **two-pass fair allocation**: Pass 1 collects all
 
 - **Python 3.14 except syntax (PEP 758)**: `except A, B, C:` without parentheses is valid and is ruff's preferred format. Do not "fix" this to `except (A, B, C):` — the formatter will revert it.
 - **`--trials` is NOT a CLI arg**: Trial count comes from `config.toml` `[optimization].trials`. The CLI only accepts `--config`, `--start`, `--end`, `--gate`, `--workers`.
+- **Backtest exit checks read `next_*[bar_idx-1]`**: `next_high[t]` is the high of bar t+1, so the just-closed bar the exit loop evaluates lives at index `bar_idx - 1`. Entry at close of bar t → first exit check against bar t+1.
+- **Fills table is WS/userTrades-only**: the tick REST path never inserts fills. Fill application goes through the `position_applied_qty` high-water mark (`advance_applied_qty`, FOR UPDATE): duplicates and replays are zero-delta no-ops.
+- **Protective orders use the `dw_p` client-id prefix**: startup cleanup keeps them for live legs; the pending-order guard counts only entry-kind, non-reduce-only requests, so resting protectives never block new entries. A trailing move bumps `revision`, changing the client id — sync replaces the order.
+- **`funding_mode = "historical"` needs DB + exchange reachability at data load**: the first backtest run backfills the `funding_rates` table; missing head/tail coverage is a hard error.
+- **`DOJIWICK_DB_URL` overrides `[database].dsn`**: same env var Atlas uses; set in compose for containers and .env on the host.
 - **config.toml is SSOT**: No behavioral tuning parameters may be hardcoded in source code. All must come from config.toml. Mathematical constants (BPS conversion 10_000, division guards 1e-9) are exempt.
 - **Optuna DB connection**: Config DSN uses `postgres` hostname (Docker). For host-side CLI/scripts, the optimize CLI auto-rewrites to `localhost`. For manual queries: `postgresql+psycopg://dojiwick:dojiwick@localhost:5432/dojiwick`.
+- **Ruff ruleset is enforced**: `lint.select = [E4,E7,E9,F,I,UP,B,SIM,C4,PIE,RUF]` — imports are sorted, `zip()` needs explicit `strict=`, blind `pytest.raises(Exception)` is rejected.
 - **`extra="forbid"` on all settings**: Every Pydantic settings model uses `ConfigDict(frozen=True, extra="forbid")`. Unknown TOML keys cause validation errors — don't invent new config fields without adding them to `schema.py` first.
 - **`PostExecutionPersistenceError` requires halt**: Orders may exist on exchange with no audit trail. Callers must stop processing — never swallow this exception.
 - **TOML scope parsing**: `[[scope.strategy]]` and `[[scope.risk]]` sections are parsed and removed from the raw dict before `Settings.model_validate()` runs. They're injected as `strategy_scope` / `risk_scope` resolver objects separately (see `loader.py`).
 - **`Settings()` zero-arg construction banned in `src/`**: Architecture test enforces this. Always load via `load_settings(path)`. Tests may use `Settings()` or `SettingsBuilder`.
 - **`Edit` tool `replace_all`**: Avoid `replace_all=true` when the search string appears on both sides of assignments (e.g., replacing `settings.risk.foo` also replaces `_foo = settings.risk.foo` LHS).
-- **Sharpe overstatement for multi-pair**: `sharpe_like` (per-trade annualized) overstates by ~40-45% for 6-pair systems due to correlated same-bar trades. `daily_sharpe` (daily portfolio returns × √365) is the industry-standard metric. Both are on `BacktestSummary`. Use `sharpe_like` for optimizer ranking (relative), `daily_sharpe` for reporting (absolute).
+- **Sharpe overstatement for multi-pair**: `sharpe_like` (per-trade annualized) overstates by ~40-45% for 6-pair systems due to correlated same-bar trades. `daily_sharpe` (daily portfolio returns × √365) is the industry-standard metric. Both are on `BacktestSummary` and both persist to `backtest_runs`. Use `sharpe_like` for optimizer ranking (relative), `daily_sharpe` for reporting (absolute). All std is sample std (ddof=1).
 - **Equity CSV exports portfolio equity**: The `--equity-csv` output uses actual per-bar portfolio equity (from `avg_equity`), not the per-trade cumulative product. DD in the CSV matches `max_portfolio_drawdown_pct`.
 - **Auto scope rule duplicate IDs**: When config.toml contains `auto_*` scope rules AND the optimizer generates fresh ones, `apply_params` filters stale rules by ID before merging. If you see `duplicate scope.strategy.id` errors, the filter in `apply_params` is not catching them.
 - **Concentration `_pct` fields use 0-100 scale**: `concentration_max_month_pct = 40.0` means 40%, consistent with `max_continuous_drawdown_pct = 30.0`. NOT 0-1 fractions.

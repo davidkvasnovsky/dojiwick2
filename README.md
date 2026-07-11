@@ -22,6 +22,8 @@ make optimize ARGS="--config config.toml --start 2025-01-01 --end 2025-06-01 --g
 make run ARGS="--config config.toml"                           # live loop, secrets via op run
 ```
 
+Secrets (`op run`) are injected only for `run`/`backtest`/`optimize`/`gate`/`validate`; pytest and Atlas targets receive just the DB URLs. Mainnet (`testnet = false`) additionally requires `DOJIWICK_LIVE_ACK=1`. CLI exit codes: 0 success, 1 error, 2 research-gate rejection.
+
 ## Working in containers
 
 `docker compose up` starts only postgres; the app and tooling services sit behind profiles.
@@ -33,4 +35,4 @@ op run --env-file=.env -- docker compose up -d app   # live trading loop (profil
 docker compose run --rm app backtest --config config.toml --start 2025-01-01 --end 2025-06-01
 ```
 
-The runtime image bakes the package and all extras into `/opt/venv`; `config.toml` is bind-mounted, secrets come from the environment. CI runs the same `make ci` / `make ci-db` inside the tooling image.
+The runtime image bakes the package with the `postgres`/`ai`/`exchange` extras into `/opt/venv` (optimization deps stay out of the live image); `config.toml` is bind-mounted, secrets come from the environment. CI runs the same `make ci` / `make ci-db` inside the tooling image.
