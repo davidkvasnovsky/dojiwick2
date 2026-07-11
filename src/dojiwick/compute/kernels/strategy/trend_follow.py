@@ -71,7 +71,7 @@ def trend_follow_signal(
     trending_down = states == MarketState.TRENDING_DOWN.value
 
     # Volatile-trend detection: high ATR periods with clear EMA alignment
-    # are eligible for trend entries (BTC is often volatile AND trending).
+    # are eligible for trend entries.
     # NOTE: this is a global toggle read from ``settings`` (not per-pair).
     # Scope overrides for ``trend_volatile_ema_enabled`` have no effect here.
     if settings.trend_volatile_ema_enabled:
@@ -94,7 +94,6 @@ def trend_follow_signal(
         trending_up & (rsi <= pullback_rsi_max) & (prices > ema_base) & (ema_fast > ema_slow) & (prices > ema_trend)
     )
 
-    # ADX pullback filter — reject weak pullbacks when ADX is too low
     pullback_adx_ok: np.ndarray | None = None
     if per_pair_settings is not None:
         pullback_adx_min = resolve_optional_param_vector(

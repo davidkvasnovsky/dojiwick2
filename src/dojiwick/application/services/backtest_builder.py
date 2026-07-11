@@ -151,7 +151,7 @@ def build_backtest_time_series(
     _warn_pair_count_mismatch(pairs, {p: len(candles_by_pair[p]) for p in pairs})
 
     if history_alignment == HistoryAlignment.INTERSECTION:
-        # Align pairs by timestamp intersection (original behavior)
+        # Align pairs by timestamp intersection
         if len(pairs) == 1:
             min_bars = len(pair_close[pairs[0]])
             if min_bars < 2:
@@ -235,7 +235,6 @@ def build_backtest_time_series(
         min_bars = len(union_times)
         n_bars = min_bars - 1
 
-        # Log per-pair activation
         for p_idx, pair in enumerate(pairs):
             first_active = np.where(has_data_mask[:, p_idx])[0]
             if len(first_active) > 0:

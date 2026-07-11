@@ -38,7 +38,6 @@ def compute_confluence_score(
     short = action == TradeAction.SHORT.value
     active = buy | short
 
-    # 1. RSI confirmation (0-20 pts)
     rsi_mid = settings.confluence_rsi_midpoint
     rsi_rng = settings.confluence_rsi_range
     rsi_score = np.where(
@@ -48,16 +47,13 @@ def compute_confluence_score(
     )
     score += rsi_score
 
-    # 2. MACD momentum alignment (0-20 pts)
     macd_ok = macd_direction_aligned(macd_hist, buy, short)
     score += np.where(macd_ok, 20.0, 0.0)
 
-    # 3. Volume surge (0-20 pts)
     vol_base = settings.confluence_volume_baseline
     vol_mult = settings.confluence_volume_multiplier
     score += np.where(active, np.clip((volume_ratio - vol_base) * vol_mult, 0, 20), 0.0)
 
-    # 4. EMA alignment (0-20 pts)
     ema_aligned = np.where(
         buy,
         ema_triple_aligned_up(ema_fast, ema_slow, ema_base),
@@ -65,7 +61,6 @@ def compute_confluence_score(
     )
     score += np.where(ema_aligned, 20.0, 0.0)
 
-    # 5. ADX trend strength (0-20 pts)
     adx_base = settings.confluence_adx_baseline
     adx_rng = settings.confluence_adx_range
     score += np.where(active, np.clip((adx - adx_base) / adx_rng * 20, 0, 20), 0.0)

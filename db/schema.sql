@@ -195,7 +195,7 @@ CREATE INDEX idx_ticks_tick_time
 CREATE INDEX idx_ticks_status
     ON ticks (status) WHERE status IN ('started', 'failed');
 
--- Decision traces (per-step audit trail — schema only, no Python code in Phase 1)
+-- Decision traces (per-step audit trail written by TickService)
 CREATE TABLE decision_traces (
     id              BIGSERIAL PRIMARY KEY,
     tick_id         TEXT             NOT NULL,

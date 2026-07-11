@@ -1,7 +1,7 @@
 """Context provider that reads from an ExchangeCache for the tick cycle.
 
-Replaces direct REST/WS calls with atomic cache reads, guaranteeing
-consistent point-in-time snapshots with no torn reads.
+Atomic cache reads instead of direct REST/WS calls guarantee consistent
+point-in-time snapshots with no torn reads.
 """
 
 from __future__ import annotations

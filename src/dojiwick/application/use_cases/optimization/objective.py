@@ -259,7 +259,6 @@ def _base_score(
         - opt.objective_drawdown_penalty * drawdown_ratio
     )
 
-    # Progressive drawdown cliff -- exponential penalty above threshold
     if dd_for_penalty > opt.objective_max_drawdown_threshold:
         excess = (dd_for_penalty - opt.objective_max_drawdown_threshold) / 100.0
         score -= opt.objective_drawdown_cliff_penalty * excess**2
@@ -270,22 +269,18 @@ def _base_score(
         trades_per_1000_bars = min(summary.trades / n_bars * 1000, opt.objective_trade_freq_cap)
         score += opt.objective_trade_freq_weight * math.log2(1 + trades_per_1000_bars)
 
-    # Trade density penalty — multiplicative reduction for very sparse strategies
     if n_bars > 0 and opt.objective_min_density_threshold > 0:
         density = summary.trades / n_bars
         if density < opt.objective_min_density_threshold:
             score *= density / opt.objective_min_density_threshold
 
-    # High win-rate bonus
     if summary.win_rate > opt.objective_high_winrate_threshold:
         score += opt.objective_high_winrate_bonus * (summary.win_rate - opt.objective_high_winrate_threshold)
 
-    # Expectancy component (normalized by avg notional)
     if opt.objective_expectancy_weight > 0 and summary.avg_notional_usd > 0:
         norm_expectancy = (summary.expectancy_usd / summary.avg_notional_usd) * 100.0
         score += opt.objective_expectancy_weight * norm_expectancy
 
-    # Consecutive loss penalty
     if (
         opt.objective_consecutive_loss_penalty > 0
         and summary.max_consecutive_losses > opt.objective_consecutive_loss_threshold
@@ -294,7 +289,6 @@ def _base_score(
             summary.max_consecutive_losses - opt.objective_consecutive_loss_threshold
         ) * opt.objective_consecutive_loss_penalty
 
-    # Payoff ratio reward (avg_win / avg_loss) — penalizes loss asymmetry
     if opt.objective_payoff_ratio_weight > 0 and summary.payoff_ratio > 0:
         score += opt.objective_payoff_ratio_weight * min(summary.payoff_ratio, opt.objective_payoff_ratio_cap)
 

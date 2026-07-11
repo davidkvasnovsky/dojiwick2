@@ -53,7 +53,6 @@ class MinRRRule(ConfigurableRiskRule):
         short_num = candidate.entry_price - candidate.take_profit_price
         rr[short_rows] = safe_divide(short_num[short_rows], short_den[short_rows])
 
-        # Block rows with valid candidate, non-zero stop, and RR below threshold
         threshold = np.array([rp.min_rr_ratio for rp in risk_params])
         blocked = candidate.valid_mask & ~zero_stop & (rr < threshold)
 

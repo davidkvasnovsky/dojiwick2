@@ -102,7 +102,7 @@ def adx(
 
     atr_vals = precomputed_atr if precomputed_atr is not None else atr(high, low, close, period)
 
-    # Wilder smooth +DM and -DM
+    # Wilder's smoothing, not EMA -- the recurrence matches standard ADX
     smooth_plus = np.full(n, np.nan, dtype=np.float64)
     smooth_minus = np.full(n, np.nan, dtype=np.float64)
     smooth_plus[period] = np.sum(plus_dm[:period])
@@ -119,7 +119,6 @@ def adx(
     di_sum_safe = np.where(di_sum > 0, di_sum, 1.0)
     dx = 100.0 * np.abs(plus_di - minus_di) / di_sum_safe
 
-    # Smooth DX to get ADX
     adx_start = 2 * period
     if adx_start < n:
         out[adx_start] = np.nanmean(dx[period + 1 : adx_start + 1])

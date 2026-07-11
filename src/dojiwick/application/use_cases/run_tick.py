@@ -187,10 +187,9 @@ class TickService:
         state = await self.bot_state_repository.get_state() if self.bot_state_repository else None
         await self._check_circuit_breaker(state, observed_at)
 
-        # 1. Fetch context
         context = await self.context_provider.fetch_context_batch(target_pairs, observed_at)
 
-        # 1b. Timebase validation -- reject stale bar data
+        # Timebase validation -- reject stale bar data
         if context.market.asof_timestamp is not None:
             try:
                 assert_timebase_valid(
@@ -220,11 +219,10 @@ class TickService:
                     case MissingBarPolicy.LAST_KNOWN:
                         log.warning("stale bar data, continuing with last known (policy=%s)", policy)
 
-        # 2. Compute tick identity and inputs hash
         tick_id = compute_tick_id(self.config_hash, observed_at, target_pairs)
         inputs_hash = compute_inputs_hash(context)
 
-        # 3. Dedup -- skip if tick already completed (atomic insert)
+        # Dedup -- skip if tick already completed (atomic insert)
         inserted = await self.tick_repository.try_insert(
             TickRecord(
                 tick_id=tick_id,
@@ -265,7 +263,6 @@ class TickService:
         state: BotState | None,
     ) -> tuple[DecisionOutcome, ...]:
         """Execute the full pipeline with tick tracking."""
-        # 5-9. Shared decision pipeline (regime -> variants -> strategy -> veto -> risk -> sizing)
         veto = None if self.settings.flags.disable_llm else self.veto_service
         classifier = None if self.settings.flags.disable_llm else self.regime_classifier
         pipeline_start = self.clock.monotonic_ns()
@@ -280,7 +277,6 @@ class TickService:
         )
         pipeline_duration_us = (self.clock.monotonic_ns() - pipeline_start) // 1_000
 
-        # 10. Filter frozen symbols from execution
         frozen = await self._get_frozen_symbols(state)
         if frozen:
             new_mask = pipeline.intents.active_mask.copy()
@@ -290,7 +286,7 @@ class TickService:
             pipeline = dc_replace(pipeline, intents=dc_replace(pipeline.intents, active_mask=new_mask))
             log.info("frozen symbols masked: %s", sorted(frozen))
 
-        # 10b. Entry risk scaling — the same ECF/drawdown sizing reductions the
+        # Entry risk scaling — the same ECF/drawdown sizing reductions the
         # backtest applies (the optimizer tunes them; without this they had no
         # live effect). Scales only new entries, never existing positions.
         scale = self._update_entry_risk_scale(context, observed_at)
@@ -307,18 +303,18 @@ class TickService:
                 )
                 log.info("entry risk scale %.3f applied to %d new entries", scale, int(np.sum(new_entries)))
 
-        # 11. Execution via planner (tracked for ops hashing)
+        # Execution tracked for ops hashing
         exec_start = self.clock.monotonic_ns()
         receipts, plan, plan_receipts, request_ids, resolved = await self._execute_via_planner_tracked(
             pipeline.intents, tick_id=tick_id
         )
         exec_duration_us = (self.clock.monotonic_ns() - exec_start) // 1_000
 
-        # 12. Compute stage hashes (pure -- no I/O dependency on ledger)
+        # Stage hashes are pure -- no I/O dependency on ledger
         intent_hash = compute_intent_hash(pipeline.intents)
         ops_hash = compute_ops_hash(plan)
 
-        # 13. Outcome assembly (pure -- no I/O dependency on ledger)
+        # Outcome assembly is pure -- no I/O dependency on ledger
         confidence_raw = tuple(pipeline.confidence_raw)
         effective_target_ids = self.target_ids
         outcomes = build_outcomes(
@@ -338,7 +334,6 @@ class TickService:
             )
         )
 
-        # 14. Atomic post-execution persistence
         duration_ms = (self.clock.monotonic_ns() - start_ns) // 1_000_000
         persist_start = self.clock.monotonic_ns()
 
@@ -382,7 +377,7 @@ class TickService:
             raise PostExecutionPersistenceError(str(exc)) from exc
         persist_duration_us = (self.clock.monotonic_ns() - persist_start) // 1_000
 
-        # 14b. Protective order maintenance — exchange I/O, deliberately outside
+        # Protective order maintenance — exchange I/O, deliberately outside
         # the persistence transaction; a crash here is healed by startup sync
         if self.protective_orders is not None:
             assert self.instrument_map is not None
@@ -394,7 +389,7 @@ class TickService:
             await self.protective_orders.update_trailing(prices_by_symbol)
             await self.protective_orders.sync()
 
-        # 15. Decision traces (fire-and-forget -- must not crash tick)
+        # Decision traces are fire-and-forget -- must not crash tick
         if self.decision_trace_repository is not None:
             vetoed_count = int(np.sum(~pipeline.veto.approved_mask & pipeline.candidates.valid_mask))
             traces = (

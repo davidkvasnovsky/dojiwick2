@@ -45,12 +45,10 @@ def compute_fill_ratio(
         Fill ratio in [min_ratio, 1.0] per pair.
     """
     bar_volume_usd = bar_volume * entry_price
-    # Avoid division by zero
     safe_notional = np.where(notional_usd > 0, notional_usd, 1.0)
     raw_ratio = (threshold_pct * bar_volume_usd) / safe_notional
     fill_ratio = np.clip(raw_ratio, min_ratio, 1.0)
 
-    # HOLD actions always get 1.0
     hold_mask = action == TradeAction.HOLD.value
     fill_ratio[hold_mask] = 1.0
 

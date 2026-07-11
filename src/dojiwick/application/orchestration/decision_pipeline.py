@@ -329,7 +329,7 @@ def _authority(
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class _CorePipelineResult:
-    """Steps 1-6c output: regime -> hysteresis -> halted -> confidence -> variants -> strategy -> exits."""
+    """Deterministic-stage output: regime -> hysteresis -> halted -> confidence -> variants -> strategy -> exits."""
 
     regimes: BatchRegimeProfile
     candidates: BatchTradeCandidate
@@ -350,16 +350,14 @@ def _run_core_pipeline(
     hysteresis_bars_override: int | None = None,
     hysteresis_eligibility_mask: np.ndarray | None = None,
 ) -> _CorePipelineResult:
-    """Steps 1-6c: regime -> hysteresis -> halted -> confidence -> variants -> strategy -> exits.
+    """Deterministic stages: regime -> hysteresis -> halted -> confidence -> variants -> strategy -> exits.
 
     Pure synchronous function shared by both sync and async pipeline paths.
     """
     pairs = context.market.pairs
 
-    # 1. Classify regime
     regimes = classify_regime_batch(context.market, settings.regime.params)
 
-    # 2. Hysteresis
     if hysteresis is not None:
         effective_bars = (
             hysteresis_bars_override if hysteresis_bars_override is not None else settings.regime.hysteresis_bars
@@ -373,21 +371,18 @@ def _run_core_pipeline(
             valid_mask=regimes.valid_mask,
         )
 
-    # 2b. Halted pairs
     if settings.flags.halted_pairs:
         halted = np.isin(pairs, settings.flags.halted_pairs)
         regimes = replace(regimes, valid_mask=regimes.valid_mask & ~halted)
         log.info("halted_pairs: masked %s", settings.flags.halted_pairs)
 
-    # 2c. Min-confidence gate
     if settings.regime.min_confidence > 0:
         low_conf = regimes.confidence < settings.regime.min_confidence
         regimes = replace(regimes, valid_mask=regimes.valid_mask & ~low_conf)
 
-    # 3. Capture pre-AI confidence (no copy needed — array not mutated downstream)
+    # No copy needed — the confidence array is not mutated downstream
     confidence_raw = regimes.confidence
 
-    # 5. Resolve per-pair variants and params
     variants, per_pair_params = _resolve_variants(
         pairs,
         regimes.coarse_state,
@@ -396,7 +391,6 @@ def _run_core_pipeline(
         scope_cache=strategy_scope_cache,
     )
 
-    # 6. Strategy signal generation
     candidates = strategy_registry.propose_candidates(
         context=context,
         regime=regimes,
@@ -405,7 +399,6 @@ def _run_core_pipeline(
         per_pair_params=per_pair_params,
     )
 
-    # 6b. Phase 2 exit resolution
     _has_rules = has_strategy_rules if has_strategy_rules is not None else settings.strategy_scope.has_strategy_rules
     candidates, per_pair_params = _resolve_exit_overrides(
         pairs,
@@ -419,7 +412,6 @@ def _run_core_pipeline(
         phase2_cache=phase2_scope_cache,
     )
 
-    # 6c. Exits-only mode
     if settings.flags.exits_only_mode:
         candidates = replace(candidates, valid_mask=candidates.valid_mask & (candidates.action == TradeAction.HOLD))
 
@@ -441,7 +433,7 @@ def _run_risk_and_sizing(
     vetoed: BatchTradeCandidate,
     risk_scope_cache: dict[tuple[str, int | None], RiskParams] | None = None,
 ) -> tuple[BatchRiskAssessment, BatchExecutionIntent]:
-    """Steps 8-10: risk scope -> risk assess -> sizing."""
+    """Risk stages: risk scope -> risk assess -> sizing."""
     risk_params = _resolve_risk_params(
         context.market.pairs,
         regimes.coarse_state,
@@ -561,10 +553,10 @@ async def run_decision_pipeline(
         phase2_scope_cache=phase2_scope_cache,
     )
 
-    # 4. AI regime ensemble (confidence adjustment only -- coarse_state never overridden)
+    # AI regime ensemble adjusts confidence only -- coarse_state is never overridden
     regimes, ai_regime_active = await _evaluate_ai_regime(context, core.regimes, settings, regime_classifier)
 
-    # 7. AI veto filter (enrich context with regime data for confidence gating)
+    # Veto context is enriched with regime data for confidence gating
     enriched_context = BatchDecisionContext(
         market=context.market,
         portfolio=context.portfolio,

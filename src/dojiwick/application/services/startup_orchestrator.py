@@ -1,8 +1,7 @@
 """Startup crash-recovery orchestrator.
 
-Extracts the inline startup logic from the runner into a structured
-application service. Handles feed bootstrap, order cleanup, reconciliation,
-cursor-based event replay, health evaluation, and consumer creation.
+Handles feed bootstrap, order cleanup, reconciliation, cursor-based event
+replay, health evaluation, and consumer creation.
 """
 
 from __future__ import annotations
@@ -83,37 +82,31 @@ class StartupOrchestrator:
                 replayed_events=0,
             )
 
-        # 0. Instrument sync — every order/position write resolves instruments
+        # Instrument sync first — every order/position write resolves instruments
         # through the DB; a fresh database would otherwise silently skip all
         if self.instrument_sync is not None and self.instrument_ids:
             await self.instrument_sync.sync(self.instrument_ids)
 
-        # 1. Bootstrap feed
         await self._bootstrap_feed()
         await self.feed.start()
 
-        # 2. Cancel stale orders
         cancelled_orders = await self._cancel_stale_orders()
 
-        # 3. Initial reconciliation
         recon_result = await self.reconciliation_service.run_startup_gate(self.pair_symbols)
 
-        # 4. Replay missed stream events
         replayed_events = await self._replay_missed_events()
 
-        # 5. Re-reconcile after replay
+        # Re-reconcile after replay
         if replayed_events > 0:
             recon_result = await self.reconciliation_service.run_startup_gate(self.pair_symbols)
 
-        # 5b. Protective orders: every surviving position gets correct
+        # Protective orders: every surviving position gets correct
         # protection before the first tick; orphaned orders are retired
         if self.protective_orders is not None:
             await self.protective_orders.sync()
 
-        # 6. Compute health
         health = await self._compute_health(recon_result)
 
-        # 7. Health gate
         if health.health in (ReconciliationHealth.UNCERTAIN, ReconciliationHealth.HALT):
             return StartupResult(
                 health=health,
@@ -125,7 +118,6 @@ class StartupOrchestrator:
 
         periodic_reconciliation = self.reconciliation_service
 
-        # 8. Start consumer
         consumer_task = await self._start_consumer()
 
         return StartupResult(

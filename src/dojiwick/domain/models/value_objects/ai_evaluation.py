@@ -1,4 +1,4 @@
-"""Typed AI evaluation artifact — replaces boolean veto with structured result."""
+"""Structured AI veto evaluation: decision, confidence, reason code, and cost."""
 
 from dataclasses import dataclass, field
 from typing import Any

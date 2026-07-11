@@ -45,7 +45,6 @@ def resolve_entry_price(
     if model == EntryPriceModel.VWAP_PROXY:
         return (next_open + next_high + next_low + next_close) / 4.0
 
-    # worst_case: next_high for longs, next_low for shorts, close for holds
     result = close.copy()
     buy_mask = action == TradeAction.BUY.value
     short_mask = action == TradeAction.SHORT.value

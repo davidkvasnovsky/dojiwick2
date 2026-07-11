@@ -5,8 +5,8 @@ keeping order reports, fills, audit events, and position legs up-to-date
 continuously between ticks.
 
 The run loop is a supervisor: a dropped socket reconnects with exponential
-backoff instead of silently ending the task (which previously halted the
-whole engine), and every (re)connect runs a per-symbol REST recovery sweep
+backoff instead of silently ending the task and halting the engine, and
+every (re)connect runs a per-symbol REST recovery sweep
 so fills that happened while the socket was down are applied through the
 same idempotent high-water-mark path as live events.
 """
