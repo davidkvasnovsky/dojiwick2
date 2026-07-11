@@ -74,7 +74,6 @@ markers = [
     "unit: fast isolated unit tests",
     "integration: tests that compose multiple services",
     "e2e: end-to-end infrastructure tests",
-    "slow: tests that take more than a few seconds",
     "db: tests requiring a running PostgreSQL instance",
 ]
 filterwarnings = [

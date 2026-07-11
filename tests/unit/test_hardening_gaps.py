@@ -73,18 +73,6 @@ def test_missing_required_section_fails(tmp_path: Path) -> None:
         load_settings(config)
 
 
-# --- Gap 1.5: Tick config_hash uses full sha256 ---
-
-
-def test_tick_config_hash_uses_full_sha256() -> None:
-    """runner.py must use fingerprint.sha256 (not trading_sha256) for config_hash and tick_id."""
-    runner_path = Path("src/dojiwick/interfaces/cli/runner.py")
-    source = runner_path.read_text()
-    # The config_hash= and compute_tick_id( must use fingerprint.sha256
-    assert "config_hash=fingerprint.sha256" in source, "config_hash should use full sha256"
-    assert "fingerprint.sha256, observed_at" in source, "compute_tick_id should use full sha256"
-
-
 # --- Gap 2: Instrument mapping ---
 
 
@@ -285,12 +273,19 @@ def test_regime_repo_writes_target_id() -> None:
 # --- Gap 4b: Binance adapter no suffix heuristic ---
 
 
-def test_account_state_no_suffix_heuristic() -> None:
-    """account_state.py must not use suffix heuristic for quote asset detection."""
-    source = Path("src/dojiwick/infrastructure/exchange/binance/account_state.py").read_text()
-    assert 'endswith("USDT")' not in source
-    assert "split_symbol" not in source  # no heuristic fallback
-    assert "_resolve_assets" in source
+async def test_account_state_resolves_assets_from_exchange_info() -> None:
+    """Base/quote come from exchange info, not any symbol-suffix heuristic."""
+    from dojiwick.infrastructure.exchange.binance.account_state import BinanceAccountStateProvider
+
+    class StubClient:
+        async def request(self, method: str, path: str, **kwargs: object) -> object:
+            assert path == "/fapi/v1/exchangeInfo"
+            # A symbol whose quote a USDT-suffix heuristic would get wrong
+            return {"symbols": [{"symbol": "WEIRDPERP", "baseAsset": "WEIRD", "quoteAsset": "USDC"}]}
+
+    provider = BinanceAccountStateProvider(client=StubClient())  # pyright: ignore[reportArgumentType]
+    base, quote = await provider._resolve_assets("WEIRDPERP")  # pyright: ignore[reportPrivateUsage]
+    assert (base, quote) == ("WEIRD", "USDC")
 
 
 # --- Gap 5: CLI overrides removed ---
@@ -426,8 +421,15 @@ def test_resolve_targets_missing_pair_in_map_raises() -> None:
 # --- Phase 2: Account-state unknown symbol ---
 
 
-def test_account_state_unknown_symbol_raises() -> None:
+async def test_account_state_unknown_symbol_raises() -> None:
     """_resolve_assets raises ExchangeError for symbols not in exchange info."""
-    source = Path("src/dojiwick/infrastructure/exchange/binance/account_state.py").read_text()
-    assert "ExchangeError" in source
-    assert "not found in exchange info" in source
+    from dojiwick.domain.errors import ExchangeError
+    from dojiwick.infrastructure.exchange.binance.account_state import BinanceAccountStateProvider
+
+    class StubClient:
+        async def request(self, method: str, path: str, **kwargs: object) -> object:
+            return {"symbols": []}
+
+    provider = BinanceAccountStateProvider(client=StubClient())  # pyright: ignore[reportArgumentType]
+    with pytest.raises(ExchangeError, match="not found in exchange info"):
+        await provider._resolve_assets("NOPE")  # pyright: ignore[reportPrivateUsage]

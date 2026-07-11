@@ -381,3 +381,35 @@ async def test_supervisor_reconnects_after_stream_error() -> None:
 
     # The event before the error was still processed
     assert len(report_repo.reports) >= 1
+
+
+async def test_partial_then_full_fill_progression() -> None:
+    """Cumulative HWM applies 0.005 then 0.005 more; report ends FILLED."""
+    stream = InMemoryOrderEventStream(_stream_name="test_orders")
+    stream.push_raw_update(
+        _make_update(
+            status=OrderStatus.PARTIALLY_FILLED,
+            last_filled_qty=Decimal("0.005"),
+            cumulative_filled_qty=Decimal("0.005"),
+            trade_id=1,
+        )
+    )
+    stream.push_raw_update(
+        _make_update(
+            status=OrderStatus.FILLED,
+            last_filled_qty=Decimal("0.005"),
+            cumulative_filled_qty=Decimal("0.010"),
+            trade_id=2,
+        )
+    )
+    consumer, req_repo, report_repo, fill_repo, _events, pos_leg_repo, pos_event_repo, _cursor = _build_consumer(stream)
+    await _seed_order_request(req_repo)
+
+    await _drain(consumer)
+
+    assert report_repo.reports[-1].status is OrderStatus.FILLED
+    assert report_repo.reports[-1].filled_qty == Decimal("0.010")
+    assert len(fill_repo.fills) == 2
+    leg = next(iter(pos_leg_repo.legs.values()))
+    assert leg.quantity == Decimal("0.010"), "high-water mark applies each cumulative delta exactly once"
+    assert len(pos_event_repo.events) == 2

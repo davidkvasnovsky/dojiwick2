@@ -2,6 +2,8 @@
 
 from decimal import Decimal
 
+from fixtures.fakes.exchange_metadata import FakeExchangeMetadata
+
 from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
 from dojiwick.domain.enums import (
     OrderSide,
@@ -15,6 +17,7 @@ from dojiwick.domain.models.value_objects.account_state import (
     ExchangePositionLeg,
 )
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId, TargetLegPosition
+from dojiwick.domain.models.value_objects.instrument_metadata import InstrumentFilter, InstrumentInfo
 from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 
 BTCUSDC = InstrumentId(
@@ -390,3 +393,89 @@ async def test_one_way_net_only_profile() -> None:
     plan = await planner.plan(snapshot, targets)
     assert len(plan.deltas) == 1
     assert plan.deltas[0].position_side == PositionSide.NET
+
+
+# Quantization against exchange filters (FakeExchangeMetadata)
+
+
+def _metadata(
+    step: str = "0.001",
+    min_qty: str = "0.001",
+    min_notional: str = "100",
+    max_qty: str | None = None,
+) -> FakeExchangeMetadata:
+    info = InstrumentInfo(
+        instrument_id=BTCUSDC,
+        status="TRADING",
+        filters=InstrumentFilter(
+            tick_size=Decimal("0.1"),
+            min_qty=Decimal(min_qty),
+            max_qty=Decimal(max_qty) if max_qty is not None else None,
+            step_size=Decimal(step),
+            min_notional=Decimal(min_notional),
+        ),
+        price_precision=1,
+        quantity_precision=3,
+        base_asset_precision=8,
+        quote_asset_precision=8,
+    )
+    return FakeExchangeMetadata(instruments={BTCUSDC: info})
+
+
+def _target(qty: str) -> tuple[TargetLegPosition, ...]:
+    return (
+        TargetLegPosition(
+            account="default",
+            instrument_id=BTCUSDC,
+            position_side=PositionSide.NET,
+            target_qty=Decimal(qty),
+        ),
+    )
+
+
+async def test_quantity_floored_to_step() -> None:
+    planner = DefaultExecutionPlanner(position_mode=PositionMode.ONE_WAY, exchange_metadata=_metadata())
+    plan = await planner.plan(_snapshot(), _target("0.0157"))
+
+    assert len(plan.deltas) == 1
+    assert plan.deltas[0].quantity == Decimal("0.015")
+
+
+async def test_entry_below_min_qty_dropped() -> None:
+    planner = DefaultExecutionPlanner(position_mode=PositionMode.ONE_WAY, exchange_metadata=_metadata(min_qty="0.01"))
+    plan = await planner.plan(_snapshot(), _target("0.005"))
+
+    assert plan.deltas == ()
+
+
+async def test_reduce_never_dropped_except_below_step() -> None:
+    """Reduce deltas skip min-qty/min-notional; only a sub-step residual is dropped."""
+    planner = DefaultExecutionPlanner(
+        position_mode=PositionMode.ONE_WAY, exchange_metadata=_metadata(min_qty="0.01", min_notional="1000000")
+    )
+    plan = await planner.plan(_snapshot(positions=(_long_leg(Decimal("0.005")),)), _target("0"))
+    assert len(plan.deltas) == 1
+    assert plan.deltas[0].reduce_only is True
+    assert plan.deltas[0].quantity == Decimal("0.005")
+
+    sub_step = await planner.plan(_snapshot(positions=(_long_leg(Decimal("0.0004")),)), _target("0"))
+    assert sub_step.deltas == ()
+
+
+async def test_filter_cache_hits_metadata_once() -> None:
+    metadata = _metadata()
+    calls = 0
+    original = metadata.get_instrument
+
+    async def counting(instrument_id: InstrumentId) -> InstrumentInfo:
+        nonlocal calls
+        calls += 1
+        return await original(instrument_id)
+
+    metadata.get_instrument = counting  # type: ignore[method-assign]
+    planner = DefaultExecutionPlanner(position_mode=PositionMode.ONE_WAY, exchange_metadata=metadata)
+
+    await planner.plan(_snapshot(), _target("0.5"))
+    await planner.plan(_snapshot(positions=(_long_leg(Decimal("0.5")),)), _target("1.0"))
+
+    assert calls == 1

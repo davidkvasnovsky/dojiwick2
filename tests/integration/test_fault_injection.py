@@ -22,7 +22,7 @@ from dojiwick.application.registry.strategy_registry import build_default_strate
 from dojiwick.application.use_cases.run_tick import TickService
 from dojiwick.config.schema import Settings
 from dojiwick.domain.enums import DecisionAuthority, DecisionStatus, PositionMode, TickStatus
-from dojiwick.domain.errors import PostExecutionPersistenceError
+from dojiwick.domain.errors import AIServiceError, PostExecutionPersistenceError
 from dojiwick.domain.hashing import compute_tick_id
 from dojiwick.infrastructure.system.clock import SystemClock
 
@@ -102,6 +102,18 @@ async def test_veto_unexpected_error_honors_fail_open() -> None:
     """FailVeto(RuntimeError) with fail_open=True → trading continues (operator intent wins)."""
     settings = SettingsBuilder().with_ai_veto(enabled=True, veto_enabled=True, fail_open_on_error=True).build()
     service, _repo = _make_service(settings=settings, veto_service=FailVeto(RuntimeError))
+    fixed_time = datetime(2024, 6, 15, 12, 0, 0, tzinfo=UTC)
+
+    outcomes = await service.run_tick(pairs=settings.trading.active_pairs, at=fixed_time)
+
+    assert len(outcomes) > 0
+    assert any(o.status == DecisionStatus.EXECUTED for o in outcomes)
+
+
+async def test_veto_ai_service_error_honors_fail_open() -> None:
+    """FailVeto(AIServiceError) — the typed SDK-wrapper error — honors fail-open."""
+    settings = SettingsBuilder().with_ai_veto(enabled=True, veto_enabled=True, fail_open_on_error=True).build()
+    service, _repo = _make_service(settings=settings, veto_service=FailVeto(AIServiceError))
     fixed_time = datetime(2024, 6, 15, 12, 0, 0, tzinfo=UTC)
 
     outcomes = await service.run_tick(pairs=settings.trading.active_pairs, at=fixed_time)

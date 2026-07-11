@@ -105,22 +105,43 @@ async def test_default_close_model_backward_compat() -> None:
     assert result_with_ohlc.sharpe_like == result_without_ohlc.sharpe_like
 
 
+def _trading_series_with_gap_open(n_bars: int = 5) -> BacktestTimeSeries:
+    """Single-pair series that reliably enters (mean_revert_buy preset) and whose
+    bar opens differ from closes, so the entry price model is observable."""
+    from fixtures.factories.domain import ContextBuilder
+
+    pairs = ("BTC/USDC",)
+    contexts = tuple(ContextBuilder(pairs=pairs).mean_revert_buy().build() for _ in range(n_bars))
+    entry = float(contexts[0].market.price[0])
+    opens = tuple(np.array([entry + 50.0]) for _ in range(n_bars))
+    highs = tuple(np.array([entry + 60.0]) for _ in range(n_bars))
+    lows = tuple(np.array([entry - 5.0]) for _ in range(n_bars))
+    closes = tuple(np.array([entry + 10.0]) for _ in range(n_bars))
+    return BacktestTimeSeries(
+        contexts=contexts,
+        next_prices=closes,
+        active_mask=np.ones((n_bars, len(pairs)), dtype=np.bool_),
+        next_open=opens,
+        next_high=highs,
+        next_low=lows,
+    )
+
+
 @pytest.mark.asyncio
 async def test_next_open_differs_from_close() -> None:
-    """next_open model produces different P&L than close model."""
+    """next_open model produces different P&L than close model on a trading series."""
     base = SettingsBuilder().build()
     settings_open = base.model_copy(
         update={"backtest": base.backtest.model_copy(update={"entry_price_model": EntryPriceModel.NEXT_OPEN})}
     )
     settings_close = base
 
-    series = _build_series()
+    series = _trading_series_with_gap_open()
     result_close, _ = await _build_service(settings_close).run_with_hysteresis_summary_only(series)
     result_open, _ = await _build_service(settings_open).run_with_hysteresis_summary_only(series)
 
-    # They may differ if any trades are taken; if no trades, both are 0
-    if result_close.trades > 0:
-        assert result_close.total_pnl_usd != result_open.total_pnl_usd
+    assert result_close.trades > 0, "fixture must produce at least one trade"
+    assert result_close.total_pnl_usd != result_open.total_pnl_usd
 
 
 @pytest.mark.asyncio
