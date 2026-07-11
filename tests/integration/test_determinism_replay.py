@@ -1,19 +1,11 @@
 """Integration tests for deterministic tick replay and deduplication."""
 
+import contextlib
 from datetime import UTC, datetime
 
-from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
-from dojiwick.application.policies.risk.defaults import build_default_risk_engine
-from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
-from dojiwick.application.use_cases.run_tick import TickService
-from dojiwick.config.fingerprint import fingerprint_settings
-from dojiwick.config.schema import Settings
-from fixtures.factories.infrastructure import default_instrument_map, default_risk_settings, default_settings
-from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext
-from dojiwick.domain.enums import PositionMode, TickStatus
-from dojiwick.domain.hashing import compute_tick_id
-from dojiwick.infrastructure.system.clock import SystemClock
 from fixtures.factories.domain import ContextBuilder
+from fixtures.factories.infrastructure import default_instrument_map, default_risk_settings, default_settings
+from fixtures.factories.integration import empty_snapshot
 from fixtures.fakes.account_state import FakeAccountState
 from fixtures.fakes.bot_state_repository import InMemoryBotStateRepo
 from fixtures.fakes.context_provider import StaticBatchContextProvider
@@ -22,7 +14,16 @@ from fixtures.fakes.outcome_repository import CapturingOutcomeRepo, FailingOutco
 from fixtures.fakes.regime_repository import InMemoryRegimeRepo
 from fixtures.fakes.tick_repository import InMemoryTickRepo
 
-from fixtures.factories.integration import empty_snapshot
+from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
+from dojiwick.application.policies.risk.defaults import build_default_risk_engine
+from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
+from dojiwick.application.use_cases.run_tick import TickService
+from dojiwick.config.fingerprint import fingerprint_settings
+from dojiwick.config.schema import Settings
+from dojiwick.domain.enums import PositionMode, TickStatus
+from dojiwick.domain.hashing import compute_tick_id
+from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext
+from dojiwick.infrastructure.system.clock import SystemClock
 
 
 def _make_service(
@@ -109,10 +110,8 @@ async def test_tick_record_persisted_on_failure() -> None:
     fixed_time = datetime(2024, 6, 15, 12, 0, 0, tzinfo=UTC)
     pairs = service.settings.trading.active_pairs
 
-    try:
+    with contextlib.suppress(Exception):
         await service.run_tick(pairs=pairs, at=fixed_time)
-    except Exception:
-        pass
 
     tick_id = compute_tick_id(service.config_hash, fixed_time, pairs)
     record = repo.get(tick_id)
@@ -185,10 +184,8 @@ async def test_dedup_after_failure_allows_retry() -> None:
     fixed_time = datetime(2024, 6, 15, 12, 0, 0, tzinfo=UTC)
     pairs = service_fail.settings.trading.active_pairs
 
-    try:
+    with contextlib.suppress(Exception):
         await service_fail.run_tick(pairs=pairs, at=fixed_time)
-    except Exception:
-        pass
 
     tick_id = compute_tick_id(service_fail.config_hash, fixed_time, pairs)
     record = repo.get(tick_id)

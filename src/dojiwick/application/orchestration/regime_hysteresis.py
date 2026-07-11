@@ -63,10 +63,7 @@ class RegimeHysteresis:
                 continue
 
             pending = self.pending_by_pair.get(pair)
-            if pending is not None and pending[0] == incoming:
-                count = pending[1] + 1
-            else:
-                count = 1
+            count = pending[1] + 1 if pending is not None and pending[0] == incoming else 1
             self.pending_by_pair[pair] = (incoming, count)
 
             if count >= bars:

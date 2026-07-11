@@ -4,6 +4,11 @@ import logging
 
 import numpy as np
 
+from dojiwick.compute.kernels.strategy.confluence import compute_confluence_score
+from dojiwick.compute.kernels.strategy.plugin import StrategyPlugin
+from dojiwick.compute.kernels.strategy.stop_tp import atr_stop_take_profit
+from dojiwick.domain.enums import TradeAction
+from dojiwick.domain.indicator_schema import INDICATOR_INDEX
 from dojiwick.domain.models.value_objects.batch_models import (
     BatchDecisionContext,
     BatchRegimeProfile,
@@ -11,13 +16,7 @@ from dojiwick.domain.models.value_objects.batch_models import (
     BatchTradeCandidate,
 )
 from dojiwick.domain.models.value_objects.params import StrategyParams, extract_param_vector
-from dojiwick.domain.enums import TradeAction
-from dojiwick.domain.indicator_schema import INDICATOR_INDEX
 from dojiwick.domain.reason_codes import STRATEGY_HOLD, STRATEGY_SIGNAL
-
-from dojiwick.compute.kernels.strategy.confluence import compute_confluence_score
-from dojiwick.compute.kernels.strategy.plugin import StrategyPlugin
-from dojiwick.compute.kernels.strategy.stop_tp import atr_stop_take_profit
 
 log = logging.getLogger(__name__)
 
@@ -160,9 +159,9 @@ def build_default_strategy_registry(
     If *enabled* is given, only plugins whose ``name`` appears in it are registered.
     Raises ``ValueError`` if any name in *enabled* doesn't match a known plugin.
     """
+    from dojiwick.compute.kernels.strategy.mean_revert import mean_revert_signal
     from dojiwick.compute.kernels.strategy.plugin import StrategyPluginAdapter
     from dojiwick.compute.kernels.strategy.trend_follow import trend_follow_signal
-    from dojiwick.compute.kernels.strategy.mean_revert import mean_revert_signal
     from dojiwick.compute.kernels.strategy.vol_revert import vol_revert_signal
 
     all_plugins = [

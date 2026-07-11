@@ -40,7 +40,7 @@ _BASE_INT_PARAMS: frozenset[str] = frozenset(
 REGIME_PARAMS: frozenset[str] = frozenset(
     {"adx_trend_min", "atr_high_pct", "min_confidence", "ema_spread_weak_bps", "atr_low_pct"}
 )
-assert REGIME_PARAMS <= frozenset(RegimeParams.model_fields), "sync REGIME_PARAMS with RegimeParams"
+assert frozenset(RegimeParams.model_fields) >= REGIME_PARAMS, "sync REGIME_PARAMS with RegimeParams"
 
 _BASE_BOUNDS: dict[str, tuple[float, float]] = {
     # Exit / risk params

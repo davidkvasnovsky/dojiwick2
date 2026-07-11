@@ -2,12 +2,12 @@
 
 import logging
 import os
+import tomllib
 import types
+from collections.abc import Callable
 from dataclasses import fields
 from pathlib import Path
-from collections.abc import Callable
 from typing import Any, TypeGuard, cast, get_args, get_origin, get_type_hints
-import tomllib
 
 from pydantic import BaseModel, ValidationError
 
@@ -16,11 +16,11 @@ from dojiwick.domain.errors import ConfigurationError
 from .risk_scope import RISK_FIELDS, RiskOverrideValues, RiskScopeResolver, RiskScopeRule
 from .schema import INFRA_ONLY_FIELDS, Settings
 from .scope import (
+    STRATEGY_FIELDS,
     ScopeSelector,
     StrategyOverrideValues,
     StrategyScopeResolver,
     StrategyScopeRule,
-    STRATEGY_FIELDS,
     parse_regime,
 )
 
@@ -274,9 +274,8 @@ def _parse_scope_header(
             raise ConfigurationError(f"{section}[{index}].regime: {exc}") from exc
 
     strategy_name = entry.get("strategy")
-    if strategy_name is not None:
-        if not isinstance(strategy_name, str) or not strategy_name:
-            raise ConfigurationError(f"{section}[{index}].strategy must be a non-empty string")
+    if strategy_name is not None and (not isinstance(strategy_name, str) or not strategy_name):
+        raise ConfigurationError(f"{section}[{index}].strategy must be a non-empty string")
 
     return rule_id, priority, ScopeSelector(pair=pair, regime=parsed_regime, strategy=strategy_name)
 

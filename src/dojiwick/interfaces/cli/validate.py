@@ -39,8 +39,8 @@ async def _run_walk_forward(
     args: argparse.Namespace,
 ) -> None:
     """Run walk-forward validation and print per-window results."""
-    from dojiwick.interfaces.cli._shared import build_service, load_settings_and_series
     from dojiwick.application.use_cases.validation.walk_forward_validator import walk_forward_validate
+    from dojiwick.interfaces.cli._shared import build_service, load_settings_and_series
 
     settings, series, cleanup = await load_settings_and_series(args)
     try:
@@ -81,9 +81,11 @@ async def _run_cross_validate(
     args: argparse.Namespace,
 ) -> None:
     """Run cross-validation + PBO and print per-fold results."""
-    from dojiwick.interfaces.cli._shared import build_service, load_settings_and_series
     from dojiwick.application.use_cases.validation.cross_validator import cross_validate
-    from dojiwick.application.use_cases.validation.gate_evaluator import _compute_pbo  # pyright: ignore[reportPrivateUsage]
+    from dojiwick.application.use_cases.validation.gate_evaluator import (
+        _compute_pbo,  # pyright: ignore[reportPrivateUsage]
+    )
+    from dojiwick.interfaces.cli._shared import build_service, load_settings_and_series
 
     settings, series, cleanup = await load_settings_and_series(args)
     try:

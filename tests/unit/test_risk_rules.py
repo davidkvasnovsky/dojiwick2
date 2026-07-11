@@ -1,6 +1,8 @@
 """Unit tests for the 4 built-in risk rules and per-pair risk engine."""
 
 import numpy as np
+from fixtures.factories.domain import ContextBuilder
+from fixtures.factories.infrastructure import default_risk_params
 
 from dojiwick.application.policies.risk.engine import RiskPolicyEngine
 from dojiwick.compute.kernels.risk.rules.daily_loss import DailyLossRule
@@ -9,7 +11,6 @@ from dojiwick.compute.kernels.risk.rules.min_rr import MinRRRule
 from dojiwick.compute.kernels.risk.rules.zero_stop import ZeroStopRule
 from dojiwick.domain.enums import TradeAction
 from dojiwick.domain.models.value_objects.batch_models import BatchTradeCandidate
-from fixtures.factories.infrastructure import default_risk_params
 from dojiwick.domain.reason_codes import (
     RISK_DAILY_LOSS,
     RISK_MAX_POSITIONS,
@@ -17,8 +18,6 @@ from dojiwick.domain.reason_codes import (
     RISK_OK,
     RISK_ZERO_STOP_DISTANCE,
 )
-
-from fixtures.factories.domain import ContextBuilder
 
 
 def _candidate(

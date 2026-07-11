@@ -1,12 +1,12 @@
 """Strategy registry and risk engine tests."""
 
 import numpy as np
+from fixtures.factories.infrastructure import default_risk_settings, default_settings
 
 from dojiwick.application.policies.risk.defaults import build_default_risk_engine
 from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
 from dojiwick.compute.kernels.regime.classify import classify_regime_batch
 from dojiwick.compute.kernels.sizing.fixed_fraction import size_intents
-from fixtures.factories.infrastructure import default_risk_settings, default_settings
 from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext
 
 

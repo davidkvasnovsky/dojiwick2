@@ -4,13 +4,11 @@ import math
 
 import numpy as np
 
-from dojiwick.domain.enums import MarketState
-from dojiwick.domain.models.value_objects.params import RegimeParams
-from dojiwick.domain.models.value_objects.outcome_models import ConfusionMatrix, RegimeEvaluationReport
-from dojiwick.domain.type_aliases import FloatVector, IntVector
-
 from dojiwick.compute.kernels.regime.classify import truth_labels_from_prices
-
+from dojiwick.domain.enums import MarketState
+from dojiwick.domain.models.value_objects.outcome_models import ConfusionMatrix, RegimeEvaluationReport
+from dojiwick.domain.models.value_objects.params import RegimeParams
+from dojiwick.domain.type_aliases import FloatVector, IntVector
 
 _STATE_LABELS: tuple[int, ...] = (
     MarketState.TRENDING_UP.value,

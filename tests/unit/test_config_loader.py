@@ -3,10 +3,15 @@
 from pathlib import Path
 
 import pytest
+from fixtures.factories.infrastructure import (
+    default_exchange_settings,
+    default_settings,
+    default_strategy_params,
+    default_universe_settings,
+)
 
 from dojiwick.config.composition import build_adapters
 from dojiwick.config.loader import load_settings
-from fixtures.factories.infrastructure import default_settings
 from dojiwick.config.scope import (
     ScopeSelector,
     StrategyOverrideValues,
@@ -15,14 +20,9 @@ from dojiwick.config.scope import (
     parse_regime,
 )
 from dojiwick.domain.enums import MarketState, PositionMode
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_VENUE
 from dojiwick.domain.errors import ConfigurationError
 from dojiwick.domain.models.value_objects.params import StrategyParams
-from fixtures.factories.infrastructure import (
-    default_exchange_settings,
-    default_strategy_params,
-    default_universe_settings,
-)
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_VENUE
 
 _BASE_CONFIG_PATH = Path("config.toml")
 
@@ -120,7 +120,7 @@ def test_scope_risk_unknown_key_rejected(tmp_path: Path) -> None:
     )
     config = _write_base_config(tmp_path, content=bad)
 
-    with pytest.raises(ConfigurationError, match="unknown keys in scope.risk"):
+    with pytest.raises(ConfigurationError, match=r"unknown keys in scope.risk"):
         load_settings(config)
 
 
@@ -186,7 +186,7 @@ def test_scope_strategy_unknown_key_rejected(tmp_path: Path) -> None:
     )
     config = _write_base_config(tmp_path, content=bad)
 
-    with pytest.raises(ConfigurationError, match="unknown keys in scope.strategy"):
+    with pytest.raises(ConfigurationError, match=r"unknown keys in scope.strategy"):
         load_settings(config)
 
 
@@ -295,29 +295,29 @@ def test_parse_regime_supports_sql_literals() -> None:
 
 
 def test_exchange_settings_validates_recv_window() -> None:
-    with pytest.raises(ValueError, match="exchange.recv_window_ms must be in"):
+    with pytest.raises(ValueError, match=r"exchange.recv_window_ms must be in"):
         default_exchange_settings(recv_window_ms=500)
-    with pytest.raises(ValueError, match="exchange.recv_window_ms must be in"):
+    with pytest.raises(ValueError, match=r"exchange.recv_window_ms must be in"):
         default_exchange_settings(recv_window_ms=120_000)
 
 
 def test_exchange_settings_validates_rate_limit() -> None:
-    with pytest.raises(ValueError, match="exchange.rate_limit_per_sec must be >= 1"):
+    with pytest.raises(ValueError, match=r"exchange.rate_limit_per_sec must be >= 1"):
         default_exchange_settings(rate_limit_per_sec=0)
 
 
 def test_exchange_settings_validates_backoff_factor() -> None:
-    with pytest.raises(ValueError, match="exchange.backoff_factor must be >= 1.0"):
+    with pytest.raises(ValueError, match=r"exchange.backoff_factor must be >= 1.0"):
         default_exchange_settings(backoff_factor=0.5)
 
 
 def test_universe_settings_validates_quote_asset() -> None:
-    with pytest.raises(ValueError, match="universe.quote_asset must not be empty"):
+    with pytest.raises(ValueError, match=r"universe.quote_asset must not be empty"):
         default_universe_settings(quote_asset="")
 
 
 def test_universe_settings_validates_settle_asset() -> None:
-    with pytest.raises(ValueError, match="universe.settle_asset must not be empty"):
+    with pytest.raises(ValueError, match=r"universe.settle_asset must not be empty"):
         default_universe_settings(settle_asset="")
 
 

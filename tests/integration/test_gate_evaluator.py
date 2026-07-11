@@ -1,8 +1,9 @@
 """DefaultGateEvaluator integration test — verifies end-to-end wiring."""
 
-from dojiwick.application.use_cases.validation.gate_evaluator import DefaultGateEvaluator
 from fixtures.factories.domain import TimeSeriesBuilder
 from fixtures.factories.infrastructure import default_research_gate_settings, default_settings
+
+from dojiwick.application.use_cases.validation.gate_evaluator import DefaultGateEvaluator
 
 
 async def test_gate_evaluator_produces_gate_result() -> None:

@@ -2,15 +2,16 @@
 
 import json
 
+from fixtures.factories.compute import RegimeProfileBuilder, TradeCandidateBuilder
+from fixtures.factories.domain import ContextBuilder
+from fixtures.fakes.clock import FixedClock
+from fixtures.fakes.llm_client import FixedLLMClient
+
 from dojiwick.domain.reason_codes import AI_VETO_PARSE_ERROR
 from dojiwick.infrastructure.ai.llm_regime_classifier import LLMRegimeClassifier
 from dojiwick.infrastructure.ai.llm_veto_service import LLMVetoService
 from dojiwick.infrastructure.ai.prompts.regime_prompt import build_regime_user_prompt
 from dojiwick.infrastructure.ai.prompts.veto_prompt import build_veto_user_prompt
-from fixtures.factories.domain import ContextBuilder
-from fixtures.factories.compute import RegimeProfileBuilder, TradeCandidateBuilder
-from fixtures.fakes.clock import FixedClock
-from fixtures.fakes.llm_client import FixedLLMClient
 
 
 class TestLLMAdversarial:

@@ -6,7 +6,6 @@ from typing import Any
 
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.entities.pair_state import PairTradingState
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _GET_SQL = """

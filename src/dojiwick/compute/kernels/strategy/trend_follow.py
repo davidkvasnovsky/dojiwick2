@@ -2,20 +2,20 @@
 
 import numpy as np
 
-from dojiwick.domain.enums import MarketState
-from dojiwick.domain.models.value_objects.params import (
-    StrategyParams,
-    resolve_optional_param_vector,
-    resolve_param_vector,
-)
-from dojiwick.domain.indicator_schema import INDICATOR_INDEX
-from dojiwick.domain.type_aliases import BoolVector, FloatMatrix, FloatVector, IntVector
 from dojiwick.compute.kernels.strategy._filters import (
     apply_macd_filter,
     apply_volume_filter,
     ema_triple_aligned_down,
     ema_triple_aligned_up,
 )
+from dojiwick.domain.enums import MarketState
+from dojiwick.domain.indicator_schema import INDICATOR_INDEX
+from dojiwick.domain.models.value_objects.params import (
+    StrategyParams,
+    resolve_optional_param_vector,
+    resolve_param_vector,
+)
+from dojiwick.domain.type_aliases import BoolVector, FloatMatrix, FloatVector, IntVector
 
 
 def _resolve_confidence_cap(

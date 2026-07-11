@@ -4,14 +4,6 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
-from dojiwick.application.services.protective_orders import ProtectiveOrderService
-from dojiwick.domain.contracts.gateways.open_order import ExchangeOpenOrder
-from dojiwick.domain.enums import OrderKind, OrderSide, OrderStatus, PositionSide
-from dojiwick.domain.hashing import compute_protective_client_order_id
-from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
-from dojiwick.domain.models.value_objects.instrument_metadata import InstrumentFilter, InstrumentInfo
-from dojiwick.domain.models.value_objects.position_leg import PositionLeg
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from fixtures.factories.infrastructure import default_settings
 from fixtures.fakes.clock import FixedClock
 from fixtures.fakes.execution import DryRunGateway
@@ -20,6 +12,15 @@ from fixtures.fakes.open_order import FakeOpenOrderAdapter
 from fixtures.fakes.order_request_repository import FakeOrderRequestRepo
 from fixtures.fakes.position_exit_state_repository import FakePositionExitStateRepository
 from fixtures.fakes.position_leg_repository import FakePositionLegRepo
+
+from dojiwick.application.services.protective_orders import ProtectiveOrderService
+from dojiwick.domain.contracts.gateways.open_order import ExchangeOpenOrder
+from dojiwick.domain.enums import OrderKind, OrderSide, OrderStatus, PositionSide
+from dojiwick.domain.hashing import compute_protective_client_order_id
+from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
+from dojiwick.domain.models.value_objects.instrument_metadata import InstrumentFilter, InstrumentInfo
+from dojiwick.domain.models.value_objects.position_leg import PositionLeg
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 
 _IID = InstrumentId(
     venue=BINANCE_VENUE,
@@ -49,7 +50,7 @@ class _Env:
     def __init__(self) -> None:
         self.instrument_repo = FakeInstrumentRepo()
         db_id = self.instrument_repo.seed(BINANCE_VENUE, BINANCE_USD_C, "BTCUSDC", db_id=7)
-        self.instrument_repo._instruments[db_id] = _INFO  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+        self.instrument_repo._instruments[db_id] = _INFO  # pyright: ignore[reportPrivateUsage]
         self.leg_repo = FakePositionLegRepo()
         self.exit_repo = FakePositionExitStateRepository()
         self.open_orders = FakeOpenOrderAdapter()

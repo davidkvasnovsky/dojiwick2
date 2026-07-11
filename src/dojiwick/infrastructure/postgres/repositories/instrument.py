@@ -3,11 +3,10 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
-from dojiwick.domain.type_aliases import ProductCode, VenueCode
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.models.value_objects.instrument_metadata import InstrumentFilter, InstrumentInfo
-
+from dojiwick.domain.type_aliases import ProductCode, VenueCode
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _UPSERT_INSTRUMENT_SQL = """

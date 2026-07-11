@@ -6,22 +6,21 @@ from typing import Any
 
 import numpy as np
 import pytest
+from fixtures.factories.infrastructure import default_strategy_params
 
 from dojiwick.domain.indicator_schema import INDICATOR_COUNT
+from dojiwick.domain.models.entities.bot_state import BotState
+from dojiwick.domain.models.entities.pair_state import PairTradingState
 from dojiwick.domain.models.value_objects.batch_models import (
     BatchMarketSnapshot,
     BatchPortfolioSnapshot,
     BatchRegimeProfile,
 )
-from dojiwick.domain.models.entities.bot_state import BotState
 from dojiwick.domain.models.value_objects.candle import Candle
-from dojiwick.domain.type_aliases import CandleInterval
 from dojiwick.domain.models.value_objects.health import HealthStatus
-from dojiwick.domain.models.entities.pair_state import PairTradingState
-from fixtures.factories.infrastructure import default_strategy_params
 from dojiwick.domain.models.value_objects.performance import PerformanceSnapshot
 from dojiwick.domain.models.value_objects.signal import Signal
-
+from dojiwick.domain.type_aliases import CandleInterval
 
 # --- Batch models (existing) ---
 

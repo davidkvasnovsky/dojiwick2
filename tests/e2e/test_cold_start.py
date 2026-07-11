@@ -7,19 +7,7 @@ reconciliation completes.
 
 from decimal import Decimal
 
-from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
-from dojiwick.application.policies.risk.defaults import build_default_risk_engine
-from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
-from dojiwick.application.use_cases.run_reconciliation import ReconciliationService
-from dojiwick.application.use_cases.run_tick import TickService
 from fixtures.factories.infrastructure import default_instrument_map, default_risk_settings, default_settings
-from dojiwick.domain.enums import PositionMode
-from dojiwick.domain.models.value_objects.account_state import AccountBalance, AccountSnapshot
-from dojiwick.infrastructure.ai.llm_filter import NullVetoService
-from dojiwick.infrastructure.exchange.cache import ExchangeCache
-from dojiwick.infrastructure.exchange.cached_context_provider import CachedContextProvider
-from dojiwick.infrastructure.exchange.feed import ExchangeDataFeed, FeedStatus
-from dojiwick.infrastructure.system.clock import SystemClock
 from fixtures.fakes.account_state import FakeAccountState
 from fixtures.fakes.audit_log import CapturingAuditLog
 from fixtures.fakes.execution import DryRunGateway
@@ -29,6 +17,19 @@ from fixtures.fakes.outcome_repository import CapturingOutcomeRepo
 from fixtures.fakes.reconciliation import CleanReconciliation
 from fixtures.fakes.regime_repository import InMemoryRegimeRepo
 from fixtures.fakes.tick_repository import NoOpTickRepository
+
+from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
+from dojiwick.application.policies.risk.defaults import build_default_risk_engine
+from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
+from dojiwick.application.use_cases.run_reconciliation import ReconciliationService
+from dojiwick.application.use_cases.run_tick import TickService
+from dojiwick.domain.enums import PositionMode
+from dojiwick.domain.models.value_objects.account_state import AccountBalance, AccountSnapshot
+from dojiwick.infrastructure.ai.llm_filter import NullVetoService
+from dojiwick.infrastructure.exchange.cache import ExchangeCache
+from dojiwick.infrastructure.exchange.cached_context_provider import CachedContextProvider
+from dojiwick.infrastructure.exchange.feed import ExchangeDataFeed, FeedStatus
+from dojiwick.infrastructure.system.clock import SystemClock
 
 
 def _empty_account(account: str = "default") -> AccountSnapshot:

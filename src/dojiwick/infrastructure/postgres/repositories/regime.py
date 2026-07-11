@@ -3,9 +3,8 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from dojiwick.domain.models.value_objects.batch_models import BatchRegimeProfile
 from dojiwick.domain.errors import AdapterError
-
+from dojiwick.domain.models.value_objects.batch_models import BatchRegimeProfile
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _INSERT_SQL = """

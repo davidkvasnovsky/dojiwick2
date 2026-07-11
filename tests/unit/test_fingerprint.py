@@ -1,10 +1,11 @@
 """Tests for settings fingerprinting."""
 
+from fixtures.factories.infrastructure import default_settings, default_system_settings
+
 from dojiwick.config.fingerprint import fingerprint_settings
 from dojiwick.config.schema import (
     DatabaseSettings,
 )
-from fixtures.factories.infrastructure import default_settings, default_system_settings
 
 
 def test_database_section_never_fingerprinted() -> None:

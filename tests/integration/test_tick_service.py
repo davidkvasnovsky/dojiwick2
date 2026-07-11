@@ -1,17 +1,8 @@
 """Tick service integration tests."""
 
-from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
-from dojiwick.application.policies.risk.defaults import build_default_risk_engine
-from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
-from dojiwick.application.use_cases.run_tick import TickService
 from fixtures.factories.infrastructure import default_instrument_map, default_risk_settings, default_settings
-from dojiwick.domain.enums import PositionMode
-from dojiwick.infrastructure.ai.llm_filter import NullVetoService
-from dojiwick.infrastructure.system.clock import SystemClock
-from dojiwick.domain.contracts.gateways.execution import ExecutionGatewayPort
-from dojiwick.domain.contracts.policies.veto import VetoServicePort
+from fixtures.factories.integration import empty_snapshot, signal_triggering_context_builder
 from fixtures.fakes.account_state import FakeAccountState
-from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext
 from fixtures.fakes.context_provider import StaticBatchContextProvider
 from fixtures.fakes.execution import CapturingGateway, DryRunGateway
 from fixtures.fakes.outcome_repository import CapturingOutcomeRepo
@@ -19,7 +10,16 @@ from fixtures.fakes.regime_repository import InMemoryRegimeRepo
 from fixtures.fakes.tick_repository import NoOpTickRepository
 from fixtures.fakes.veto import RejectFirstVeto
 
-from fixtures.factories.integration import empty_snapshot, signal_triggering_context_builder
+from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
+from dojiwick.application.policies.risk.defaults import build_default_risk_engine
+from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
+from dojiwick.application.use_cases.run_tick import TickService
+from dojiwick.domain.contracts.gateways.execution import ExecutionGatewayPort
+from dojiwick.domain.contracts.policies.veto import VetoServicePort
+from dojiwick.domain.enums import PositionMode
+from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext
+from dojiwick.infrastructure.ai.llm_filter import NullVetoService
+from dojiwick.infrastructure.system.clock import SystemClock
 
 
 def _make_tick_service(

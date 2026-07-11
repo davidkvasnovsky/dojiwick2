@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from dojiwick.domain.contracts.gateways.clock import ClockPort
-from dojiwick.domain.errors import AIServiceError
 from dojiwick.domain.contracts.gateways.llm_client import LLMRequest, LLMResponse
+from dojiwick.domain.errors import AIServiceError
 
 if TYPE_CHECKING:
     import anthropic

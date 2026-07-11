@@ -2,6 +2,7 @@
 
 from dojiwick.domain.errors import (
     AdapterError,
+    AIServiceError,
     ConfigurationError,
     DataQualityError,
     DomainValidationError,
@@ -12,7 +13,6 @@ from dojiwick.domain.errors import (
     PostExecutionPersistenceError,
     RateLimitError,
     ReconciliationError,
-    AIServiceError,
 )
 
 

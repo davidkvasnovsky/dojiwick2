@@ -2,9 +2,9 @@
 
 from decimal import Decimal
 
-from dojiwick.domain.models.value_objects.account_state import AccountBalance, AccountSnapshot
-
 from fixtures.factories.domain import ContextBuilder
+
+from dojiwick.domain.models.value_objects.account_state import AccountBalance, AccountSnapshot
 
 
 def signal_triggering_context_builder() -> ContextBuilder:

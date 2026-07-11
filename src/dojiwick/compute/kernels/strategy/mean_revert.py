@@ -2,12 +2,12 @@
 
 import numpy as np
 
-from dojiwick.domain.enums import MarketState
-from dojiwick.domain.models.value_objects.params import StrategyParams, resolve_param_vector
-from dojiwick.domain.indicator_schema import INDICATOR_INDEX
-from dojiwick.domain.type_aliases import BoolVector, FloatMatrix, FloatVector, IntVector
 from dojiwick.compute.kernels.math import safe_divide
 from dojiwick.compute.kernels.strategy._filters import apply_volume_filter
+from dojiwick.domain.enums import MarketState
+from dojiwick.domain.indicator_schema import INDICATOR_INDEX
+from dojiwick.domain.models.value_objects.params import StrategyParams, resolve_param_vector
+from dojiwick.domain.type_aliases import BoolVector, FloatMatrix, FloatVector, IntVector
 
 
 def mean_revert_signal(
@@ -39,10 +39,7 @@ def mean_revert_signal(
         overbought = settings.mean_rsi_overbought
 
     max_bb_width = settings.mean_revert_max_bb_width
-    if max_bb_width > 0.0:
-        narrow_range = safe_divide(bb_upper - bb_lower, prices) <= max_bb_width
-    else:
-        narrow_range = None
+    narrow_range = safe_divide(bb_upper - bb_lower, prices) <= max_bb_width if max_bb_width > 0.0 else None
 
     if settings.mean_revert_disable_ema_filter:
         buy_mask = ranging & (rsi <= oversold) & (prices <= bb_lower)

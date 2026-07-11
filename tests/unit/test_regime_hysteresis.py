@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from dojiwick.domain.enums import MarketState
 from dojiwick.application.orchestration.regime_hysteresis import RegimeHysteresis
+from dojiwick.domain.enums import MarketState
 
 
 def test_no_change_stays_stable() -> None:

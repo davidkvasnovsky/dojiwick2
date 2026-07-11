@@ -7,6 +7,15 @@ from typing import Self
 import numpy as np
 import numpy.typing as npt
 
+from dojiwick.application.orchestration.outcome_assembler import OutcomeInputs
+from dojiwick.domain.enums import (
+    DecisionAuthority,
+    DecisionStatus,
+    ExecutionStatus,
+    MarketState,
+    TradeAction,
+)
+from dojiwick.domain.indicator_schema import INDICATOR_COUNT, INDICATOR_INDEX
 from dojiwick.domain.models.value_objects.batch_models import (
     BatchDecisionContext,
     BatchExecutionIntent,
@@ -17,17 +26,8 @@ from dojiwick.domain.models.value_objects.batch_models import (
     BatchTradeCandidate,
     BatchVetoDecision,
 )
-from dojiwick.domain.enums import (
-    DecisionAuthority,
-    DecisionStatus,
-    ExecutionStatus,
-    MarketState,
-    TradeAction,
-)
-from dojiwick.domain.indicator_schema import INDICATOR_COUNT, INDICATOR_INDEX
-from dojiwick.domain.numerics import to_money, to_price, to_quantity
-from dojiwick.application.orchestration.outcome_assembler import OutcomeInputs
 from dojiwick.domain.models.value_objects.outcome_models import DecisionOutcome, ExecutionReceipt
+from dojiwick.domain.numerics import to_money, to_price, to_quantity
 
 
 def make_indicator_matrix(size: int = 1, **overrides: float) -> npt.NDArray[np.float64]:

@@ -3,7 +3,8 @@
 import asyncio
 import logging
 from collections import deque
-from dataclasses import dataclass, field, replace as dc_replace
+from dataclasses import dataclass, field
+from dataclasses import replace as dc_replace
 from datetime import datetime
 from decimal import Decimal
 
@@ -16,6 +17,9 @@ from dojiwick.application.orchestration.regime_hysteresis import RegimeHysteresi
 from dojiwick.application.orchestration.target_resolver import ResolvedTargets, resolve_targets
 from dojiwick.application.policies.risk.engine import RiskPolicyEngine
 from dojiwick.application.registry.strategy_registry import StrategyRegistry
+from dojiwick.application.services.order_ledger import OrderLedgerService
+from dojiwick.application.services.position_tracker import PositionTracker
+from dojiwick.application.services.protective_orders import ProtectiveOrderService
 from dojiwick.domain.contracts.gateways.account_state import AccountStatePort
 from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.contracts.gateways.context_provider import ContextProviderPort
@@ -26,27 +30,24 @@ from dojiwick.domain.contracts.gateways.unit_of_work import UnitOfWorkPort
 from dojiwick.domain.contracts.policies.regime_classifier import AIRegimeClassifierPort
 from dojiwick.domain.contracts.policies.veto import VetoServicePort
 from dojiwick.domain.contracts.repositories.bot_state import BotStateRepositoryPort
+from dojiwick.domain.contracts.repositories.decision_trace import DecisionTraceRepositoryPort
 from dojiwick.domain.contracts.repositories.outcome import OutcomeRepositoryPort
 from dojiwick.domain.contracts.repositories.regime import RegimeRepositoryPort
-from dojiwick.domain.contracts.repositories.decision_trace import DecisionTraceRepositoryPort
 from dojiwick.domain.contracts.repositories.tick import TickRepositoryPort
-from dojiwick.application.services.order_ledger import OrderLedgerService
-from dojiwick.application.services.position_tracker import PositionTracker
-from dojiwick.application.services.protective_orders import ProtectiveOrderService
 from dojiwick.domain.enums import ExecutionStatus, MissingBarPolicy, OrderSide, ReconciliationHealth, TickStatus
 from dojiwick.domain.errors import CircuitBreakerTrippedError, DataQualityError, PostExecutionPersistenceError
-from dojiwick.domain.timebase import assert_timebase_valid, interval_to_seconds
-from dojiwick.domain.models.entities.bot_state import BotState
 from dojiwick.domain.hashing import compute_inputs_hash, compute_intent_hash, compute_ops_hash, compute_tick_id
+from dojiwick.domain.models.entities.bot_state import BotState
 from dojiwick.domain.models.value_objects.batch_models import (
     BatchDecisionContext,
     BatchExecutionIntent,
 )
+from dojiwick.domain.models.value_objects.decision_trace import DecisionTrace
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan, LegDelta
 from dojiwick.domain.models.value_objects.outcome_models import DecisionOutcome, ExecutionReceipt
-from dojiwick.domain.models.value_objects.decision_trace import DecisionTrace
 from dojiwick.domain.models.value_objects.tick_record import TickRecord
+from dojiwick.domain.timebase import assert_timebase_valid, interval_to_seconds
 
 log = logging.getLogger(__name__)
 
@@ -556,7 +557,7 @@ class TickService:
 
     async def _register_protective_entries(
         self,
-        pipeline: "PipelineResult",
+        pipeline: PipelineResult,
         plan: ExecutionPlan,
         plan_receipts: tuple[ExecutionReceipt, ...],
         request_ids: dict[int, int],

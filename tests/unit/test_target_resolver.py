@@ -6,9 +6,9 @@ import numpy as np
 
 from dojiwick.application.orchestration.target_resolver import pair_to_instrument_id, resolve_targets
 from dojiwick.domain.enums import PositionMode, PositionSide, TradeAction
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.domain.models.value_objects.batch_models import BatchExecutionIntent
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 
 
 def _intent(

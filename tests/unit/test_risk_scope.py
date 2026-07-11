@@ -1,6 +1,7 @@
 """Unit tests for the risk scope resolver."""
 
 import pytest
+from fixtures.factories.infrastructure import default_risk_params
 
 from dojiwick.config.risk_scope import (
     RiskOverrideValues,
@@ -9,8 +10,6 @@ from dojiwick.config.risk_scope import (
 )
 from dojiwick.config.scope import ScopeSelector
 from dojiwick.domain.enums import MarketState
-from fixtures.factories.infrastructure import default_risk_params
-
 
 _DEFAULT = default_risk_params()
 
@@ -77,7 +76,7 @@ class TestRiskScopeResolver:
         assert trace.resolved.max_open_positions == 4
 
     def test_duplicate_id_rejected(self) -> None:
-        with pytest.raises(ValueError, match="duplicate scope.risk.id"):
+        with pytest.raises(ValueError, match=r"duplicate scope.risk.id"):
             RiskScopeResolver(
                 rules=(
                     RiskScopeRule(

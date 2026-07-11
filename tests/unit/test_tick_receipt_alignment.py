@@ -11,11 +11,11 @@ from dojiwick.domain.enums import (
     OrderType,
     PositionSide,
 )
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId, TargetLegPosition
 from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan, LegDelta
 from dojiwick.domain.models.value_objects.outcome_models import ExecutionReceipt
 from dojiwick.domain.numerics import to_price, to_quantity
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 
 
 def _instrument() -> InstrumentId:

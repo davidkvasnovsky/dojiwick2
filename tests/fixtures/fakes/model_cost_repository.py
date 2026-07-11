@@ -1,8 +1,8 @@
 """Fake model cost repository for tests."""
 
+from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from dataclasses import dataclass, field
 
 from dojiwick.domain.models.value_objects.model_cost import ModelCostRecord
 

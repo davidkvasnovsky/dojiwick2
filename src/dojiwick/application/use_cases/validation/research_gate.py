@@ -179,9 +179,8 @@ def _check_continuous(continuous: ContinuousBacktestResult | None, t: GateThresh
 
 
 def _check_shock_test(shock_test: ShockTestResult | None, t: GateThresholds, reasons: list[str]) -> None:
-    if shock_test is not None and t.shock_test_min_pf > 0:
-        if shock_test.profit_factor < t.shock_test_min_pf:
-            reasons.append(f"shock test PF {shock_test.profit_factor:.2f} < min {t.shock_test_min_pf:.2f}")
+    if shock_test is not None and t.shock_test_min_pf > 0 and shock_test.profit_factor < t.shock_test_min_pf:
+        reasons.append(f"shock test PF {shock_test.profit_factor:.2f} < min {t.shock_test_min_pf:.2f}")
 
 
 def _check_regime_pf(regime_pf: RegimePFResult | None, t: GateThresholds, reasons: list[str]) -> None:
@@ -205,8 +204,11 @@ def _check_concentration(concentration: ConcentrationResult | None, t: GateThres
 
 
 def _check_pair_robustness(pair_robustness: PairRobustnessResult | None, t: GateThresholds, reasons: list[str]) -> None:
-    if pair_robustness is not None and t.pair_robustness_min_pairs > 0:
-        if pair_robustness.pairs_above_threshold < t.pair_robustness_min_pairs:
-            reasons.append(
-                f"only {pair_robustness.pairs_above_threshold}/{pair_robustness.total_pairs} pairs above PF threshold, need {t.pair_robustness_min_pairs}"
-            )
+    if (
+        pair_robustness is not None
+        and t.pair_robustness_min_pairs > 0
+        and pair_robustness.pairs_above_threshold < t.pair_robustness_min_pairs
+    ):
+        reasons.append(
+            f"only {pair_robustness.pairs_above_threshold}/{pair_robustness.total_pairs} pairs above PF threshold, need {t.pair_robustness_min_pairs}"
+        )

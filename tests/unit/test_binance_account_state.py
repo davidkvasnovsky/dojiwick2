@@ -7,9 +7,8 @@ import pytest
 
 from dojiwick.domain.enums import PositionSide
 from dojiwick.domain.errors import ExchangeError
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.infrastructure.exchange.binance.account_state import BinanceAccountStateProvider
-
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 
 _EXCHANGE_INFO_RESPONSE: dict[str, object] = {
     "symbols": [
@@ -114,5 +113,5 @@ class TestGetAccountSnapshot:
         provider, _client = _make_provider()
         # Prime the cache with exchange info (no XYZUSDT)
         provider._symbol_assets = {"BTCUSDT": ("BTC", "USDT")}  # pyright: ignore[reportPrivateUsage]
-        with pytest.raises(ExchangeError, match="XYZUSDT.*not found"):
+        with pytest.raises(ExchangeError, match=r"XYZUSDT.*not found"):
             await provider._resolve_assets("XYZUSDT")  # pyright: ignore[reportPrivateUsage]

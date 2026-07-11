@@ -6,7 +6,6 @@ from decimal import Decimal
 import numpy as np
 
 from dojiwick.domain.enums import OrderSide, OrderType, PositionSide
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.domain.hashing import (
     compute_client_order_id,
     compute_inputs_hash,
@@ -21,8 +20,9 @@ from dojiwick.domain.models.value_objects.batch_models import (
     BatchMarketSnapshot,
     BatchPortfolioSnapshot,
 )
-from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan, LegDelta
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
+from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan, LegDelta
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 
 
 def _make_context(

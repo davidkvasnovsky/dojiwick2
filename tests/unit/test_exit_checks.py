@@ -2,7 +2,10 @@
 
 import pytest
 
-from dojiwick.application.use_cases.run_backtest import _check_exit, _OpenPosition  # pyright: ignore[reportPrivateUsage]
+from dojiwick.application.use_cases.run_backtest import (
+    _check_exit,  # pyright: ignore[reportPrivateUsage]
+    _OpenPosition,  # pyright: ignore[reportPrivateUsage]
+)
 from dojiwick.domain.enums import CloseReason, TradeAction
 
 

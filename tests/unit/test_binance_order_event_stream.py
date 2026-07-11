@@ -3,7 +3,9 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from dojiwick.domain.enums import OrderEventType, OrderSide, OrderStatus, OrderType, PositionSide, STATUS_TO_EVENT_TYPE
+import pytest
+
+from dojiwick.domain.enums import STATUS_TO_EVENT_TYPE, OrderEventType, OrderSide, OrderStatus, OrderType, PositionSide
 from dojiwick.infrastructure.exchange.binance.boundary import parse_ws_order_update
 
 
@@ -184,8 +186,5 @@ def test_parse_ws_order_update_timestamps() -> None:
 def test_parse_ws_order_update_missing_o_raises() -> None:
     """Missing 'o' sub-dict raises ValueError."""
     raw: dict[str, object] = {"e": "ORDER_TRADE_UPDATE", "E": 0, "T": 0, "o": "not_a_dict"}
-    try:
+    with pytest.raises(ValueError, match="missing 'o'"):
         parse_ws_order_update(raw)
-        assert False, "expected ValueError"
-    except ValueError as exc:
-        assert "missing 'o'" in str(exc)

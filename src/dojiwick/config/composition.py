@@ -12,24 +12,22 @@ if TYPE_CHECKING:
 
 from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
 from dojiwick.config.schema import Settings
+from dojiwick.config.targets import resolve_execution_symbols
 from dojiwick.domain.contracts.gateways.account_state import AccountStatePort
+from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.contracts.gateways.context_provider import ContextProviderPort
+from dojiwick.domain.contracts.gateways.exchange_metadata import ExchangeMetadataPort
 from dojiwick.domain.contracts.gateways.execution import ExecutionGatewayPort
 from dojiwick.domain.contracts.gateways.execution_planner import ExecutionPlannerPort
-from dojiwick.domain.contracts.gateways.clock import ClockPort
-from dojiwick.domain.contracts.gateways.exchange_metadata import ExchangeMetadataPort
-from dojiwick.domain.contracts.gateways.open_order import OpenOrderPort
-from dojiwick.domain.contracts.gateways.order_event_stream import OrderEventStreamPort
-from dojiwick.domain.type_aliases import VenueCode
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_VENUE
-from dojiwick.domain.errors import ConfigurationError
-
-from dojiwick.config.targets import resolve_execution_symbols
-
 from dojiwick.domain.contracts.gateways.historical_candle_source import HistoricalCandleSourcePort
 from dojiwick.domain.contracts.gateways.historical_funding_source import HistoricalFundingSourcePort
 from dojiwick.domain.contracts.gateways.market_data_feed import MarketDataFeedPort
+from dojiwick.domain.contracts.gateways.open_order import OpenOrderPort
+from dojiwick.domain.contracts.gateways.order_event_stream import OrderEventStreamPort
 from dojiwick.domain.enums import FundingMode
+from dojiwick.domain.errors import ConfigurationError
+from dojiwick.domain.type_aliases import VenueCode
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_VENUE
 
 log = logging.getLogger(__name__)
 
@@ -95,13 +93,13 @@ def _build_binance_adapters(settings: Settings, clock: ClockPort) -> ComposedAda
     )
 
     from dojiwick.infrastructure.exchange.binance.account_state import BinanceAccountStateProvider
-    from dojiwick.infrastructure.exchange.binance.execution import BinanceExecutionGateway
-    from dojiwick.infrastructure.exchange.binance.open_order import BinanceOpenOrderAdapter
     from dojiwick.infrastructure.exchange.binance.exchange_metadata import BinanceExchangeMetadataProvider
+    from dojiwick.infrastructure.exchange.binance.execution import BinanceExecutionGateway
     from dojiwick.infrastructure.exchange.binance.market_data import BinanceMarketDataProvider
+    from dojiwick.infrastructure.exchange.binance.open_order import BinanceOpenOrderAdapter
     from dojiwick.infrastructure.exchange.binance.order_event_stream import BinanceOrderEventStream
-    from dojiwick.infrastructure.exchange.cached_context_provider import CachedContextProvider
     from dojiwick.infrastructure.exchange.cache import ExchangeCache
+    from dojiwick.infrastructure.exchange.cached_context_provider import CachedContextProvider
     from dojiwick.infrastructure.exchange.feed import ExchangeDataFeed
 
     http_client = _build_http_client(settings, clock, api_key=api_key, api_secret=api_secret)
@@ -123,8 +121,8 @@ def _build_binance_adapters(settings: Settings, clock: ClockPort) -> ComposedAda
     async def _cleanup() -> None:
         await http_client.close()
 
-    from dojiwick.infrastructure.exchange.indicator_enricher import IndicatorEnricher
     from dojiwick.domain.type_aliases import CandleInterval
+    from dojiwick.infrastructure.exchange.indicator_enricher import IndicatorEnricher
 
     indicator_enricher = IndicatorEnricher(
         market_data=market_data,
@@ -200,9 +198,9 @@ async def build_market_data_fetcher(
     caching. Cache setup failure falls back to direct exchange fetch only
     for connection-level errors — programming errors must surface.
     """
-    from dojiwick.infrastructure.exchange.binance.readiness import assert_binance_ready
     from dojiwick.infrastructure.exchange.binance.funding import BinanceFundingRateProvider
     from dojiwick.infrastructure.exchange.binance.market_data import BinanceMarketDataProvider
+    from dojiwick.infrastructure.exchange.binance.readiness import assert_binance_ready
     from dojiwick.infrastructure.system.clock import SystemClock
 
     effective_clock = clock or SystemClock()
@@ -220,11 +218,11 @@ async def build_market_data_fetcher(
     if use_cache:
         from psycopg import OperationalError
 
+        from dojiwick.application.services.caching_candle_fetcher import CachingCandleFetcher
+        from dojiwick.application.services.caching_funding_fetcher import CachingFundingRateFetcher
         from dojiwick.infrastructure.postgres.connection import connect
         from dojiwick.infrastructure.postgres.repositories.candle import PgCandleRepository
         from dojiwick.infrastructure.postgres.repositories.funding_rate import PgFundingRateRepository
-        from dojiwick.application.services.caching_candle_fetcher import CachingCandleFetcher
-        from dojiwick.application.services.caching_funding_fetcher import CachingFundingRateFetcher
 
         try:
             db_conn = await connect(settings.database)

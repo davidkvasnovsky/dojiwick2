@@ -20,7 +20,7 @@ def safe_market_state(code: int) -> MarketState | None:
         return None
 
 
-def regime_group(state: "MarketState | None") -> str:
+def regime_group(state: MarketState | None) -> str:
     """Map MarketState to the 3-regime model key used by gate and objective.
 
     TRENDING_UP and TRENDING_DOWN collapse into "trending" so per-regime
@@ -112,7 +112,7 @@ class OrderKind(StrEnum):
     PROTECTIVE_TP1 = "protective_tp1"
 
 
-PROTECTIVE_ORDER_KINDS: frozenset["OrderKind"] = frozenset(
+PROTECTIVE_ORDER_KINDS: frozenset[OrderKind] = frozenset(
     {OrderKind.PROTECTIVE_STOP, OrderKind.PROTECTIVE_TP, OrderKind.PROTECTIVE_TP1}
 )
 

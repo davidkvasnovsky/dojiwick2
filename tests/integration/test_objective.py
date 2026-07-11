@@ -3,15 +3,20 @@
 import math
 
 import pytest
+from fixtures.factories.domain import TimeSeriesBuilder
+from fixtures.factories.infrastructure import default_optimization_settings, default_settings, default_strategy_params
 
 from dojiwick.application.use_cases.optimization.objective import (
-    _base_score as base_score_fn,  # pyright: ignore[reportPrivateUsage]
-    _regularization as regularization_fn,  # pyright: ignore[reportPrivateUsage]
     WalkForwardObjective,
+)
+from dojiwick.application.use_cases.optimization.objective import (
+    _base_score as base_score_fn,  # pyright: ignore[reportPrivateUsage]
+)
+from dojiwick.application.use_cases.optimization.objective import (
+    _regularization as regularization_fn,  # pyright: ignore[reportPrivateUsage]
 )
 from dojiwick.application.use_cases.optimization.search_space import ParamSet, extract_regularization_baseline
 from dojiwick.config.param_tuning import apply_params
-from dojiwick.domain.models.value_objects.outcome_models import BacktestSummary
 from dojiwick.config.scope import (
     ScopeSelector,
     StrategyOverrideValues,
@@ -19,9 +24,8 @@ from dojiwick.config.scope import (
     StrategyScopeRule,
 )
 from dojiwick.domain.enums import ObjectiveMode
+from dojiwick.domain.models.value_objects.outcome_models import BacktestSummary
 from dojiwick.domain.models.value_objects.params import StrategyParams
-from fixtures.factories.domain import TimeSeriesBuilder
-from fixtures.factories.infrastructure import default_optimization_settings, default_settings, default_strategy_params
 
 
 def _full_params(**overrides: float | int) -> ParamSet:
@@ -147,7 +151,7 @@ def test_regularization_uses_loaded_settings() -> None:
     assert baseline["rr_ratio"] == 2.0  # Pydantic default, not old 2.5
 
     # When params match baseline exactly, regularization penalty is zero
-    params: ParamSet = {k: v for k, v in baseline.items()}
+    params: ParamSet = dict(baseline.items())
     summary = BacktestSummary(
         trades=0, total_pnl_usd=0.0, win_rate=0.0, expectancy_usd=0.0, sharpe_like=0.0, max_drawdown_pct=0.0
     )

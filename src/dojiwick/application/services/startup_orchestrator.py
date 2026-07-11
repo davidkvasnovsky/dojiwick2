@@ -10,11 +10,12 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+
 from dojiwick.application.models.startup_result import StartupResult
 from dojiwick.application.services.instrument_sync import InstrumentSyncService
 from dojiwick.application.services.order_event_consumer import OrderEventConsumer
-from dojiwick.application.services.protective_orders import ProtectiveOrderService
 from dojiwick.application.services.position_tracker import PositionTracker
+from dojiwick.application.services.protective_orders import ProtectiveOrderService
 from dojiwick.application.services.startup_order_cleanup import StartupOrderCleanupService
 from dojiwick.application.use_cases.run_reconciliation import ReconciliationService
 from dojiwick.domain.contracts.gateways.audit_log import AuditLogPort
@@ -22,7 +23,6 @@ from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.contracts.gateways.market_data_feed import MarketDataFeedPort
 from dojiwick.domain.contracts.gateways.open_order import OpenOrderPort
 from dojiwick.domain.contracts.gateways.order_event_stream import OrderEventStreamPort
-from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.contracts.repositories.bot_state import BotStateRepositoryPort
 from dojiwick.domain.contracts.repositories.fill import FillRepositoryPort
 from dojiwick.domain.contracts.repositories.order_event import OrderEventRepositoryPort
@@ -30,6 +30,7 @@ from dojiwick.domain.contracts.repositories.order_report import OrderReportRepos
 from dojiwick.domain.contracts.repositories.order_request import OrderRequestRepositoryPort
 from dojiwick.domain.contracts.repositories.stream_cursor import StreamCursorRepositoryPort
 from dojiwick.domain.enums import ReconciliationHealth
+from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.models.value_objects.health_state import HealthState
 from dojiwick.domain.models.value_objects.reconciliation import ReconciliationResult
 from dojiwick.domain.reconciliation_health import compute_health

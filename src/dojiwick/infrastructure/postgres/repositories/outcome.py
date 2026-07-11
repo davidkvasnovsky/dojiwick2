@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from dojiwick.domain.enums import MARKET_STATE_TO_SQL, TRADE_ACTION_TO_SQL
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.value_objects.outcome_models import DecisionOutcome
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _INSERT_SQL = """

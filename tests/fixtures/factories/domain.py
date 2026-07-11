@@ -2,35 +2,33 @@
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 
 import numpy as np
 
 from dojiwick.application.use_cases.run_backtest import BacktestTimeSeries
-from dojiwick.domain.models.value_objects.batch_models import (
-    BatchDecisionContext,
-    BatchMarketSnapshot,
-    BatchPortfolioSnapshot,
-)
-from dojiwick.domain.models.entities.bot_state import BotState
-from dojiwick.domain.models.value_objects.candle import Candle
 from dojiwick.domain.enums import (
     AuditSeverity,
     OrderEventType,
     PositionSide,
 )
-from dojiwick.domain.type_aliases import ProductCode, VenueCode
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.domain.indicator_schema import INDICATOR_COUNT, INDICATOR_INDEX
-from dojiwick.domain.numerics import Confidence, Money, Quantity, to_money, to_price, to_quantity
-from dojiwick.domain.type_aliases import CandleInterval
+from dojiwick.domain.models.entities.bot_state import BotState
 from dojiwick.domain.models.entities.pair_state import PairTradingState
 from dojiwick.domain.models.value_objects.ai_evaluation import AIEvaluationResult
+from dojiwick.domain.models.value_objects.batch_models import (
+    BatchDecisionContext,
+    BatchMarketSnapshot,
+    BatchPortfolioSnapshot,
+)
+from dojiwick.domain.models.value_objects.candle import Candle
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId, PositionLegKey, TargetLegPosition
 from dojiwick.domain.models.value_objects.order_event import OrderEvent
 from dojiwick.domain.models.value_objects.signal import Signal
 from dojiwick.domain.models.value_objects.system_event import SystemEvent
-from dojiwick.domain.type_aliases import FloatMatrix
+from dojiwick.domain.numerics import Confidence, Money, Quantity, to_money, to_price, to_quantity
+from dojiwick.domain.type_aliases import CandleInterval, FloatMatrix, ProductCode, VenueCode
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 
 
 class ContextBuilder:
@@ -149,7 +147,7 @@ class ContextBuilder:
 class TimeSeriesBuilder:
     """Fluent builder for BacktestTimeSeries (multi-bar replay data)."""
 
-    _PRESET_MAP: dict[str, str] = {
+    _PRESET_MAP: ClassVar[dict[str, str]] = {
         "trending_up": "trending_up",
         "ranging": "ranging",
         "mean_revert_buy": "mean_revert_buy",

@@ -5,7 +5,6 @@ from decimal import Decimal
 from typing import cast
 
 from dojiwick.domain.contracts.gateways.clock import ClockPort
-from dojiwick.domain.type_aliases import ProductCode, VenueCode
 from dojiwick.domain.errors import ExchangeError
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.models.value_objects.instrument_metadata import (
@@ -13,6 +12,7 @@ from dojiwick.domain.models.value_objects.instrument_metadata import (
     InstrumentFilter,
     InstrumentInfo,
 )
+from dojiwick.domain.type_aliases import ProductCode, VenueCode
 
 from .boundary import build_instrument_id
 from .http_client import BinanceHttpClient

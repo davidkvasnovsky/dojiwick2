@@ -6,7 +6,6 @@ from decimal import Decimal
 
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.value_objects.order_request import Fill
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _INSERT_SQL = """

@@ -1,6 +1,6 @@
 """Timebase contract — bar-close alignment and anti-leakage validation."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from dojiwick.domain.errors import DataQualityError
 
@@ -36,7 +36,7 @@ def last_confirmed_bar_close(observed_at: datetime, interval_sec: int) -> dateti
     """
     epoch = int(observed_at.timestamp())
     floored = (epoch // interval_sec) * interval_sec
-    return datetime.fromtimestamp(floored, tz=timezone.utc)
+    return datetime.fromtimestamp(floored, tz=UTC)
 
 
 def assert_timebase_valid(

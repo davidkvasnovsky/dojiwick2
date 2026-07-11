@@ -5,7 +5,6 @@ from datetime import datetime
 
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.value_objects.funding_rate import FundingRate
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _INSERT_SQL = """

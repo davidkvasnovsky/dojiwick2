@@ -1,8 +1,8 @@
 """Regime evaluation kernel tests."""
 
 import numpy as np
-
 from fixtures.factories.infrastructure import default_settings
+
 from dojiwick.compute.kernels.regime.evaluate import evaluate_regimes
 
 

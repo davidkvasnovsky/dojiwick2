@@ -188,7 +188,7 @@ class BinanceHttpClient:
 
                 raise NetworkError(f"HTTP {resp.status}: {raw}")
 
-            except (_aiohttp.ClientError, TimeoutError, asyncio.TimeoutError) as exc:
+            except (_aiohttp.ClientError, TimeoutError) as exc:
                 last_exc = NetworkError(f"{type(exc).__name__}: {exc}")
                 if attempt < self.retry_max_attempts:
                     delay = self.retry_base_delay_sec * (self.backoff_factor ** (attempt - 1))

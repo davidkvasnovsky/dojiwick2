@@ -119,9 +119,9 @@ def _worker_fn(
 
     from dataclasses import replace
 
-    from dojiwick.domain.enums import ObjectiveMode
     from dojiwick.application.use_cases.optimization.runner import OptunaRunner
     from dojiwick.application.use_cases.optimization.search_space import SearchSpace
+    from dojiwick.domain.enums import ObjectiveMode
 
     # Workers load the existing study (warm-start already enqueued by parent)
     worker_spec = replace(spec, trials=n_trials)
@@ -155,9 +155,9 @@ async def _run() -> int:
     args = _parse_args()
 
     from dojiwick.application.use_cases.optimization.runner import (
-        OptunaRunner,
         OptimizationResult,
         OptimizationRunSpec,
+        OptunaRunner,
     )
     from dojiwick.application.use_cases.optimization.search_space import SearchSpace
     from dojiwick.domain.enums import ObjectiveMode
@@ -195,6 +195,7 @@ async def _run() -> int:
         workers: int = args.workers
         if workers > 1:
             import multiprocessing as mp
+
             import optuna
 
             from dojiwick.application.use_cases.optimization.runner import create_study_from_spec
@@ -231,7 +232,7 @@ async def _run() -> int:
                 workers,
                 train_fraction,
             )
-            _Process = ctx.Process  # noqa: N806  # multiprocessing convention
+            _Process = ctx.Process  # multiprocessing convention
             procs: list[mp.Process] = []
             for i in range(workers):
                 n = trials_per_worker + (1 if i < remainder else 0)
@@ -295,8 +296,8 @@ async def _run() -> int:
         print(f"{'=' * 50}\n")
 
         if args.gate:
-            from dojiwick.config.param_tuning import build_apply_tuned, perturb_exit_geometry
             from dojiwick.application.use_cases.validation.gate_evaluator import DefaultGateEvaluator
+            from dojiwick.config.param_tuning import build_apply_tuned, perturb_exit_geometry
 
             evaluator = DefaultGateEvaluator(
                 settings=settings,

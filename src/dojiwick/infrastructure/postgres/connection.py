@@ -47,7 +47,7 @@ class DbCursor(Protocol):
         """Number of rows affected by the last operation."""
         ...
 
-    async def __aenter__(self) -> "DbCursor":
+    async def __aenter__(self) -> DbCursor:
         """Enter async context manager."""
         ...
 
@@ -104,7 +104,7 @@ async def connect(settings: DatabaseSettings) -> DbConnection:
     return cast(DbConnection, conn)
 
 
-async def create_pool(settings: DatabaseSettings) -> "AsyncConnectionPool[Any]":
+async def create_pool(settings: DatabaseSettings) -> AsyncConnectionPool[Any]:
     """Create an async connection pool using typed database settings."""
 
     try:
@@ -126,15 +126,14 @@ async def create_pool(settings: DatabaseSettings) -> "AsyncConnectionPool[Any]":
     return pool
 
 
-async def check_db_connectivity(pool: "AsyncConnectionPool[Any]") -> None:
+async def check_db_connectivity(pool: AsyncConnectionPool[Any]) -> None:
     """Run a simple SELECT 1 health check against the pool.
 
     Raises ConfigurationError on failure.
     """
     try:
-        async with pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute("SELECT 1")
+        async with pool.connection() as conn, conn.cursor() as cur:
+            await cur.execute("SELECT 1")
     except Exception as exc:
         raise ConfigurationError(f"database health check failed: {exc}") from exc
     log.info("database connectivity check passed")

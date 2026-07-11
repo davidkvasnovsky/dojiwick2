@@ -1,9 +1,9 @@
 """Tests for explicit USDT/USDC instrument mapping."""
 
 import pytest
+from fixtures.factories.infrastructure import default_universe_settings
 
 from dojiwick.config.schema import TargetConfig
-from fixtures.factories.infrastructure import default_universe_settings
 
 
 def test_target_requires_target_id() -> None:

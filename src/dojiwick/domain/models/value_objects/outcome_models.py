@@ -16,7 +16,6 @@ from dojiwick.domain.enums import (
 )
 from dojiwick.domain.numerics import Confidence, Money, Price, Quantity
 
-
 type ConfusionMatrix = dict[str, dict[str, int]]
 
 

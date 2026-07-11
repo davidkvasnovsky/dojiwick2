@@ -2,12 +2,12 @@
 
 import numpy as np
 import pytest
+from fixtures.factories.compute import make_indicator_matrix
+from fixtures.factories.infrastructure import default_strategy_params
 
 from dojiwick.compute.kernels.strategy.confluence import compute_confluence_score
 from dojiwick.domain.enums import TradeAction
 from dojiwick.domain.indicator_schema import INDICATOR_INDEX
-from fixtures.factories.compute import make_indicator_matrix
-from fixtures.factories.infrastructure import default_strategy_params
 
 # Defaults matching the old _make_indicators helper (base fill was 0.0).
 _BUY_DEFAULTS: dict[str, float] = {

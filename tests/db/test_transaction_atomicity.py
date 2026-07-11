@@ -49,8 +49,8 @@ async def test_uow_rollback_undoes_insert(db_connection: Any, db_cursor: Any, te
 
 async def test_committed_data_persists(db_connection: Any, db_cursor: Any, test_instrument_id: int) -> None:
     """Committed data should survive and be queryable."""
-    from dojiwick.infrastructure.postgres.repositories.stream_cursor import PgStreamCursorRepository
     from dojiwick.domain.models.value_objects.stream_cursor_record import StreamCursorRecord
+    from dojiwick.infrastructure.postgres.repositories.stream_cursor import PgStreamCursorRepository
 
     repo = PgStreamCursorRepository(connection=db_connection)
 

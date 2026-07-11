@@ -25,15 +25,14 @@ from dojiwick.domain.enums import (
     MissingBarPolicy,
     ObjectiveMode,
     PositionMode,
+    RegimeExitProfile,
     WFMode,
     WorkingType,
 )
-from dojiwick.domain.enums import RegimeExitProfile
 from dojiwick.domain.models.value_objects.params import RegimeParams, RiskParams, StrategyParams
-from dojiwick.domain.numerics import to_money
 from dojiwick.domain.models.value_objects.performance import PerformanceSnapshot
+from dojiwick.domain.numerics import to_money
 from dojiwick.domain.type_aliases import ProductCode, VenueCode
-
 
 # --- Factory functions for models that lost defaults ---
 

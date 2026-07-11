@@ -24,6 +24,7 @@ from dojiwick.application.orchestration.decision_pipeline import run_decision_pi
 from dojiwick.application.orchestration.regime_hysteresis import RegimeHysteresis
 from dojiwick.application.policies.risk.engine import RiskPolicyEngine
 from dojiwick.application.registry.strategy_registry import STRATEGY_MEAN_REVERT, StrategyRegistry
+from dojiwick.application.use_cases.optimization.pruning import PrunedError, PruningCallback
 from dojiwick.compute.kernels.metrics.summarize import (
     compute_daily_sharpe,
     interval_to_bars_per_year,
@@ -37,8 +38,6 @@ from dojiwick.compute.kernels.pnl.partial_fill import apply_fill_ratio, compute_
 from dojiwick.compute.kernels.pnl.pnl import scalar_net_pnl
 from dojiwick.compute.kernels.regime.classify import classify_regime_batch
 from dojiwick.compute.kernels.regime.evaluate import evaluate_regimes
-from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext, BatchExecutionIntent
-from dojiwick.domain.models.value_objects.cost_model import CostModel
 from dojiwick.domain.enums import (
     CloseReason,
     EntryPriceModel,
@@ -49,13 +48,14 @@ from dojiwick.domain.enums import (
     safe_market_state,
 )
 from dojiwick.domain.indicator_schema import INDICATOR_INDEX
+from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext, BatchExecutionIntent
+from dojiwick.domain.models.value_objects.cost_model import CostModel
 from dojiwick.domain.models.value_objects.outcome_models import (
     BacktestResult,
     BacktestSummary,
     RegimeEvaluationReport,
     TradeDetail,
 )
-from dojiwick.application.use_cases.optimization.pruning import PrunedError, PruningCallback
 from dojiwick.domain.models.value_objects.params import RiskParams, StrategyParams
 
 log = logging.getLogger(__name__)
@@ -102,11 +102,10 @@ def build_backtest_service(
     target_ids: tuple[str, ...],
     venue: str,
     product: str,
-) -> "BacktestService":
+) -> BacktestService:
     """Build a BacktestService from settings using default registry and risk engine."""
     from dojiwick.application.policies.risk.defaults import build_default_risk_engine
     from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
-
     from dojiwick.domain.errors import ConfigurationError
 
     if not target_ids:
@@ -243,7 +242,7 @@ class BacktestTimeSeries:
     def n_pairs(self) -> int:
         return self.contexts[0].size
 
-    def slice_by_indices(self, indices: Sequence[int]) -> "BacktestTimeSeries":
+    def slice_by_indices(self, indices: Sequence[int]) -> BacktestTimeSeries:
         """Return a sub-series containing only the bars at *indices*."""
         idx_arr = np.asarray(indices)
         return BacktestTimeSeries(
@@ -323,7 +322,7 @@ class BacktestService:
 
         # Monthly PnL breakdown (bar_totals already computed above)
         monthly: dict[str, float] = {}
-        for ctx, pnl in zip(series.contexts, bar_totals.tolist()):
+        for ctx, pnl in zip(series.contexts, bar_totals.tolist(), strict=True):
             key = ctx.market.observed_at.strftime("%Y-%m")
             monthly[key] = monthly.get(key, 0.0) + pnl
 

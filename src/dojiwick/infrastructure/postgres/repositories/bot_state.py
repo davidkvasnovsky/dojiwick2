@@ -3,9 +3,8 @@
 from dataclasses import dataclass
 
 from dojiwick.domain.enums import ReconciliationHealth
-from dojiwick.domain.models.entities.bot_state import BotState
 from dojiwick.domain.errors import AdapterError
-
+from dojiwick.domain.models.entities.bot_state import BotState
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _GET_SQL = """
@@ -44,6 +43,12 @@ INSERT INTO bot_state_history (
     circuit_breaker_active, circuit_breaker_until, last_tick_at,
     recon_health, recon_frozen_symbols
 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+"""
+
+# History only grows through update_state, so pruning here keeps the
+# 30-day retention promise without external scheduling (pg_cron)
+_PRUNE_HISTORY_SQL = """
+DELETE FROM bot_state_history WHERE captured_at < now() - interval '30 days'
 """
 
 
@@ -110,6 +115,7 @@ class PgBotStateRepository:
             async with self.connection.cursor() as cursor:
                 await cursor.execute(_ENSURE_SQL)
                 await cursor.execute(_INSERT_HISTORY_SQL, history_row)
+                await cursor.execute(_PRUNE_HISTORY_SQL)
                 await cursor.execute(_UPDATE_SQL, row)
             await self.connection.commit()
         except Exception as exc:

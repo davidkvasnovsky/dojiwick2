@@ -5,7 +5,6 @@ from dataclasses import dataclass
 
 from dojiwick.domain.enums import AuditSeverity
 from dojiwick.domain.errors import AdapterError
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _INSERT_SQL = """

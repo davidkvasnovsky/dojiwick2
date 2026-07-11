@@ -1,7 +1,20 @@
 """Unit tests for OrderEventConsumer."""
 
+import asyncio
+import contextlib
 from datetime import UTC, datetime
 from decimal import Decimal
+
+from fixtures.fakes.clock import FixedClock
+from fixtures.fakes.fill_repository import FakeFillRepo
+from fixtures.fakes.instrument_repository import FakeInstrumentRepo
+from fixtures.fakes.order_event_repository import FakeOrderEventRepository
+from fixtures.fakes.order_event_stream import InMemoryOrderEventStream
+from fixtures.fakes.order_report_repository import FakeOrderReportRepo
+from fixtures.fakes.order_request_repository import FakeOrderRequestRepo
+from fixtures.fakes.position_event_repository import FakePositionEventRepo
+from fixtures.fakes.position_leg_repository import FakePositionLegRepo
+from fixtures.fakes.stream_cursor_repository import FakeStreamCursorRepo
 
 from dojiwick.application.services.order_event_consumer import OrderEventConsumer
 from dojiwick.application.services.position_tracker import PositionTracker
@@ -14,16 +27,6 @@ from dojiwick.domain.enums import (
 )
 from dojiwick.domain.models.value_objects.exchange_order_update import ExchangeOrderUpdate
 from dojiwick.domain.models.value_objects.order_request import OrderRequest
-from fixtures.fakes.clock import FixedClock
-from fixtures.fakes.fill_repository import FakeFillRepo
-from fixtures.fakes.instrument_repository import FakeInstrumentRepo
-from fixtures.fakes.order_event_repository import FakeOrderEventRepository
-from fixtures.fakes.order_event_stream import InMemoryOrderEventStream
-from fixtures.fakes.order_report_repository import FakeOrderReportRepo
-from fixtures.fakes.order_request_repository import FakeOrderRequestRepo
-from fixtures.fakes.position_event_repository import FakePositionEventRepo
-from fixtures.fakes.position_leg_repository import FakePositionLegRepo
-from fixtures.fakes.stream_cursor_repository import FakeStreamCursorRepo
 
 _NOW = datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
 
@@ -361,8 +364,6 @@ async def test_consumer_propagates_stream_error() -> None:
 
 async def test_supervisor_reconnects_after_stream_error() -> None:
     """run() survives a stream error: reconnects with backoff instead of dying."""
-    import asyncio
-
     stream = InMemoryOrderEventStream(_stream_name="test_orders")
     stream.push_raw_update(_make_update())
     stream.set_error_after(1, RuntimeError("ws disconnect"))
@@ -375,10 +376,8 @@ async def test_supervisor_reconnects_after_stream_error() -> None:
     await asyncio.sleep(0.1)
     assert not task.done(), "supervisor must keep running through stream errors"
     task.cancel()
-    try:
+    with contextlib.suppress(asyncio.CancelledError):
         await task
-    except asyncio.CancelledError:
-        pass
 
     # The event before the error was still processed
     assert len(report_repo.reports) >= 1

@@ -1,8 +1,9 @@
 """Search-space emission of per-regime volatile entry-gate params."""
 
+from fixtures.factories.infrastructure import default_settings
+
 from dojiwick.application.use_cases.optimization.search_space import SearchSpace
 from dojiwick.config.param_tuning import apply_params
-from fixtures.factories.infrastructure import default_settings
 
 
 def test_volatile_entry_gates_in_bounds() -> None:

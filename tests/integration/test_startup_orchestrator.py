@@ -1,36 +1,11 @@
 """Integration tests for the StartupOrchestrator."""
 
 import asyncio
+import contextlib
 from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-
-from dojiwick.application.models.startup_result import StartupResult
-from dojiwick.application.services.position_tracker import PositionTracker
-from dojiwick.application.services.startup_orchestrator import StartupOrchestrator
-from dojiwick.application.use_cases.run_reconciliation import ReconciliationService
-from dojiwick.domain.enums import (
-    OrderEventType,
-    OrderSide,
-    OrderStatus,
-    OrderType,
-    PositionSide,
-    ReconciliationHealth,
-)
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
-from dojiwick.domain.contracts.gateways.market_data_feed import MarketDataFeedPort
-from dojiwick.domain.contracts.gateways.open_order import ExchangeOpenOrder
-from dojiwick.domain.models.value_objects.account_state import (
-    AccountSnapshot,
-    ExchangePositionLeg,
-)
-from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
-from dojiwick.domain.models.value_objects.order_event import OrderEvent
-from dojiwick.domain.models.value_objects.exchange_order_update import ExchangeOrderUpdate
-from dojiwick.domain.models.value_objects.order_request import OrderRequest
-from dojiwick.domain.models.value_objects.stream_cursor_record import StreamCursorRecord
-from dojiwick.infrastructure.exchange.reconciliation import ExchangeReconciliation
 from fixtures.fakes.account_state import FakeAccountState
 from fixtures.fakes.audit_log import CapturingAuditLog
 from fixtures.fakes.bot_state_repository import InMemoryBotStateRepo
@@ -47,6 +22,32 @@ from fixtures.fakes.order_request_repository import FakeOrderRequestRepo
 from fixtures.fakes.position_event_repository import FakePositionEventRepo
 from fixtures.fakes.position_leg_repository import FakePositionLegRepo
 from fixtures.fakes.stream_cursor_repository import FakeStreamCursorRepo
+
+from dojiwick.application.models.startup_result import StartupResult
+from dojiwick.application.services.position_tracker import PositionTracker
+from dojiwick.application.services.startup_orchestrator import StartupOrchestrator
+from dojiwick.application.use_cases.run_reconciliation import ReconciliationService
+from dojiwick.domain.contracts.gateways.market_data_feed import MarketDataFeedPort
+from dojiwick.domain.contracts.gateways.open_order import ExchangeOpenOrder
+from dojiwick.domain.enums import (
+    OrderEventType,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    PositionSide,
+    ReconciliationHealth,
+)
+from dojiwick.domain.models.value_objects.account_state import (
+    AccountSnapshot,
+    ExchangePositionLeg,
+)
+from dojiwick.domain.models.value_objects.exchange_order_update import ExchangeOrderUpdate
+from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
+from dojiwick.domain.models.value_objects.order_event import OrderEvent
+from dojiwick.domain.models.value_objects.order_request import OrderRequest
+from dojiwick.domain.models.value_objects.stream_cursor_record import StreamCursorRecord
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
+from dojiwick.infrastructure.exchange.reconciliation import ExchangeReconciliation
 
 PAIR_SYMBOLS = ("BTCUSDC",)
 
@@ -91,10 +92,8 @@ async def _cancel_consumer(result: StartupResult) -> None:
     """Cancel consumer task if present and wait for it to finish."""
     if result.consumer_task is not None:
         result.consumer_task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await result.consumer_task
-        except asyncio.CancelledError:
-            pass
 
 
 def _build_orchestrator(
@@ -622,7 +621,7 @@ async def test_stale_recon_result_after_replay() -> None:
 
         async def run_startup_gate(
             self,
-            pair_symbols: tuple[str, ...],  # noqa: ARG002
+            pair_symbols: tuple[str, ...],
         ) -> ReconciliationResult:
             self._call_count += 1
             if self._call_count == 1:
@@ -631,7 +630,7 @@ async def test_stale_recon_result_after_replay() -> None:
 
         async def run_periodic_check(
             self,
-            pair_symbols: tuple[str, ...],  # noqa: ARG002
+            pair_symbols: tuple[str, ...],
         ) -> ReconciliationResult:
             return _CLEAN
 

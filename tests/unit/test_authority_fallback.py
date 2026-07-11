@@ -1,7 +1,11 @@
 """Tests for authority attribution with fallback codes."""
 
 import numpy as np
+from fixtures.factories.infrastructure import SettingsBuilder
+from fixtures.fakes.clock import FixedClock
+from fixtures.fakes.llm_client import FixedLLMClient
 
+from dojiwick.application.orchestration.decision_pipeline import _authority  # pyright: ignore[reportPrivateUsage]
 from dojiwick.domain.enums import DecisionAuthority
 from dojiwick.domain.models.value_objects.batch_models import BatchVetoDecision
 from dojiwick.domain.reason_codes import (
@@ -12,11 +16,7 @@ from dojiwick.domain.reason_codes import (
     AI_VETO_ERROR,
     AI_VETO_PARSE_ERROR,
 )
-from dojiwick.application.orchestration.decision_pipeline import _authority  # pyright: ignore[reportPrivateUsage]
 from dojiwick.infrastructure.ai.llm_veto_service import LLMVetoService
-from fixtures.factories.infrastructure import SettingsBuilder
-from fixtures.fakes.clock import FixedClock
-from fixtures.fakes.llm_client import FixedLLMClient
 
 
 def _veto(reason_codes: tuple[str, ...]) -> BatchVetoDecision:

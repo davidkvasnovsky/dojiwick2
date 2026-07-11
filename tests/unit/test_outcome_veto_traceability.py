@@ -1,7 +1,9 @@
 """Tests for outcome veto traceability — specific reason codes, not generic AI_VETO."""
 
 import numpy as np
+from fixtures.factories.domain import ContextBuilder
 
+from dojiwick.application.orchestration.outcome_assembler import OutcomeInputs, build_outcomes
 from dojiwick.domain.enums import DecisionAuthority, DecisionStatus, ExecutionStatus
 from dojiwick.domain.models.value_objects.batch_models import (
     BatchExecutionIntent,
@@ -12,8 +14,6 @@ from dojiwick.domain.models.value_objects.batch_models import (
 )
 from dojiwick.domain.models.value_objects.outcome_models import ExecutionReceipt
 from dojiwick.domain.reason_codes import AI_VETO_CONFLICTING_REGIME, AI_VETO_EXTREME_VOLATILITY
-from dojiwick.application.orchestration.outcome_assembler import OutcomeInputs, build_outcomes
-from fixtures.factories.domain import ContextBuilder
 
 
 def _make_veto_inputs(

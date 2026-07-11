@@ -2,20 +2,19 @@
 
 import numpy as np
 import pytest
+from fixtures.factories.infrastructure import default_settings
 
+from dojiwick.application.use_cases.validation.cross_validator import CVResult
 from dojiwick.application.use_cases.validation.research_gate import (
     GateThresholds,
     evaluate_research_gate,
 )
 from dojiwick.application.use_cases.validation.walk_forward_validator import WalkForwardResult, WindowResult
 from dojiwick.config.param_tuning import perturb_exit_geometry
-from dojiwick.config.risk_scope import RiskOverrideValues, RiskScopeRule
-from dojiwick.config.scope import ScopeSelector, StrategyOverrideValues, StrategyScopeResolver, StrategyScopeRule
-from dojiwick.config.risk_scope import RiskScopeResolver
+from dojiwick.config.risk_scope import RiskOverrideValues, RiskScopeResolver, RiskScopeRule
 from dojiwick.config.schema import Settings
+from dojiwick.config.scope import ScopeSelector, StrategyOverrideValues, StrategyScopeResolver, StrategyScopeRule
 from dojiwick.domain.enums import MarketState, WFMode
-from dojiwick.application.use_cases.validation.cross_validator import CVResult
-from fixtures.factories.infrastructure import default_settings
 
 
 def _wf(windows: list[tuple[float, float]], ratio: float, min_oos: float | None = None) -> WalkForwardResult:
@@ -85,9 +84,10 @@ def test_worst_window_floor_rejects_single_catastrophic_window() -> None:
 
 
 def test_trade_freq_bonus_is_capped() -> None:
+    from fixtures.factories.infrastructure import default_optimization_settings
+
     from dojiwick.application.use_cases.optimization.objective import _base_score  # pyright: ignore[reportPrivateUsage]
     from dojiwick.domain.models.value_objects.outcome_models import BacktestSummary
-    from fixtures.factories.infrastructure import default_optimization_settings
 
     opt = default_optimization_settings(
         objective_min_trades=1, objective_trade_freq_weight=1.0, objective_trade_freq_cap=50.0

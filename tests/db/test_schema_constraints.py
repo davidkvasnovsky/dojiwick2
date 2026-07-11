@@ -6,6 +6,7 @@ order_requests, fills, instruments, reconciliation_runs, strategy_state.
 
 from typing import Any
 
+import psycopg
 import pytest
 
 pytestmark = pytest.mark.db
@@ -13,7 +14,7 @@ pytestmark = pytest.mark.db
 
 async def test_decision_outcomes_confidence_range(db_cursor: Any) -> None:
     """confidence CHECK (confidence BETWEEN 0 AND 1) should reject out-of-range."""
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO decision_outcomes
             (pair, observed_at, status, authority, reason_code,
@@ -27,7 +28,7 @@ async def test_decision_outcomes_confidence_range(db_cursor: Any) -> None:
 
 async def test_regime_observations_coarse_state_range(db_cursor: Any) -> None:
     """coarse_state CHECK (coarse_state BETWEEN 1 AND 4) should reject out-of-range."""
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO regime_observations
             (pair, observed_at, coarse_state, confidence, valid)
@@ -40,7 +41,7 @@ async def test_regime_observations_coarse_state_range(db_cursor: Any) -> None:
 
 async def test_position_legs_quantity_non_negative(db_cursor: Any, test_instrument_id: int) -> None:
     """CHECK (quantity >= 0) should reject negative quantity."""
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO position_legs
             (account, instrument_id, position_side, quantity, entry_price, leverage)
@@ -51,7 +52,7 @@ async def test_position_legs_quantity_non_negative(db_cursor: Any, test_instrume
 
 async def test_position_legs_leverage_minimum(db_cursor: Any, test_instrument_id: int) -> None:
     """CHECK (leverage >= 1) should reject zero leverage."""
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO position_legs
             (account, instrument_id, position_side, quantity, entry_price, leverage)
@@ -62,7 +63,7 @@ async def test_position_legs_leverage_minimum(db_cursor: Any, test_instrument_id
 
 async def test_position_legs_instrument_fk(db_cursor: Any) -> None:
     """FK to instruments should reject non-existent instrument_id."""
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO position_legs
             (account, instrument_id, position_side, quantity, entry_price, leverage)
@@ -75,7 +76,7 @@ async def test_position_legs_instrument_fk(db_cursor: Any) -> None:
 
 async def test_position_events_quantity_positive(db_cursor: Any) -> None:
     """CHECK (quantity > 0) should reject zero quantity."""
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO position_events
             (position_leg_id, event_type, quantity, price)
@@ -85,7 +86,7 @@ async def test_position_events_quantity_positive(db_cursor: Any) -> None:
 
 async def test_position_events_price_positive(db_cursor: Any) -> None:
     """CHECK (price > 0) should reject zero price."""
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO position_events
             (position_leg_id, event_type, quantity, price)
@@ -98,7 +99,7 @@ async def test_position_events_price_positive(db_cursor: Any) -> None:
 
 async def test_order_requests_quantity_positive(db_cursor: Any) -> None:
     """CHECK (quantity > 0) should reject zero quantity."""
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO order_requests
             (venue, product, client_order_id, instrument_id, account, side, order_type, quantity)
@@ -114,7 +115,7 @@ async def test_order_requests_unique_client_order_id(db_cursor: Any, test_instru
         VALUES ('binance', 'usd_c', 'dup-test', %s, 'test', 'buy', 'market', 1)""",
         (test_instrument_id,),
     )
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO order_requests
             (venue, product, client_order_id, instrument_id, account, side, order_type, quantity)
@@ -128,7 +129,7 @@ async def test_order_requests_unique_client_order_id(db_cursor: Any, test_instru
 
 async def test_fills_price_positive(db_cursor: Any) -> None:
     """CHECK (price > 0) should reject zero price."""
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO fills
             (order_request_id, price, quantity)
@@ -138,7 +139,7 @@ async def test_fills_price_positive(db_cursor: Any) -> None:
 
 async def test_fills_quantity_positive(db_cursor: Any) -> None:
     """CHECK (quantity > 0) should reject zero quantity."""
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO fills
             (order_request_id, price, quantity)
@@ -148,7 +149,7 @@ async def test_fills_quantity_positive(db_cursor: Any) -> None:
 
 async def test_fills_commission_non_negative(db_cursor: Any) -> None:
     """CHECK (commission >= 0) should reject negative commission."""
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO fills
             (order_request_id, price, quantity, commission)
@@ -169,7 +170,7 @@ async def test_instruments_unique_symbol(db_cursor: Any, clean_tables: None) -> 
         VALUES ('binance', 'usd_c', 'ETHUSDC', 'ETH', 'USDC', 'USDC',
                 'trading', 8, 3, 8, 8)"""
     )
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO instruments
             (venue, product, symbol, base_asset, quote_asset, settle_asset,
@@ -185,7 +186,7 @@ async def test_instruments_unique_symbol(db_cursor: Any, clean_tables: None) -> 
 
 async def test_instrument_filters_tick_size_positive(db_cursor: Any, test_instrument_id: int) -> None:
     """CHECK (tick_size > 0) should reject zero tick_size."""
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO instrument_filters
             (instrument_id, min_price, tick_size, min_qty, step_size, min_notional)
@@ -199,7 +200,7 @@ async def test_instrument_filters_tick_size_positive(db_cursor: Any, test_instru
 
 async def test_reconciliation_runs_type_check(db_cursor: Any) -> None:
     """CHECK constraint on run_type should reject invalid types."""
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO reconciliation_runs (run_type)
             VALUES ('invalid_type')"""
@@ -217,7 +218,7 @@ async def test_position_legs_partial_unique_active(db_cursor: Any, test_instrume
         VALUES ('idx-test', %s, 'long', 1, 50000, 1)""",
         (test_instrument_id,),
     )
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO position_legs
             (account, instrument_id, position_side, quantity, entry_price, leverage)
@@ -294,7 +295,7 @@ async def test_strategy_state_upsert_on_conflict(db_cursor: Any) -> None:
         """INSERT INTO strategy_state (target_id, venue, product, pair, active_strategy, variant, state_json)
         VALUES ('btc_usdc', 'binance', 'usd_c', 'BTC/USDC', 'trend_follow', 'v2', '{"a": 1}')"""
     )
-    with pytest.raises(Exception):
+    with pytest.raises(psycopg.Error):
         await db_cursor.execute(
             """INSERT INTO strategy_state (target_id, venue, product, pair, active_strategy, variant, state_json)
             VALUES ('btc_usdc', 'binance', 'usd_c', 'BTC/USDC', 'trend_follow', 'v2', '{"a": 2}')"""

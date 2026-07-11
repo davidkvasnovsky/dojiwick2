@@ -14,6 +14,8 @@ from dojiwick.domain.numerics import candles_to_ohlc, decimals_to_array
 from dojiwick.domain.timebase import interval_to_seconds
 from dojiwick.domain.type_aliases import CandleInterval, FloatMatrix
 
+_DEFAULT_INTERVAL = CandleInterval("1h")
+
 log = logging.getLogger(__name__)
 
 
@@ -32,7 +34,7 @@ class IndicatorEnricher:
 
     market_data: MarketDataProviderPort
     clock: ClockPort
-    candle_interval: CandleInterval = CandleInterval("1h")
+    candle_interval: CandleInterval = _DEFAULT_INTERVAL
     candle_lookback: int = 600
     rsi_period: int = 14
     ema_fast_period: int = 12

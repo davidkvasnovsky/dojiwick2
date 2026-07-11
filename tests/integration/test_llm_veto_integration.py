@@ -3,6 +3,10 @@
 import json
 
 import numpy as np
+from fixtures.factories.compute import TradeCandidateBuilder
+from fixtures.factories.domain import ContextBuilder
+from fixtures.fakes.clock import FixedClock
+from fixtures.fakes.llm_client import FixedLLMClient
 
 from dojiwick.domain.models.value_objects.batch_models import (
     BatchVetoDecision,
@@ -10,10 +14,6 @@ from dojiwick.domain.models.value_objects.batch_models import (
 from dojiwick.domain.reason_codes import AI_VETO_APPROVED, AI_VETO_CONFLICTING_REGIME
 from dojiwick.infrastructure.ai.llm_filter import NullVetoService
 from dojiwick.infrastructure.ai.llm_veto_service import LLMVetoService
-from fixtures.fakes.clock import FixedClock
-from fixtures.fakes.llm_client import FixedLLMClient
-from fixtures.factories.domain import ContextBuilder
-from fixtures.factories.compute import TradeCandidateBuilder
 
 
 class TestLLMVetoServicePort:

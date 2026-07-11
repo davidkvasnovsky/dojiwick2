@@ -11,11 +11,11 @@ from dojiwick.application.models.pipeline_settings import PipelineSettings
 from dojiwick.application.use_cases.optimization.search_space import (
     INT_PARAMS,
     NON_STRATEGY_PARAMS,
-    ParamSet,
     REGIME_PARAMS,
     REGIME_SCOPE_FIELDS,
     REGIME_SCOPE_PREFIX,
     RISK_PARAM_BOUNDS,
+    ParamSet,
     SearchSpace,
     extract_regularization_baseline,
 )
@@ -25,7 +25,6 @@ from dojiwick.domain.models.value_objects.params import RegimeParams, StrategyPa
 from .risk_scope import RiskScopeResolver, RiskScopeRule
 from .schema import RiskSettings, Settings
 from .scope import ScopeSelector, StrategyOverrideValues, StrategyScopeResolver, StrategyScopeRule
-
 
 _SCOPE_CLAMP_BOUNDS: dict[str, dict[str, tuple[float, float]]] = {
     "mean_revert": {

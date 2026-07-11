@@ -35,11 +35,9 @@ class InMemoryOrderEventStream(OrderEventStreamPort):
 
     async def raw_updates(self) -> AsyncIterator[ExchangeOrderUpdate]:
         """Yield raw exchange order updates."""
-        yielded = 0
-        for update in self._raw_updates:
+        for yielded, update in enumerate(self._raw_updates, start=1):
             self._sequence += 1
             yield update
-            yielded += 1
             if self._error is not None and yielded >= self._error_after:
                 raise self._error
 

@@ -8,8 +8,8 @@ from pathlib import Path
 
 from dojiwick.config.fingerprint import fingerprint_settings
 from dojiwick.config.loader import load_settings
-from dojiwick.config.risk_scope import RiskResolutionTrace, RISK_FIELDS
-from dojiwick.config.scope import ResolutionTrace, parse_regime, regime_name, STRATEGY_FIELDS
+from dojiwick.config.risk_scope import RISK_FIELDS, RiskResolutionTrace
+from dojiwick.config.scope import STRATEGY_FIELDS, ResolutionTrace, parse_regime, regime_name
 from dojiwick.domain.enums import MarketState
 
 # Read only from the global StrategyParams, never from per-pair resolutions:

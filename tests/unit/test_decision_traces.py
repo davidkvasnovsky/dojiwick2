@@ -1,9 +1,9 @@
 """Tests for decision trace collection in TickService."""
 
 import pytest
+from fixtures.fakes.decision_trace_repository import InMemoryDecisionTraceRepository
 
 from dojiwick.domain.models.value_objects.decision_trace import DecisionTrace
-from fixtures.fakes.decision_trace_repository import InMemoryDecisionTraceRepository
 
 
 class TestDecisionTrace:

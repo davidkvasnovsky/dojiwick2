@@ -1,10 +1,10 @@
 """Tests for the confidence gate pre-filter."""
 
 import numpy as np
+from fixtures.factories.compute import RegimeProfileBuilder, TradeCandidateBuilder
 
 from dojiwick.domain.enums import MarketState
 from dojiwick.infrastructure.ai.confidence_gate import compute_llm_review_mask
-from fixtures.factories.compute import RegimeProfileBuilder, TradeCandidateBuilder
 
 
 class TestConfidenceGate:

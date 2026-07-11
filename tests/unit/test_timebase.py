@@ -1,6 +1,6 @@
 """Unit tests for timebase contract — bar-close alignment and staleness validation."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -9,7 +9,7 @@ from dojiwick.domain.timebase import assert_timebase_valid, interval_to_seconds,
 
 
 def _utc(epoch: int) -> datetime:
-    return datetime.fromtimestamp(epoch, tz=timezone.utc)
+    return datetime.fromtimestamp(epoch, tz=UTC)
 
 
 class TestLastConfirmedBarClose:

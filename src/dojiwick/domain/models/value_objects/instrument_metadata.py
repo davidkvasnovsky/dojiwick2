@@ -3,9 +3,9 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
-from dojiwick.domain.type_aliases import ProductCode, VenueCode
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.numerics import Money, Price, Quantity
+from dojiwick.domain.type_aliases import ProductCode, VenueCode
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

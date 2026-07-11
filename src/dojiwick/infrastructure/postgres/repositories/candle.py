@@ -3,10 +3,9 @@
 from dataclasses import dataclass
 from datetime import datetime
 
-from dojiwick.domain.models.value_objects.candle import Candle
 from dojiwick.domain.errors import AdapterError
+from dojiwick.domain.models.value_objects.candle import Candle
 from dojiwick.domain.type_aliases import CandleInterval
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _UPSERT_SQL = """

@@ -4,13 +4,13 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import numpy as np
+from fixtures.fakes.clock import FixedClock
+from fixtures.fakes.market_data_provider import InMemoryMarketDataProvider
 
 from dojiwick.domain.indicator_schema import INDICATOR_INDEX
 from dojiwick.domain.models.value_objects.candle import Candle
 from dojiwick.domain.type_aliases import CandleInterval
 from dojiwick.infrastructure.exchange.indicator_enricher import IndicatorEnricher
-from fixtures.fakes.clock import FixedClock
-from fixtures.fakes.market_data_provider import InMemoryMarketDataProvider
 
 _T0 = datetime(2026, 1, 1, tzinfo=UTC)
 _INTERVAL = CandleInterval("1h")

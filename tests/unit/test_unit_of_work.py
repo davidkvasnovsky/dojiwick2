@@ -3,10 +3,9 @@
 from typing import Any
 
 import pytest
-
-from dojiwick.infrastructure.postgres.connection import DbConnection, DbCursor
 from fixtures.fakes.unit_of_work import FakeUnitOfWork
 
+from dojiwick.infrastructure.postgres.connection import DbConnection, DbCursor
 
 pytestmark = pytest.mark.unit
 
@@ -30,7 +29,7 @@ class _StubCursor:
     def rowcount(self) -> int:
         return 0
 
-    async def __aenter__(self) -> "_StubCursor":
+    async def __aenter__(self) -> _StubCursor:
         return self
 
     async def __aexit__(

@@ -8,7 +8,6 @@ call ``run_decision_pipeline`` so that decision logic is defined once.
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass, replace
-from typing import TypeVar
 
 import numpy as np
 
@@ -25,7 +24,6 @@ from dojiwick.domain.contracts.policies.veto import VetoServicePort
 from dojiwick.domain.enums import DecisionAuthority, MarketState, TradeAction, safe_market_state
 from dojiwick.domain.errors import AIServiceError
 from dojiwick.domain.indicator_schema import INDICATOR_INDEX
-from dojiwick.domain.models.value_objects.params import RiskParams, StrategyParams
 from dojiwick.domain.models.value_objects.batch_models import (
     BatchDecisionContext,
     BatchExecutionIntent,
@@ -34,8 +32,9 @@ from dojiwick.domain.models.value_objects.batch_models import (
     BatchTradeCandidate,
     BatchVetoDecision,
 )
-from dojiwick.domain.type_aliases import FloatVector
+from dojiwick.domain.models.value_objects.params import RiskParams, StrategyParams
 from dojiwick.domain.reason_codes import AI_VETO_ERROR, AI_VETO_NON_CONTRIBUTORY_CODES
+from dojiwick.domain.type_aliases import FloatVector
 
 log = logging.getLogger(__name__)
 
@@ -58,21 +57,18 @@ class PipelineResult:
 # Internal helpers
 
 
-_T = TypeVar("_T")
-
-
 _regime_state = safe_market_state
 
 
-def _cached_resolve(
+def _cached_resolve[T](
     pairs: tuple[str, ...],
     stable_state: np.ndarray,
     valid_mask: np.ndarray,
-    resolve_fn: Callable[[str, MarketState | None], _T],
-    cache: dict[tuple[str, int | None], _T] | None = None,
-) -> tuple[_T, ...]:
+    resolve_fn: Callable[[str, MarketState | None], T],
+    cache: dict[tuple[str, int | None], T] | None = None,
+) -> tuple[T, ...]:
     """Resolve per-pair values with optional caching."""
-    resolved: list[_T] = []
+    resolved: list[T] = []
     for i, pair in enumerate(pairs):
         regime = _regime_state(int(stable_state[i])) if bool(valid_mask[i]) else None
         regime_key = regime.value if regime is not None else None

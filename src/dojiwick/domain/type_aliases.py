@@ -12,7 +12,6 @@ from typing import NewType
 import numpy as np
 import numpy.typing as npt
 
-
 type FloatVector = npt.NDArray[np.float64]
 type FloatMatrix = npt.NDArray[np.float64]
 type BoolVector = npt.NDArray[np.bool_]

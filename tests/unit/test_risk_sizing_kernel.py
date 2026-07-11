@@ -1,12 +1,12 @@
 """Risk sizing kernel edge case tests."""
 
 import numpy as np
+from fixtures.factories.domain import ContextBuilder
+from fixtures.factories.infrastructure import default_risk_params, default_settings
 
 from dojiwick.compute.kernels.sizing.fixed_fraction import size_intents
-from fixtures.factories.infrastructure import default_risk_params, default_settings
-from dojiwick.domain.models.value_objects.batch_models import BatchRiskAssessment, BatchTradeCandidate
 from dojiwick.domain.enums import TradeAction
-from fixtures.factories.domain import ContextBuilder
+from dojiwick.domain.models.value_objects.batch_models import BatchRiskAssessment, BatchTradeCandidate
 
 
 def _make_candidate(size: int, action: int = TradeAction.BUY.value) -> BatchTradeCandidate:

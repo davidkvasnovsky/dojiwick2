@@ -5,7 +5,6 @@ import numpy as np
 from dojiwick.domain.models.value_objects.outcome_models import BacktestSummary
 from dojiwick.domain.type_aliases import FloatVector
 
-
 _INTERVAL_BARS: dict[str, float] = {
     "1m": 525_600,
     "5m": 105_120,
@@ -138,7 +137,7 @@ def summarize(
     returns = pnl / notional_active * 100.0
 
     total_pnl = float(np.sum(pnl))
-    trades = int(len(pnl))
+    trades = len(pnl)
 
     win_mask = pnl > 0.0
     loss_mask = pnl < 0.0

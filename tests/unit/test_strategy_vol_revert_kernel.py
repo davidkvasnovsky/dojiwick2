@@ -1,11 +1,11 @@
 """Volatility-reversion strategy kernel tests."""
 
 import numpy as np
-
-from dojiwick.domain.enums import MarketState
-from dojiwick.compute.kernels.strategy.vol_revert import vol_revert_signal
 from fixtures.factories.compute import make_indicator_matrix
 from fixtures.factories.infrastructure import default_strategy_params
+
+from dojiwick.compute.kernels.strategy.vol_revert import vol_revert_signal
+from dojiwick.domain.enums import MarketState
 
 
 def test_volatile_extreme_oversold_emits_buy() -> None:

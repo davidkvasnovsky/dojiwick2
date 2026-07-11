@@ -8,7 +8,6 @@ from typing import cast
 from dojiwick.domain.enums import AuditSeverity
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.value_objects.system_event import SystemEvent
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _INSERT_SQL = """

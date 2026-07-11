@@ -15,11 +15,11 @@ from dojiwick.domain.enums import (
     TradeAction,
     WorkingType,
 )
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.domain.errors import ExchangeError, OrderNotFoundError
 from dojiwick.domain.hashing import compute_client_order_id
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan, LegDelta
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.infrastructure.exchange.binance.execution import BinanceExecutionGateway
 
 

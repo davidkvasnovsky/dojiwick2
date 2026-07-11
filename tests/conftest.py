@@ -1,7 +1,6 @@
 """Root test fixtures for dojiwick engine."""
 
 import pytest
-
 from fixtures.factories.compute import DecisionOutcomeBuilder, ExecutionReceiptBuilder
 from fixtures.factories.domain import (
     AIEvaluationResultBuilder,

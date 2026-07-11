@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import cast
 
 from dojiwick.domain.errors import AdapterError
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _UPSERT_SQL = """

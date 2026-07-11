@@ -7,7 +7,6 @@ from decimal import Decimal
 from dojiwick.domain.enums import OrderKind, OrderSide, OrderTimeInForce, OrderType, PositionSide, WorkingType
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.value_objects.order_request import OrderRequest
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _INSERT_SQL = """

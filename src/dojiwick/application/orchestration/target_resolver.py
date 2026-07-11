@@ -3,11 +3,11 @@
 from dataclasses import dataclass
 
 from dojiwick.domain.enums import PositionMode, PositionSide, TradeAction
-from dojiwick.domain.type_aliases import ProductCode, VenueCode
 from dojiwick.domain.models.value_objects.batch_models import BatchExecutionIntent
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId, TargetLegPosition
 from dojiwick.domain.numerics import ZERO, to_quantity
 from dojiwick.domain.symbols import pair_to_symbol, split_symbol
+from dojiwick.domain.type_aliases import ProductCode, VenueCode
 
 
 @dataclass(slots=True, frozen=True)

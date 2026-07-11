@@ -15,7 +15,7 @@ class AIEvaluationResult:
     approval : bool
         True if the candidate is approved, False if vetoed.
     confidence : Confidence
-        Model confidence in the evaluation (0.0 – 1.0).
+        Model confidence in the evaluation (0.0 - 1.0).
     reason_code : str
         Machine-readable code (e.g., "AI_VETO", "AI_APPROVE", "AI_ERROR").
     rationale : str

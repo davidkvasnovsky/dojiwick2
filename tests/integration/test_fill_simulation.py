@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from fixtures.factories.infrastructure import SettingsBuilder
 
-from dojiwick.application.use_cases.run_backtest import BacktestService, BacktestTimeSeries
 from dojiwick.application.policies.risk.defaults import build_default_risk_engine
 from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
+from dojiwick.application.use_cases.run_backtest import BacktestService, BacktestTimeSeries
 from dojiwick.config.schema import Settings
 from dojiwick.domain.enums import EntryPriceModel
 from dojiwick.domain.indicator_schema import INDICATOR_COUNT
@@ -21,7 +22,6 @@ from dojiwick.domain.models.value_objects.batch_models import (
     BatchMarketSnapshot,
     BatchPortfolioSnapshot,
 )
-from fixtures.factories.infrastructure import SettingsBuilder
 
 
 def _build_series(n_bars: int = 10) -> BacktestTimeSeries:

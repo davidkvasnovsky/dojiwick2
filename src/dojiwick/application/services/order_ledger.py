@@ -9,7 +9,7 @@ from dojiwick.domain.contracts.repositories.instrument import InstrumentReposito
 from dojiwick.domain.contracts.repositories.order_event import OrderEventRepositoryPort
 from dojiwick.domain.contracts.repositories.order_report import OrderReportRepositoryPort
 from dojiwick.domain.contracts.repositories.order_request import OrderRequestRepositoryPort
-from dojiwick.domain.enums import OrderKind, ExecutionStatus, OrderEventType, OrderStatus
+from dojiwick.domain.enums import ExecutionStatus, OrderEventType, OrderKind, OrderStatus
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.hashing import compute_client_order_id
 from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan

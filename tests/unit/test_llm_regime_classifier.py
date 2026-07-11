@@ -2,12 +2,13 @@
 
 import json
 
-from dojiwick.domain.enums import MarketState
-from dojiwick.infrastructure.ai.llm_regime_classifier import LLMRegimeClassifier
+from fixtures.factories.compute import RegimeProfileBuilder
+from fixtures.factories.domain import ContextBuilder
 from fixtures.fakes.clock import FixedClock
 from fixtures.fakes.llm_client import FixedLLMClient
-from fixtures.factories.domain import ContextBuilder
-from fixtures.factories.compute import RegimeProfileBuilder
+
+from dojiwick.domain.enums import MarketState
+from dojiwick.infrastructure.ai.llm_regime_classifier import LLMRegimeClassifier
 
 
 class TestLLMRegimeClassifier:

@@ -2,8 +2,8 @@
 
 import json
 import logging
-from datetime import UTC, datetime
 import traceback
+from datetime import UTC, datetime
 from logging.config import dictConfig
 
 

@@ -7,7 +7,6 @@ from decimal import Decimal
 from dojiwick.domain.enums import PositionSide
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.value_objects.position_leg import PositionLeg
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _INSERT_SQL = """

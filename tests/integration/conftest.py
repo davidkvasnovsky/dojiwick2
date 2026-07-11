@@ -1,20 +1,14 @@
 """Integration test configuration — auto-marks all tests as integration."""
 
 import pytest
-
-from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
-from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
-from dojiwick.application.policies.risk.defaults import build_default_risk_engine
-from dojiwick.application.use_cases.run_tick import TickService
-from dojiwick.config.schema import Settings
+from fixtures.factories.domain import ContextBuilder
 from fixtures.factories.infrastructure import (
     default_instrument_map,
     default_risk_settings,
+)
+from fixtures.factories.infrastructure import (
     default_settings as _default_settings,
 )
-from dojiwick.domain.enums import PositionMode
-from dojiwick.infrastructure.system.clock import SystemClock
-from fixtures.factories.domain import ContextBuilder
 from fixtures.factories.integration import empty_snapshot
 from fixtures.fakes.account_state import FakeAccountState
 from fixtures.fakes.bot_state_repository import InMemoryBotStateRepo
@@ -23,6 +17,14 @@ from fixtures.fakes.execution import DryRunGateway
 from fixtures.fakes.outcome_repository import CapturingOutcomeRepo
 from fixtures.fakes.regime_repository import InMemoryRegimeRepo
 from fixtures.fakes.tick_repository import InMemoryTickRepo
+
+from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
+from dojiwick.application.policies.risk.defaults import build_default_risk_engine
+from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
+from dojiwick.application.use_cases.run_tick import TickService
+from dojiwick.config.schema import Settings
+from dojiwick.domain.enums import PositionMode
+from dojiwick.infrastructure.system.clock import SystemClock
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:

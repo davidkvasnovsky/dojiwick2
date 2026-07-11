@@ -25,13 +25,13 @@ class AIServices:
 
     veto_service: VetoServicePort | None
     regime_classifier: AIRegimeClassifierPort | None
-    cost_tracker: "CostTracker | None" = None
+    cost_tracker: CostTracker | None = None
 
 
 def build_ai_services(
     settings: AISettings,
     clock: ClockPort,
-    cost_repository: "ModelCostRepositoryPort | None" = None,
+    cost_repository: ModelCostRepositoryPort | None = None,
 ) -> AIServices:
     """Build AI services from settings.
 

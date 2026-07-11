@@ -3,11 +3,12 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+from fixtures.fakes.candle_repository import InMemoryCandleRepo
+from fixtures.fakes.clock import FixedClock
+
 from dojiwick.application.services.caching_candle_fetcher import CachingCandleFetcher
 from dojiwick.domain.models.value_objects.candle import Candle
 from dojiwick.domain.type_aliases import CandleInterval
-from fixtures.fakes.candle_repository import InMemoryCandleRepo
-from fixtures.fakes.clock import FixedClock
 
 _INTERVAL = CandleInterval("1h")
 _VENUE = "binance"
@@ -17,7 +18,7 @@ _PRODUCT = "usd_c"
 _NOW = datetime(2026, 1, 1, tzinfo=UTC)
 
 
-def _cacher(repo: InMemoryCandleRepo, fetcher: "FakeFetcher") -> CachingCandleFetcher:
+def _cacher(repo: InMemoryCandleRepo, fetcher: FakeFetcher) -> CachingCandleFetcher:
     return CachingCandleFetcher(
         candle_repo=repo, fetcher=fetcher, venue=_VENUE, product=_PRODUCT, clock=FixedClock(_NOW)
     )

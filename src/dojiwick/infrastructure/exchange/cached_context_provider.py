@@ -55,7 +55,7 @@ class CachedContextProvider:
         symbols = tuple(pair_to_symbol(pair, self.pair_separator) for pair in pairs)
 
         raw_prices = [snap.prices.get(symbol) for symbol in symbols]
-        missing = [s for s, p in zip(symbols, raw_prices) if p is None or float(p) == 0.0]
+        missing = [s for s, p in zip(symbols, raw_prices, strict=True) if p is None or float(p) == 0.0]
         if missing:
             raise DataQualityError(f"zero or missing prices for: {', '.join(missing)}")
         prices = np.array([float(p) for p in raw_prices if p is not None], dtype=np.float64)

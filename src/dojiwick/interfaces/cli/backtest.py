@@ -320,7 +320,7 @@ async def _run() -> int:
                     if summary.portfolio_drawdown_curve is not None
                     else [0.0] * len(summary.portfolio_equity_curve)
                 )
-                for i, (eq, d) in enumerate(zip(summary.portfolio_equity_curve, dd)):
+                for i, (eq, d) in enumerate(zip(summary.portfolio_equity_curve, dd, strict=True)):
                     writer.writerow([i, float(eq), float(d)])
             log.info("wrote equity curve to %s", args.equity_csv)
 

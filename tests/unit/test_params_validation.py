@@ -1,7 +1,6 @@
 """Parameter boundary violation tests."""
 
 import pytest
-
 from fixtures.factories.infrastructure import default_regime_params, default_risk_params, default_strategy_params
 
 

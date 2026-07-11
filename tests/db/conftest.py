@@ -23,7 +23,7 @@ def db_dsn() -> str:
 
 
 @pytest_asyncio.fixture
-async def db_connection(db_dsn: str) -> AsyncGenerator[DbConnection, None]:
+async def db_connection(db_dsn: str) -> AsyncGenerator[DbConnection]:
     """Yield an async psycopg connection with per-test transaction rollback."""
     try:
         import psycopg
@@ -39,7 +39,7 @@ async def db_connection(db_dsn: str) -> AsyncGenerator[DbConnection, None]:
 
 
 @pytest_asyncio.fixture
-async def db_cursor(db_connection: DbConnection) -> AsyncGenerator[DbCursor, None]:
+async def db_cursor(db_connection: DbConnection) -> AsyncGenerator[DbCursor]:
     """Convenience fixture for an async cursor within the test transaction."""
     async with db_connection.cursor() as cursor:
         yield cursor

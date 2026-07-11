@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, fields
-from typing import Protocol, TypeVar
+from typing import Protocol
 
-from dojiwick.domain.enums import MarketState, RegimeExitProfile, SQL_TO_MARKET_STATE
+from dojiwick.domain.enums import SQL_TO_MARKET_STATE, MarketState, RegimeExitProfile
 from dojiwick.domain.models.value_objects.params import StrategyParams
 
 _MAX_PRIORITY = 1_000_000
@@ -21,9 +21,6 @@ class ScopeRuleLike(Protocol):
     def priority(self) -> int: ...
     @property
     def selector(self) -> ScopeSelector: ...
-
-
-_ScopeRuleT = TypeVar("_ScopeRuleT", bound=ScopeRuleLike)
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -344,18 +341,15 @@ def selector_matches(
         return False
     if selector.regime is not None and selector.regime != regime:
         return False
-    if selector.strategy is not None:
-        if strategy is None or selector.strategy != strategy:
-            return False
-    return True
+    return selector.strategy is None or (strategy is not None and selector.strategy == strategy)
 
 
-def ranked_scope_matches(
-    rules: Iterable[_ScopeRuleT],
+def ranked_scope_matches[RuleT: ScopeRuleLike](
+    rules: Iterable[RuleT],
     pair: str,
     regime: MarketState | None,
     strategy: str | None = None,
-) -> tuple[_ScopeRuleT, ...]:
+) -> tuple[RuleT, ...]:
     """Filter and rank scope rules by priority/specificity for deterministic resolution."""
     matched = tuple(rule for rule in rules if selector_matches(rule.selector, pair, regime, strategy))
     return tuple(

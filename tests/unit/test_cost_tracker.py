@@ -2,9 +2,10 @@
 
 from datetime import UTC, datetime
 
-from dojiwick.infrastructure.ai.cost_tracker import CostTracker
 from fixtures.fakes.clock import FixedClock
 from fixtures.fakes.model_cost_repository import FakeModelCostRepository
+
+from dojiwick.infrastructure.ai.cost_tracker import CostTracker
 
 
 class TestCostTracker:

@@ -4,12 +4,12 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import numpy as np
+from fixtures.factories.infrastructure import default_risk_settings, default_settings
 
 from dojiwick.application.policies.risk.defaults import build_default_risk_engine
 from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
 from dojiwick.application.services.backtest_builder import build_backtest_time_series
 from dojiwick.application.use_cases.run_backtest import BacktestService
-from fixtures.factories.infrastructure import default_risk_settings, default_settings
 from dojiwick.domain.models.value_objects.candle import Candle
 from dojiwick.domain.type_aliases import CandleInterval
 

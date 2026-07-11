@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.value_objects.stream_cursor_record import StreamCursorRecord
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _UPSERT_SQL = """

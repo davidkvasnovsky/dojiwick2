@@ -199,8 +199,8 @@ class OptunaRunner:
                 if trial.number % 10 == 0:
                     gc.collect()
                 return result
-            except PrunedError:
-                raise optuna.TrialPruned()
+            except PrunedError as exc:
+                raise optuna.TrialPruned() from exc
             except TimeoutError:
                 # The coroutine keeps running past the timeout otherwise,
                 # contending with subsequent trials on the event loop.

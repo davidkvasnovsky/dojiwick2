@@ -3,6 +3,10 @@
 import json
 
 import numpy as np
+from fixtures.factories.compute import TradeCandidateBuilder
+from fixtures.factories.domain import ContextBuilder
+from fixtures.fakes.clock import FixedClock
+from fixtures.fakes.llm_client import FixedLLMClient
 
 from dojiwick.domain.enums import MarketState
 from dojiwick.domain.models.value_objects.batch_models import (
@@ -17,10 +21,6 @@ from dojiwick.domain.reason_codes import (
 )
 from dojiwick.infrastructure.ai.cost_tracker import CostTracker
 from dojiwick.infrastructure.ai.llm_veto_service import LLMVetoService
-from fixtures.fakes.clock import FixedClock
-from fixtures.fakes.llm_client import FixedLLMClient
-from fixtures.factories.domain import ContextBuilder
-from fixtures.factories.compute import TradeCandidateBuilder
 
 
 class TestLLMVetoService:

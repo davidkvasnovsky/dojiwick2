@@ -247,7 +247,6 @@ version = "2.0.0"
 source = { editable = "." }
 dependencies = [
     { name = "numpy" },
-    { name = "psycopg-pool" },
     { name = "pydantic" },
     { name = "python-dotenv" },
 ]
@@ -292,8 +291,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.0" },
     { name = "optuna", marker = "extra == 'optuna'", specifier = ">=4.0" },
     { name = "psycopg", extras = ["binary"], marker = "extra == 'postgres'", specifier = ">=3.2" },
-    { name = "psycopg-pool", specifier = ">=3.3.0" },
-    { name = "psycopg-pool", marker = "extra == 'postgres'", specifier = ">=3.2" },
+    { name = "psycopg-pool", marker = "extra == 'postgres'", specifier = ">=3.3.0" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "sqlalchemy", marker = "extra == 'optuna'", specifier = ">=2.0" },

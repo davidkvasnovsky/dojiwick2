@@ -78,7 +78,7 @@ def decimals_to_array(values: Sequence[Decimal]) -> NDArray[np.float64]:
 
 
 def candles_to_ohlc(
-    candles: Sequence["Candle"],
+    candles: Sequence[Candle],
 ) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
     """Extract (close, high, low) as float64 arrays from a candle sequence.
 
@@ -116,5 +116,5 @@ def round_price_to_tick(price: Price, tick_size: Price, *, away_from: Price | No
 
 
 def meets_min_notional(qty: Quantity, price: Price, min_notional: Money) -> bool:
-    """True when qty × price satisfies the exchange's minimum notional filter."""
+    """True when qty x price satisfies the exchange's minimum notional filter."""
     return qty * price >= min_notional

@@ -1,10 +1,10 @@
 """Tests for FeatureFlags dataclass and Settings wiring."""
 
 import pytest
+from fixtures.factories.infrastructure import SettingsBuilder, default_settings
 from pydantic import ValidationError
 
 from dojiwick.config.schema import FeatureFlags
-from fixtures.factories.infrastructure import SettingsBuilder, default_settings
 
 
 class TestFeatureFlags:

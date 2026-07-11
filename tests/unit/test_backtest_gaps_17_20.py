@@ -2,18 +2,18 @@
 
 import numpy as np
 import pytest
-
-from dojiwick.application.policies.risk.defaults import build_default_risk_engine
-from dojiwick.application.registry.strategy_registry import StrategyRegistry, build_default_strategy_registry
-from dojiwick.application.use_cases.run_backtest import BacktestService
-from dojiwick.config.schema import Settings
+from fixtures.factories.domain import TimeSeriesBuilder
 from fixtures.factories.infrastructure import (
     default_backtest_settings,
     default_risk_settings,
     default_settings,
     default_trading_settings,
 )
-from fixtures.factories.domain import TimeSeriesBuilder
+
+from dojiwick.application.policies.risk.defaults import build_default_risk_engine
+from dojiwick.application.registry.strategy_registry import StrategyRegistry, build_default_strategy_registry
+from dojiwick.application.use_cases.run_backtest import BacktestService
+from dojiwick.config.schema import Settings
 
 
 def _service(settings: Settings | None = None) -> BacktestService:

@@ -7,22 +7,8 @@ parity and veto fail-open behaviour.
 from decimal import Decimal
 
 import numpy as np
-
-from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
-from dojiwick.application.policies.risk.defaults import build_default_risk_engine
-from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
-from dojiwick.application.use_cases.run_backtest import BacktestService, BacktestTimeSeries
-from dojiwick.application.use_cases.run_tick import TickService
-from dojiwick.compute.kernels.regime.classify import classify_regime_batch
-from fixtures.factories.infrastructure import default_instrument_map, default_risk_settings, default_settings
-from dojiwick.domain.enums import DecisionStatus, PositionMode
-from dojiwick.domain.models.value_objects.account_state import AccountBalance, AccountSnapshot
-from dojiwick.domain.models.value_objects.batch_models import BatchSignalFragment
-from dojiwick.domain.models.value_objects.params import StrategyParams
-from dojiwick.domain.type_aliases import FloatMatrix, FloatVector, IntVector
-from dojiwick.infrastructure.ai.llm_filter import NullVetoService
-from dojiwick.infrastructure.system.clock import SystemClock
 from fixtures.factories.domain import ContextBuilder
+from fixtures.factories.infrastructure import default_instrument_map, default_risk_settings, default_settings
 from fixtures.fakes.account_state import FakeAccountState
 from fixtures.fakes.bot_state_repository import InMemoryBotStateRepo
 from fixtures.fakes.context_provider import StaticBatchContextProvider
@@ -31,6 +17,20 @@ from fixtures.fakes.outcome_repository import CapturingOutcomeRepo
 from fixtures.fakes.regime_repository import InMemoryRegimeRepo
 from fixtures.fakes.tick_repository import NoOpTickRepository
 from fixtures.fakes.veto import TimeoutVeto
+
+from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
+from dojiwick.application.policies.risk.defaults import build_default_risk_engine
+from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
+from dojiwick.application.use_cases.run_backtest import BacktestService, BacktestTimeSeries
+from dojiwick.application.use_cases.run_tick import TickService
+from dojiwick.compute.kernels.regime.classify import classify_regime_batch
+from dojiwick.domain.enums import DecisionStatus, PositionMode
+from dojiwick.domain.models.value_objects.account_state import AccountBalance, AccountSnapshot
+from dojiwick.domain.models.value_objects.batch_models import BatchSignalFragment
+from dojiwick.domain.models.value_objects.params import StrategyParams
+from dojiwick.domain.type_aliases import FloatMatrix, FloatVector, IntVector
+from dojiwick.infrastructure.ai.llm_filter import NullVetoService
+from dojiwick.infrastructure.system.clock import SystemClock
 
 
 def _fake_account_state() -> FakeAccountState:
@@ -281,9 +281,8 @@ def test_no_domain_imports_from_infrastructure() -> None:
                 for alias in node.names:
                     if alias.name.startswith("dojiwick.infrastructure"):
                         violations.append(f"{py_file}:{node.lineno} imports {alias.name}")
-            elif isinstance(node, ast.ImportFrom):
-                if node.module and node.module.startswith("dojiwick.infrastructure"):
-                    violations.append(f"{py_file}:{node.lineno} imports from {node.module}")
+            elif isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("dojiwick.infrastructure"):
+                violations.append(f"{py_file}:{node.lineno} imports from {node.module}")
 
     assert not violations, "domain→infrastructure imports found:\n" + "\n".join(violations)
 

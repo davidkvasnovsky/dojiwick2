@@ -42,7 +42,7 @@ def _hline(title: str) -> None:
 # ── Section 1: Optuna Study Overview ──────────────────────────────────────
 
 
-def section_optuna_overview(study) -> None:  # noqa: ANN001
+def section_optuna_overview(study) -> None:
     _hline("1. OPTUNA STUDY OVERVIEW")
     trials = study.trials
     completed = [t for t in trials if t.state.name == "COMPLETE"]
@@ -64,7 +64,7 @@ def section_optuna_overview(study) -> None:  # noqa: ANN001
 # ── Section 2: Top Trial Convergence ─────────────────────────────────────
 
 
-def section_convergence(study) -> None:  # noqa: ANN001
+def section_convergence(study) -> None:
     _hline("2. TOP 20 PARAM CONVERGENCE")
     completed = [t for t in study.trials if t.state.name == "COMPLETE"]
     top20 = sorted(completed, key=lambda t: t.value, reverse=True)[:20]
@@ -166,7 +166,7 @@ def section_stop_loss(real: pd.DataFrame) -> None:
     if "regime" in stops.columns:
         print("\nStops by regime:")
         for r, g in stops.groupby("regime"):
-            print(f"  {str(r):20s} {len(g):>3} loss=${g['pnl_usd'].sum():>12,.2f}")
+            print(f"  {r!s:20s} {len(g):>3} loss=${g['pnl_usd'].sum():>12,.2f}")
 
 
 def section_strategy(real: pd.DataFrame) -> None:
@@ -190,7 +190,7 @@ def section_regime(real: pd.DataFrame) -> None:
         return
     for r, g in real.groupby("regime"):
         wr = (g["pnl_usd"] > 0).mean()
-        print(f"  {str(r):20s} n={len(g):>4} WR={wr:.0%} PnL=${g['pnl_usd'].sum():>12,.2f}")
+        print(f"  {r!s:20s} n={len(g):>4} WR={wr:.0%} PnL=${g['pnl_usd'].sum():>12,.2f}")
 
 
 def section_drawdown(real: pd.DataFrame, equity_df: pd.DataFrame) -> None:
@@ -338,7 +338,7 @@ def section_recommendations(real: pd.DataFrame, max_dd: float) -> None:
             print(f"  ! {f}")
 
 
-def section_comparison(current_study, compare_study) -> None:  # noqa: ANN001
+def section_comparison(current_study, compare_study) -> None:
     _hline("15. COMPARISON WITH PREVIOUS STUDY")
     cur_completed = [t for t in current_study.trials if t.state.name == "COMPLETE"]
     prev_completed = [t for t in compare_study.trials if t.state.name == "COMPLETE"]

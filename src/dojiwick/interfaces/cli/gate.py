@@ -31,8 +31,8 @@ def _parse_args() -> argparse.Namespace:
 async def _run() -> int:
     args = _parse_args()
 
-    from dojiwick.config.param_tuning import apply_params
     from dojiwick.application.use_cases.validation.gate_evaluator import DefaultGateEvaluator
+    from dojiwick.config.param_tuning import apply_params
     from dojiwick.interfaces.cli._shared import load_settings_and_series
 
     if args.params_file:

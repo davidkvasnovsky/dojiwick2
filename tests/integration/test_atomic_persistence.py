@@ -3,17 +3,8 @@
 from datetime import UTC, datetime
 
 import pytest
-
-from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
-from dojiwick.application.policies.risk.defaults import build_default_risk_engine
-from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
-from dojiwick.application.use_cases.run_tick import TickService
-from fixtures.factories.infrastructure import default_instrument_map, default_settings
-from dojiwick.domain.enums import PositionMode, TickStatus
-from dojiwick.domain.errors import PostExecutionPersistenceError
-from dojiwick.domain.hashing import compute_tick_id
-from dojiwick.infrastructure.system.clock import SystemClock
 from fixtures.factories.domain import ContextBuilder
+from fixtures.factories.infrastructure import default_instrument_map, default_settings
 from fixtures.factories.integration import empty_snapshot
 from fixtures.fakes.account_state import FakeAccountState
 from fixtures.fakes.bot_state_repository import InMemoryBotStateRepo
@@ -23,6 +14,15 @@ from fixtures.fakes.outcome_repository import FailingOutcomeRepo
 from fixtures.fakes.regime_repository import InMemoryRegimeRepo
 from fixtures.fakes.tick_repository import InMemoryTickRepo
 from fixtures.fakes.unit_of_work import FakeUnitOfWork
+
+from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
+from dojiwick.application.policies.risk.defaults import build_default_risk_engine
+from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
+from dojiwick.application.use_cases.run_tick import TickService
+from dojiwick.domain.enums import PositionMode, TickStatus
+from dojiwick.domain.errors import PostExecutionPersistenceError
+from dojiwick.domain.hashing import compute_tick_id
+from dojiwick.infrastructure.system.clock import SystemClock
 
 
 async def test_atomic_rollback_on_persistence_failure() -> None:

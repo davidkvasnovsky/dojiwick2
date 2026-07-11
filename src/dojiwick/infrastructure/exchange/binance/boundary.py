@@ -18,11 +18,10 @@ from dojiwick.domain.enums import (
     PositionSide,
     WorkingType,
 )
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.domain.models.value_objects.exchange_order_update import ExchangeOrderUpdate
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.numerics import Money, Price, Quantity, to_money, to_price, to_quantity
-
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 
 # Enum conversions: Binance string <-> domain enum
 

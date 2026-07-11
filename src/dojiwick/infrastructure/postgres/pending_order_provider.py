@@ -6,7 +6,6 @@ from decimal import Decimal
 from dojiwick.domain.enums import PositionSide
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.numerics import Quantity
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 # Entry orders only: resting protective (reduce-only) orders are expected to

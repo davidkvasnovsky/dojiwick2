@@ -3,17 +3,8 @@
 from datetime import UTC, datetime
 
 import pytest
-
-from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
-from dojiwick.application.policies.risk.defaults import build_default_risk_engine
-from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
-from dojiwick.application.use_cases.run_tick import TickService
 from fixtures.factories.infrastructure import default_instrument_map, default_risk_settings, default_settings
-from dojiwick.domain.enums import DecisionStatus, PositionMode, ReconciliationHealth
-from dojiwick.domain.errors import CircuitBreakerTrippedError
-from dojiwick.domain.models.entities.bot_state import BotState
-from dojiwick.infrastructure.ai.llm_filter import NullVetoService
-from dojiwick.infrastructure.system.clock import SystemClock
+from fixtures.factories.integration import empty_snapshot, signal_triggering_context_builder
 from fixtures.fakes.account_state import FakeAccountState
 from fixtures.fakes.bot_state_repository import InMemoryBotStateRepo
 from fixtures.fakes.context_provider import StaticBatchContextProvider
@@ -22,7 +13,15 @@ from fixtures.fakes.outcome_repository import CapturingOutcomeRepo
 from fixtures.fakes.regime_repository import InMemoryRegimeRepo
 from fixtures.fakes.tick_repository import NoOpTickRepository
 
-from fixtures.factories.integration import empty_snapshot, signal_triggering_context_builder
+from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
+from dojiwick.application.policies.risk.defaults import build_default_risk_engine
+from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
+from dojiwick.application.use_cases.run_tick import TickService
+from dojiwick.domain.enums import DecisionStatus, PositionMode, ReconciliationHealth
+from dojiwick.domain.errors import CircuitBreakerTrippedError
+from dojiwick.domain.models.entities.bot_state import BotState
+from dojiwick.infrastructure.ai.llm_filter import NullVetoService
+from dojiwick.infrastructure.system.clock import SystemClock
 
 
 def _make_tick_service(

@@ -1,22 +1,21 @@
-"""Tests for hardening gap remediation (Gaps 1–6)."""
+"""Tests for hardening gap remediation (Gaps 1-6)."""
 
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-from pydantic import ValidationError
-
 import numpy as np
+import pytest
+from fixtures.factories.infrastructure import (
+    default_settings,
+    default_universe_settings,
+)
+from pydantic import ValidationError
 
 from dojiwick.config.loader import load_settings
 from dojiwick.config.schema import (
     TargetConfig,
 )
 from dojiwick.domain.errors import ConfigurationError
-from fixtures.factories.infrastructure import (
-    default_settings,
-    default_universe_settings,
-)
 
 _BASE = Path("config.toml")
 
@@ -35,7 +34,7 @@ def test_settings_fails_on_missing_behavior_field(tmp_path: Path) -> None:
     """Missing behavior-bearing field (backtest.fee_bps) raises ConfigurationError."""
     body = _BASE.read_text(encoding="utf-8").replace("fee_bps = 4.0\n", "")
     config = _write_config(tmp_path, content=body)
-    with pytest.raises(ConfigurationError, match="backtest.fee_bps"):
+    with pytest.raises(ConfigurationError, match=r"backtest.fee_bps"):
         load_settings(config)
 
 
@@ -43,7 +42,7 @@ def test_ai_settings_require_explicit_config(tmp_path: Path) -> None:
     """Missing ai.enabled raises ConfigurationError."""
     body = _BASE.read_text(encoding="utf-8").replace("enabled = true\nveto_enabled", "veto_enabled")
     config = _write_config(tmp_path, content=body)
-    with pytest.raises(ConfigurationError, match="ai.enabled"):
+    with pytest.raises(ConfigurationError, match=r"ai.enabled"):
         load_settings(config)
 
 
@@ -70,7 +69,7 @@ def test_missing_required_section_fails(tmp_path: Path) -> None:
         if not skip:
             filtered.append(line)
     config = _write_config(tmp_path, content="".join(filtered))
-    with pytest.raises(ConfigurationError, match="missing required config sections.*system"):
+    with pytest.raises(ConfigurationError, match=r"missing required config sections.*system"):
         load_settings(config)
 
 
@@ -114,9 +113,10 @@ def test_candle_cache_scoped_by_venue_product() -> None:
     """CachingCandleFetcher requires venue and product fields."""
     from datetime import UTC, datetime
 
-    from dojiwick.application.services.caching_candle_fetcher import CachingCandleFetcher
     from fixtures.fakes.candle_repository import InMemoryCandleRepo
     from fixtures.fakes.clock import FixedClock
+
+    from dojiwick.application.services.caching_candle_fetcher import CachingCandleFetcher
 
     class FakeFetcher:
         async def fetch_candles_range(self, symbol: str, interval: str, start: object, end: object) -> tuple[()]:
@@ -176,6 +176,8 @@ def test_params_fail_without_defaults() -> None:
 
 def test_outcome_carries_target_id() -> None:
     """OutcomeInputs with target_ids populates DecisionOutcome.target_id."""
+    from fixtures.factories.domain import ContextBuilder
+
     from dojiwick.application.orchestration.outcome_assembler import OutcomeInputs, build_outcomes
     from dojiwick.domain.enums import DecisionAuthority, ExecutionStatus
     from dojiwick.domain.models.value_objects.batch_models import (
@@ -186,7 +188,6 @@ def test_outcome_carries_target_id() -> None:
         BatchVetoDecision,
     )
     from dojiwick.domain.models.value_objects.outcome_models import ExecutionReceipt
-    from fixtures.factories.domain import ContextBuilder
 
     ctx = ContextBuilder(pairs=("BTC/USDC",)).build()
     n = 1

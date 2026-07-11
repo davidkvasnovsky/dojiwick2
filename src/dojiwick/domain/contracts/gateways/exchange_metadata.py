@@ -2,9 +2,9 @@
 
 from typing import Protocol
 
-from dojiwick.domain.type_aliases import ProductCode, VenueCode
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.models.value_objects.instrument_metadata import ExchangeCapabilities, InstrumentInfo
+from dojiwick.domain.type_aliases import ProductCode, VenueCode
 
 
 class ExchangeMetadataPort(Protocol):

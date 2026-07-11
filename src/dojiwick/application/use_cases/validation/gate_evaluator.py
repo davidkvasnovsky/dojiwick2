@@ -148,10 +148,7 @@ class DefaultGateEvaluator:
 
     async def evaluate(self, best_params: ParamSet, workers: int = 1) -> GateResult:
         """Run all three validation checks against the best params."""
-        if self.apply_tuned is not None:
-            tuned = self.apply_tuned(best_params)
-        else:
-            tuned = self.settings
+        tuned = self.apply_tuned(best_params) if self.apply_tuned is not None else self.settings
 
         if workers > 1:
             return await self._evaluate_parallel(tuned, workers)

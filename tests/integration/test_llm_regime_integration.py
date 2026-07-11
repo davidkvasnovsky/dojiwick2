@@ -2,16 +2,17 @@
 
 import json
 
+from fixtures.factories.compute import RegimeProfileBuilder
+from fixtures.factories.domain import ContextBuilder
+from fixtures.fakes.clock import FixedClock
+from fixtures.fakes.llm_client import FixedLLMClient
+
 from dojiwick.compute.kernels.regime.ensemble import combine_regime_ensemble
 from dojiwick.domain.enums import MarketState
 from dojiwick.domain.models.value_objects.batch_models import (
     BatchRegimeProfile,
 )
 from dojiwick.infrastructure.ai.llm_regime_classifier import LLMRegimeClassifier
-from fixtures.fakes.clock import FixedClock
-from fixtures.fakes.llm_client import FixedLLMClient
-from fixtures.factories.domain import ContextBuilder
-from fixtures.factories.compute import RegimeProfileBuilder
 
 
 class TestLLMRegimeClassifierPort:

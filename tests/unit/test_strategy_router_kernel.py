@@ -1,13 +1,13 @@
 """Strategy registry kernel tests."""
 
 import numpy as np
+from fixtures.factories.domain import ContextBuilder
+from fixtures.factories.infrastructure import default_settings
 
 from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
 from dojiwick.compute.kernels.regime.classify import classify_regime_batch
-from fixtures.factories.infrastructure import default_settings
 from dojiwick.domain.enums import TradeAction
 from dojiwick.domain.reason_codes import STRATEGY_HOLD, STRATEGY_SIGNAL
-from fixtures.factories.domain import ContextBuilder
 
 
 def test_routing_priority_trend_over_mean_revert() -> None:

@@ -9,13 +9,13 @@ from dojiwick.domain.enums import (
     PositionMode,
     PositionSide,
 )
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.domain.models.value_objects.account_state import (
     AccountBalance,
     AccountSnapshot,
     ExchangePositionLeg,
 )
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId, TargetLegPosition
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 
 BTCUSDC = InstrumentId(
     venue=BINANCE_VENUE,

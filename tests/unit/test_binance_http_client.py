@@ -5,10 +5,10 @@ import hmac
 from unittest.mock import AsyncMock
 
 import pytest
+from fixtures.fakes.clock import FixedClock
 
 from dojiwick.domain.errors import AuthenticationError, ExchangeError, NetworkError
 from dojiwick.infrastructure.exchange.binance.http_client import BinanceHttpClient
-from fixtures.fakes.clock import FixedClock
 
 
 def _make_client(*, testnet: bool = True, retry_max_attempts: int = 3) -> BinanceHttpClient:

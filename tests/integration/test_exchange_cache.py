@@ -3,21 +3,22 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from fixtures.fakes.account_state import FakeAccountState
+from fixtures.fakes.clock import FixedClock
+from fixtures.fakes.market_data_provider import InMemoryMarketDataProvider
+from fixtures.fakes.order_event_stream import InMemoryOrderEventStream
+
 from dojiwick.domain.enums import PositionSide
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.domain.models.value_objects.account_state import (
     AccountBalance,
     AccountSnapshot,
     ExchangePositionLeg,
 )
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.infrastructure.exchange.cache import ExchangeCache
 from dojiwick.infrastructure.exchange.cached_context_provider import CachedContextProvider
 from dojiwick.infrastructure.exchange.feed import ExchangeDataFeed, FeedStatus
-from fixtures.fakes.account_state import FakeAccountState
-from fixtures.fakes.clock import FixedClock
-from fixtures.fakes.market_data_provider import InMemoryMarketDataProvider
-from fixtures.fakes.order_event_stream import InMemoryOrderEventStream
 
 
 def _btc_instrument() -> InstrumentId:

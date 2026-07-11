@@ -2,9 +2,9 @@
 
 import numpy as np
 import pytest
+from fixtures.factories.domain import ContextBuilder
 
 from dojiwick.application.use_cases.run_backtest import BacktestTimeSeries
-from fixtures.factories.domain import ContextBuilder
 
 
 def _ctx(pairs: tuple[str, ...] = ("BTC/USDC", "ETH/USDC")) -> ...:

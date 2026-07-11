@@ -18,16 +18,17 @@ WORKDIR /app
 
 FROM base AS builder
 
+# Live-trading image: postgres/ai/exchange only -- optuna+sqlalchemy stay out
 RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project --no-dev --all-extras
+    uv sync --locked --no-install-project --no-dev --extra postgres --extra ai --extra exchange
 
 COPY pyproject.toml uv.lock README.md ./
 COPY src src
 
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev --all-extras --no-editable
+    uv sync --locked --no-dev --extra postgres --extra ai --extra exchange --no-editable
 
 
 FROM ${PY_IMAGE} AS runtime

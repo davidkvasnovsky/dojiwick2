@@ -1,10 +1,10 @@
 """Tests for regime classification prompt builder."""
 
 import numpy as np
+from fixtures.factories.domain import ContextBuilder
 
 from dojiwick.domain.models.value_objects.batch_models import BatchRegimeProfile
 from dojiwick.infrastructure.ai.prompts.regime_prompt import build_regime_system_prompt, build_regime_user_prompt
-from fixtures.factories.domain import ContextBuilder
 
 
 class TestRegimePrompt:

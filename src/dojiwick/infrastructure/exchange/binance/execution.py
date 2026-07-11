@@ -3,6 +3,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime
+
 from dojiwick.domain.enums import (
     ExecutionStatus,
     OrderSide,

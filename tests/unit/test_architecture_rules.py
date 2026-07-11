@@ -10,8 +10,8 @@ import ast
 import pathlib
 from dataclasses import fields
 
-from dojiwick.config.scope import StrategyOverrideValues
 from dojiwick.config.risk_scope import RiskOverrideValues
+from dojiwick.config.scope import StrategyOverrideValues
 from dojiwick.domain.models.value_objects.params import RiskParams, StrategyParams
 
 SRC_ROOT = pathlib.Path(__file__).resolve().parents[2] / "src" / "dojiwick"

@@ -5,14 +5,14 @@ identical intents through the shared ``run_decision_pipeline``.
 """
 
 import numpy as np
+from fixtures.factories.domain import ContextBuilder
+from fixtures.factories.infrastructure import default_risk_settings, default_settings
 
 from dojiwick.application.orchestration.decision_pipeline import run_decision_pipeline
 from dojiwick.application.orchestration.regime_hysteresis import RegimeHysteresis
 from dojiwick.application.policies.risk.defaults import build_default_risk_engine
 from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
-from fixtures.factories.infrastructure import default_risk_settings, default_settings
 from dojiwick.infrastructure.ai.llm_filter import NullVetoService
-from fixtures.factories.domain import ContextBuilder
 
 
 async def test_pipeline_parity_backtest_vs_live() -> None:

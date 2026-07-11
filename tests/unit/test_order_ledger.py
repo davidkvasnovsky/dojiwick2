@@ -4,12 +4,14 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-
-from dojiwick.domain.errors import AdapterError
+from fixtures.fakes.clock import FixedClock
+from fixtures.fakes.fill_repository import FakeFillRepo
+from fixtures.fakes.instrument_repository import FakeInstrumentRepo
+from fixtures.fakes.order_event_repository import FakeOrderEventRepository
+from fixtures.fakes.order_report_repository import FakeOrderReportRepo
+from fixtures.fakes.order_request_repository import FakeOrderRequestRepo
 
 from dojiwick.application.services.order_ledger import OrderLedgerService
-
-
 from dojiwick.domain.enums import (
     ExecutionStatus,
     OrderEventType,
@@ -18,25 +20,20 @@ from dojiwick.domain.enums import (
     OrderType,
     PositionSide,
 )
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
+from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.hashing import compute_client_order_id
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan, LegDelta
 from dojiwick.domain.models.value_objects.outcome_models import ExecutionReceipt
-from fixtures.fakes.clock import FixedClock
-from fixtures.fakes.fill_repository import FakeFillRepo
-from fixtures.fakes.instrument_repository import FakeInstrumentRepo
-from fixtures.fakes.order_event_repository import FakeOrderEventRepository
-from fixtures.fakes.order_report_repository import FakeOrderReportRepo
-from fixtures.fakes.order_request_repository import FakeOrderRequestRepo
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 
 _NOW = datetime(2025, 1, 1, tzinfo=UTC)
 
 
 async def _record(
     svc: OrderLedgerService,
-    plan: "ExecutionPlan",
-    receipts: "tuple[ExecutionReceipt, ...]",
+    plan: ExecutionPlan,
+    receipts: tuple[ExecutionReceipt, ...],
     tick_id: str,
 ) -> dict[int, int]:
     request_ids = await svc.record_requests(plan, tick_id=tick_id)

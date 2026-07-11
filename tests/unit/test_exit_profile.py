@@ -3,16 +3,16 @@
 # pyright: reportPrivateUsage=false, reportUnknownMemberType=false
 
 import pytest
+from fixtures.factories.infrastructure import default_strategy_params
 
 from dojiwick.application.use_cases.run_backtest import (
-    _ExitContext,
-    _ExitProfile,
     _apply_mean_revert_overrides,
     _apply_ranging_exits,
     _apply_trending_exits,
     _apply_volatile_exits,
+    _ExitContext,
+    _ExitProfile,
 )
-from fixtures.factories.infrastructure import default_strategy_params
 
 
 def _base_profile() -> _ExitProfile:

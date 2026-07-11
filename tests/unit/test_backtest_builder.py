@@ -96,7 +96,7 @@ class TestTimestampIntersection:
         candles_a = _make_candles(pair_a, n)
         candles_b = _make_candles(pair_b, n, offset=timedelta(hours=500))
 
-        with pytest.raises(ValueError, match="insufficient common timestamps|timestamp coverage too low"):
+        with pytest.raises(ValueError, match=r"insufficient common timestamps|timestamp coverage too low"):
             build_backtest_time_series(
                 {pair_a: candles_a, pair_b: candles_b},
                 (pair_a, pair_b),

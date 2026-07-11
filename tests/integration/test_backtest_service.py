@@ -1,13 +1,13 @@
 """Backtest service tests."""
 
 import numpy as np
+from fixtures.factories.domain import TimeSeriesBuilder
+from fixtures.factories.infrastructure import default_regime_settings, default_risk_settings, default_settings
 
 from dojiwick.application.policies.risk.defaults import build_default_risk_engine
 from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
 from dojiwick.application.use_cases.run_backtest import BacktestService
 from dojiwick.config.schema import Settings
-from fixtures.factories.infrastructure import default_regime_settings, default_risk_settings, default_settings
-from fixtures.factories.domain import TimeSeriesBuilder
 
 
 def _service(settings: Settings | None = None) -> BacktestService:

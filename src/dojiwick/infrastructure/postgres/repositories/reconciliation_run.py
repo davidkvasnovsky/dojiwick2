@@ -7,7 +7,6 @@ from typing import cast
 
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.value_objects.reconciliation_run import ReconciliationRun
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _INSERT_SQL = """

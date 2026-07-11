@@ -1,10 +1,14 @@
 """Outcome factory unit tests."""
 
 from datetime import UTC, datetime
+from decimal import Decimal
 
 import numpy as np
 import pytest
 
+from dojiwick.application.orchestration.outcome_assembler import OutcomeInputs, build_outcomes
+from dojiwick.domain.enums import DecisionAuthority, DecisionStatus, ExecutionStatus, MarketState, TradeAction
+from dojiwick.domain.errors import DomainValidationError
 from dojiwick.domain.models.value_objects.batch_models import (
     BatchDecisionContext,
     BatchExecutionIntent,
@@ -15,12 +19,7 @@ from dojiwick.domain.models.value_objects.batch_models import (
     BatchTradeCandidate,
     BatchVetoDecision,
 )
-from decimal import Decimal
-
-from dojiwick.domain.enums import DecisionAuthority, DecisionStatus, ExecutionStatus, MarketState, TradeAction
-from dojiwick.domain.errors import DomainValidationError
 from dojiwick.domain.models.value_objects.outcome_models import ExecutionReceipt
-from dojiwick.application.orchestration.outcome_assembler import OutcomeInputs, build_outcomes
 
 
 def _make_inputs(

@@ -7,7 +7,6 @@ from decimal import Decimal
 from dojiwick.domain.enums import OrderEventType
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.value_objects.order_event import OrderEvent
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _INSERT_SQL = """

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import logging
 import signal
 from collections.abc import Awaitable, Callable
@@ -11,70 +12,70 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
 from dojiwick.application.policies.risk.defaults import build_default_risk_engine
+from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
+from dojiwick.application.services.instrument_sync import InstrumentSyncService
 from dojiwick.application.services.order_ledger import OrderLedgerService
 from dojiwick.application.services.position_tracker import PositionTracker
-from dojiwick.application.services.instrument_sync import InstrumentSyncService
 from dojiwick.application.services.protective_orders import ProtectiveOrderService
 from dojiwick.application.services.startup_orchestrator import StartupOrchestrator
 from dojiwick.application.use_cases.run_reconciliation import ReconciliationService
 from dojiwick.application.use_cases.run_tick import TickService
 from dojiwick.config.composition import ComposedAdapters, build_adapters
-from dojiwick.config.schema import Settings
 from dojiwick.config.fingerprint import SettingsFingerprint, fingerprint_settings
 from dojiwick.config.loader import load_settings
 from dojiwick.config.logging import configure_logging
+from dojiwick.config.schema import Settings
+from dojiwick.config.targets import resolve_execution_symbols, resolve_instrument_map, resolve_target_ids
 from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.contracts.gateways.market_data_feed import MarketDataFeedPort
 from dojiwick.domain.contracts.gateways.open_order import OpenOrderPort
-from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.enums import DecisionStatus, ReconciliationHealth
 from dojiwick.domain.errors import (
-    ConfigurationError,
     AdapterError,
     AuthenticationError,
     CircuitBreakerTrippedError,
+    ConfigurationError,
     DataQualityError,
     ExchangeError,
     InsufficientBalanceError,
     NetworkError,
     PostExecutionPersistenceError,
 )
-from dojiwick.config.targets import resolve_execution_symbols, resolve_instrument_map, resolve_target_ids
 from dojiwick.domain.hashing import compute_tick_id
+from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.models.value_objects.health_state import HealthState
 from dojiwick.domain.reconciliation_health import compute_health
 from dojiwick.infrastructure.ai.factory import AIServices, build_ai_services
+from dojiwick.infrastructure.exchange.reconciliation import ExchangeReconciliation
 from dojiwick.infrastructure.observability.alert_evaluator import AlertEvaluator
 from dojiwick.infrastructure.observability.log_notification import LogNotification
-from dojiwick.infrastructure.system.clock import SystemClock
 from dojiwick.infrastructure.postgres.connection import (
     DbConnection,
     TransactionAwareConnection,
     check_db_connectivity,
     create_pool,
 )
-from dojiwick.infrastructure.exchange.reconciliation import ExchangeReconciliation
 from dojiwick.infrastructure.postgres.gateways.audit_log import PgAuditLog
+from dojiwick.infrastructure.postgres.pending_order_provider import PgPendingOrderProvider
 from dojiwick.infrastructure.postgres.repositories.bot_config_snapshot import PgBotConfigSnapshotRepository
-from dojiwick.infrastructure.postgres.repositories.model_cost import PgModelCostRepository
-from dojiwick.infrastructure.postgres.repositories.position_exit_state import PgPositionExitStateRepository
+from dojiwick.infrastructure.postgres.repositories.bot_state import PgBotStateRepository
 from dojiwick.infrastructure.postgres.repositories.decision_trace import PgDecisionTraceRepository
-from dojiwick.infrastructure.postgres.repositories.instrument import PgInstrumentRepository
 from dojiwick.infrastructure.postgres.repositories.fill import PgFillRepository
+from dojiwick.infrastructure.postgres.repositories.instrument import PgInstrumentRepository
+from dojiwick.infrastructure.postgres.repositories.model_cost import PgModelCostRepository
 from dojiwick.infrastructure.postgres.repositories.order_event import PgOrderEventRepository
 from dojiwick.infrastructure.postgres.repositories.order_report import PgOrderReportRepository
 from dojiwick.infrastructure.postgres.repositories.order_request import PgOrderRequestRepository
-from dojiwick.infrastructure.postgres.pending_order_provider import PgPendingOrderProvider
 from dojiwick.infrastructure.postgres.repositories.outcome import PgOutcomeRepository
 from dojiwick.infrastructure.postgres.repositories.position_event import PgPositionEventRepository
+from dojiwick.infrastructure.postgres.repositories.position_exit_state import PgPositionExitStateRepository
 from dojiwick.infrastructure.postgres.repositories.position_leg import PgPositionLegRepository
 from dojiwick.infrastructure.postgres.repositories.regime import PgRegimeRepository
-from dojiwick.infrastructure.postgres.repositories.bot_state import PgBotStateRepository
 from dojiwick.infrastructure.postgres.repositories.stream_cursor import PgStreamCursorRepository
 from dojiwick.infrastructure.postgres.repositories.tick import PgTickRepository
 from dojiwick.infrastructure.postgres.unit_of_work import PgUnitOfWork
+from dojiwick.infrastructure.system.clock import SystemClock
 
 if TYPE_CHECKING:
     from psycopg_pool import AsyncConnectionPool
@@ -314,7 +315,7 @@ async def _run_periodic_recon(
         if new_hs.health is ReconciliationHealth.HALT:
             log.critical("reconciliation HALT — manual intervention required")
             return True
-    except (AdapterError, OSError, asyncio.TimeoutError) as exc:
+    except (TimeoutError, AdapterError, OSError) as exc:
         log.warning("periodic reconciliation failed (retryable): %s", exc)
     except Exception:
         log.exception("unexpected error in reconciliation — crashing")
@@ -378,13 +379,13 @@ async def _run_tick_loop(
             log.critical("fatal exchange error, halting: %s", exc)
             break
         except (
+            TimeoutError,
             DataQualityError,
             CircuitBreakerTrippedError,
             NetworkError,
             ExchangeError,
             AdapterError,
             OSError,
-            asyncio.TimeoutError,
         ) as exc:
             consecutive_errors += 1
             alert_evaluator.evaluate_tick_failure(consecutive_errors)
@@ -396,9 +397,8 @@ async def _run_tick_loop(
             log.exception("unexpected error in tick loop — crashing")
             raise
 
-        if tick_count > 0 and tick_count % recon_interval == 0 and recon_check is not None:
-            if await recon_check():
-                break
+        if tick_count > 0 and tick_count % recon_interval == 0 and recon_check is not None and await recon_check():
+            break
         if max_ticks > 0 and tick_count >= max_ticks:
             log.info("max ticks reached ticks=%d", tick_count)
             break
@@ -471,10 +471,8 @@ async def _run(config_path: Path) -> int:
     wired.service.shutdown_event = stop_event
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        try:
+        with contextlib.suppress(NotImplementedError):  # pragma: no cover
             loop.add_signal_handler(sig, stop_event.set)
-        except NotImplementedError:  # pragma: no cover
-            pass
 
     try:
         tick_count = await _run_tick_loop(
@@ -493,10 +491,8 @@ async def _run(config_path: Path) -> int:
         log.info("shutting down gracefully timeout=%ds", settings.system.shutdown_timeout_sec)
         if consumer_task is not None and not consumer_task.done():
             consumer_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await consumer_task
-            except asyncio.CancelledError:
-                pass
         await adapters.close()
         await wired.cleanup()
         await pool.close()

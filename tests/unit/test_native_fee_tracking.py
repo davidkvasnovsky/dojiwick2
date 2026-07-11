@@ -3,10 +3,10 @@
 from decimal import Decimal
 
 import pytest
-
-from dojiwick.domain.models.value_objects.outcome_models import ExecutionReceipt
-from dojiwick.domain.enums import ExecutionStatus
 from fixtures.factories.compute import ExecutionReceiptBuilder
+
+from dojiwick.domain.enums import ExecutionStatus
+from dojiwick.domain.models.value_objects.outcome_models import ExecutionReceipt
 
 
 def test_receipt_tracks_native_fee_and_asset() -> None:

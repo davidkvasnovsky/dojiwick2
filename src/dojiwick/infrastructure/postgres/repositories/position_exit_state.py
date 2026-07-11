@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 
 from dojiwick.domain.models.entities.position_exit_state import PositionExitState
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 from dojiwick.infrastructure.postgres.helpers import pg_execute, pg_fetch_all, pg_fetch_one
 

@@ -59,7 +59,7 @@ async def load_settings_and_series(
     candles_by_pair: dict[str, tuple[Candle, ...]] = {}
     funding_by_pair: dict[str, tuple[FundingRate, ...]] | None = {} if fetchers.funding is not None else None
     try:
-        for pair, symbol in zip(pairs, symbols):
+        for pair, symbol in zip(pairs, symbols, strict=True):
             log.info("fetching %s candles for %s (%s to %s)", interval, symbol, args.start, args.end)
             candles = await fetchers.candles.fetch_candles_range(symbol, interval, start, end)
             log.info("  -> %d candles", len(candles))

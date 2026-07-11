@@ -3,6 +3,7 @@
 from decimal import Decimal
 
 import pytest
+from fixtures.fakes.pending_order_provider import FakePendingOrderProvider
 
 from dojiwick.application.use_cases.run_tick import TickService
 from dojiwick.domain.enums import (
@@ -10,10 +11,9 @@ from dojiwick.domain.enums import (
     OrderType,
     PositionSide,
 )
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan, LegDelta
-from fixtures.fakes.pending_order_provider import FakePendingOrderProvider
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 
 _IID_BTC = InstrumentId(
     venue=BINANCE_VENUE,

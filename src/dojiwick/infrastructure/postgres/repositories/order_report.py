@@ -8,7 +8,6 @@ from decimal import Decimal
 from dojiwick.domain.enums import OrderStatus
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.value_objects.order_request import OrderReport
-
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
 _UPSERT_SQL = """

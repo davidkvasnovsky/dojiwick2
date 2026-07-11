@@ -1,17 +1,17 @@
 """Cross-strategy signal conflict resolution: first-registered plugin wins."""
 
 import numpy as np
+from fixtures.factories.domain import ContextBuilder
+from fixtures.factories.infrastructure import default_strategy_params
 
 from dojiwick.application.registry.strategy_registry import StrategyRegistry
 from dojiwick.compute.kernels.strategy.plugin import StrategyPluginAdapter
 from dojiwick.domain.enums import TradeAction
 from dojiwick.domain.models.value_objects.params import StrategyParams
 from dojiwick.domain.type_aliases import BoolVector, FloatMatrix, FloatVector, IntVector
-from fixtures.factories.domain import ContextBuilder
-from fixtures.factories.infrastructure import default_strategy_params
 
 
-def _fixed_signal(buy: list[bool], short: list[bool]):  # noqa: ANN202
+def _fixed_signal(buy: list[bool], short: list[bool]):
     def signal(
         *,
         states: IntVector,

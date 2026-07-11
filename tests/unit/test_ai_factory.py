@@ -4,11 +4,11 @@ import os
 from unittest.mock import patch
 
 import pytest
+from fixtures.factories.infrastructure import default_ai_settings
+from fixtures.fakes.clock import FixedClock
 
 from dojiwick.domain.errors import ConfigurationError
 from dojiwick.infrastructure.ai.factory import build_ai_services
-from fixtures.factories.infrastructure import default_ai_settings
-from fixtures.fakes.clock import FixedClock
 
 
 class TestAIFactory:
@@ -61,7 +61,7 @@ class TestAIFactory:
         assert result.regime_classifier is not None
 
     def test_empty_model_raises_configuration_error(self) -> None:
-        with pytest.raises(ConfigurationError, match="ai.veto_model must be set"):
+        with pytest.raises(ConfigurationError, match=r"ai.veto_model must be set"):
             default_ai_settings(
                 enabled=True,
                 veto_enabled=True,

@@ -38,7 +38,7 @@ class RejectFirstVeto:
         approved[0] = False
         return BatchVetoDecision(
             approved_mask=approved,
-            reason_codes=("rejected",) + tuple("ok" for _ in range(context.size - 1)),
+            reason_codes=("rejected", *("ok" for _ in range(context.size - 1))),
         )
 
 

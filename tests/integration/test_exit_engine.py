@@ -2,6 +2,8 @@
 
 import numpy as np
 import pytest
+from fixtures.factories.domain import ContextBuilder, TimeSeriesBuilder
+from fixtures.factories.infrastructure import default_backtest_settings, default_risk_settings, default_settings
 
 from dojiwick.application.orchestration.decision_pipeline import run_decision_pipeline_sync
 from dojiwick.application.policies.risk.defaults import build_default_risk_engine
@@ -11,8 +13,6 @@ from dojiwick.compute.kernels.pnl.pnl import scalar_net_pnl
 from dojiwick.config.schema import Settings
 from dojiwick.domain.enums import CloseReason
 from dojiwick.domain.models.value_objects.batch_models import BatchExecutionIntent
-from fixtures.factories.domain import ContextBuilder, TimeSeriesBuilder
-from fixtures.factories.infrastructure import default_backtest_settings, default_risk_settings, default_settings
 
 _PAIR = ("BTC/USDC",)
 
@@ -171,5 +171,5 @@ async def test_funding_accrual_charged_on_held_bars() -> None:
     position_notional = r_base.trade_details[0].notional_usd
     diff = r_base.trade_details[0].pnl_usd - r_funded.trade_details[0].pnl_usd
     assert diff == pytest.approx(rate * position_notional * settings.backtest.leverage, rel=1e-9), (  # pyright: ignore[reportUnknownMemberType]
-        "a long position held across a funding settlement must pay rate × leveraged notional"
+        "a long position held across a funding settlement must pay rate x leveraged notional"
     )

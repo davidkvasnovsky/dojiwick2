@@ -2,14 +2,12 @@
 
 import numpy as np
 
-from dojiwick.domain.models.value_objects.batch_models import BatchMarketSnapshot, BatchRegimeProfile
-from dojiwick.domain.models.value_objects.params import RegimeParams
+from dojiwick.compute.kernels.math import clamp01, safe_divide
 from dojiwick.domain.enums import MarketState
 from dojiwick.domain.indicator_schema import INDICATOR_INDEX
-
+from dojiwick.domain.models.value_objects.batch_models import BatchMarketSnapshot, BatchRegimeProfile
+from dojiwick.domain.models.value_objects.params import RegimeParams
 from dojiwick.domain.type_aliases import FloatVector, IntVector
-
-from dojiwick.compute.kernels.math import clamp01, safe_divide
 
 
 def classify_regime_batch(market: BatchMarketSnapshot, settings: RegimeParams) -> BatchRegimeProfile:

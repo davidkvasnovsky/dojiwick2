@@ -4,16 +4,16 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-
-from dojiwick.application.services.startup_order_cleanup import StartupOrderCleanupService
-from dojiwick.domain.contracts.gateways.open_order import ExchangeOpenOrder, OpenOrderPort
-from dojiwick.domain.enums import AuditSeverity, OrderEventType, OrderSide, OrderStatus, PositionSide
-from dojiwick.domain.models.value_objects.order_request import OrderReport
 from fixtures.fakes.audit_log import CapturingAuditLog
 from fixtures.fakes.clock import FixedClock
 from fixtures.fakes.open_order import FakeOpenOrderAdapter
 from fixtures.fakes.order_event_repository import FakeOrderEventRepository
 from fixtures.fakes.order_report_repository import FakeOrderReportRepo
+
+from dojiwick.application.services.startup_order_cleanup import StartupOrderCleanupService
+from dojiwick.domain.contracts.gateways.open_order import ExchangeOpenOrder, OpenOrderPort
+from dojiwick.domain.enums import AuditSeverity, OrderEventType, OrderSide, OrderStatus, PositionSide
+from dojiwick.domain.models.value_objects.order_request import OrderReport
 
 _NOW = datetime(2026, 3, 6, tzinfo=UTC)
 

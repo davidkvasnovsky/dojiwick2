@@ -5,11 +5,11 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from fixtures.factories.infrastructure import SettingsBuilder
 from psycopg import OperationalError
 
 from dojiwick.config.composition import build_market_data_fetcher
 from dojiwick.config.schema import Settings
-from fixtures.factories.infrastructure import SettingsBuilder
 
 _READINESS = "dojiwick.infrastructure.exchange.binance.readiness.assert_binance_ready"
 _CONNECT = "dojiwick.infrastructure.postgres.connection.connect"
@@ -20,7 +20,7 @@ def settings() -> Settings:
     return SettingsBuilder().build()
 
 
-def _patch_exchange():  # noqa: ANN202
+def _patch_exchange():
     """Patch Binance readiness + HTTP client so no real network calls are made."""
     return (
         patch(_READINESS, return_value=("key", "secret")),

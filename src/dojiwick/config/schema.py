@@ -15,14 +15,13 @@ from dojiwick.domain.enums import (
     WFMode,
     WorkingType,
 )
-from dojiwick.domain.type_aliases import ProductCode, VenueCode
 from dojiwick.domain.errors import ConfigurationError
 from dojiwick.domain.models.value_objects.cost_model import CostModel
 from dojiwick.domain.models.value_objects.params import RegimeParams, RiskParams, StrategyParams
+from dojiwick.domain.type_aliases import ProductCode, VenueCode
 
 from .risk_scope import RiskScopeResolver
 from .scope import StrategyScopeResolver
-
 
 # Fields with no trading behavior: optional in TOML (loader keeps code defaults)
 # and excluded from the trading fingerprint. Single source for both consumers.
@@ -253,7 +252,7 @@ class RiskSettings(BaseModel):
 
 
 @lru_cache(maxsize=128)
-def _regime_params(settings: "RegimeSettings") -> RegimeParams:
+def _regime_params(settings: RegimeSettings) -> RegimeParams:
     """Memoized RegimeParams — ``.params`` runs per bar in the optimizer hot path.
 
     Keyed on the frozen (hashable) settings instance; equal field values hit
@@ -279,7 +278,7 @@ def _regime_params(settings: "RegimeSettings") -> RegimeParams:
 
 
 @lru_cache(maxsize=128)
-def _risk_params(settings: "RiskSettings") -> RiskParams:
+def _risk_params(settings: RiskSettings) -> RiskParams:
     """Memoized RiskParams — see ``_regime_params`` for the caching rationale."""
     return RiskParams(
         max_daily_loss_pct=settings.max_daily_loss_pct,

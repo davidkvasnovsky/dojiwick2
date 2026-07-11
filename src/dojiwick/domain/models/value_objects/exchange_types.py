@@ -3,8 +3,8 @@
 from dataclasses import dataclass
 
 from dojiwick.domain.enums import PositionSide
-from dojiwick.domain.type_aliases import ProductCode, VenueCode
 from dojiwick.domain.numerics import Money, Quantity
+from dojiwick.domain.type_aliases import ProductCode, VenueCode
 
 
 @dataclass(slots=True, frozen=True)

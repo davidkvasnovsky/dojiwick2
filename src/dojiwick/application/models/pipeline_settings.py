@@ -10,17 +10,16 @@ from typing import Protocol
 from dojiwick.domain.enums import (
     EntryPriceModel,
     FundingMode,
-    WorkingType,
     HistoryAlignment,
     MarketState,
     MissingBarPolicy,
     PositionMode,
     WFMode,
+    WorkingType,
 )
 from dojiwick.domain.models.value_objects.cost_model import CostModel
 from dojiwick.domain.models.value_objects.params import RegimeParams, RiskParams, StrategyParams
 from dojiwick.domain.type_aliases import ProductCode, VenueCode
-
 
 # Sub-section protocols
 

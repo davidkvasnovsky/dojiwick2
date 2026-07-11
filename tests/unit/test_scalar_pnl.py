@@ -7,7 +7,7 @@ from dojiwick.compute.kernels.pnl.pnl import scalar_net_pnl
 
 
 def test_fees_charged_on_leveraged_notional() -> None:
-    # Flat price move, zero slippage: PnL is pure fees on notional × leverage.
+    # Flat price move, zero slippage: PnL is pure fees on notional x leverage.
     pnl = scalar_net_pnl(
         is_long=True,
         entry_price=100.0,
@@ -33,7 +33,7 @@ def test_slippage_applied_on_both_sides() -> None:
         fee_bps=0.0,
         leverage=1.0,
     )
-    # entry 100.1, exit 99.9 → -0.2 per unit × qty 2
+    # entry 100.1, exit 99.9 → -0.2 per unit x qty 2
     assert pnl == pytest.approx(-0.4)  # pyright: ignore[reportUnknownMemberType]
 
 
@@ -59,7 +59,7 @@ def test_short_mirrors_long() -> None:
         leverage=2.0,
     )
     # Symmetric 10-point favorable moves differ only via price-proportional
-    # exit slippage (110 vs 90 base): (110 + 90 - 2×100) × slip × leverage
+    # exit slippage (110 vs 90 base): (110 + 90 - 2x100) x slip x leverage
     slip_rate = 5.0 / 10_000.0
     assert long_pnl - short_pnl == pytest.approx(-20.0 * slip_rate * 2.0, abs=1e-9)  # pyright: ignore[reportUnknownMemberType]
     assert long_pnl == pytest.approx((110.0 * (1 - slip_rate) - 100.0 * (1 + slip_rate)) * 2.0 - 100.0 * 2 * 0.0004 * 2)  # pyright: ignore[reportUnknownMemberType]

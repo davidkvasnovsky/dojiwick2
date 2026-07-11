@@ -1,10 +1,10 @@
 """Regime kernel tests."""
 
 import numpy as np
-
 from fixtures.factories.infrastructure import default_settings
-from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext
+
 from dojiwick.compute.kernels.regime.classify import classify_regime_batch
+from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext
 
 
 def test_classify_regime_batch_detects_trending_up(sample_context: BatchDecisionContext) -> None:

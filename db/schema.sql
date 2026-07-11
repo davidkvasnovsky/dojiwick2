@@ -514,7 +514,7 @@ CREATE TABLE bot_state (
     CONSTRAINT bot_state_daily_trade_count_check   CHECK (daily_trade_count >= 0)
 );
 
--- Bot state history (append-only audit trail, retain last 30 days via pg_cron)
+-- Bot state history (append-only audit trail; PgBotStateRepository prunes rows older than 30 days on each write)
 CREATE TABLE bot_state_history (
     id                      BIGSERIAL PRIMARY KEY,
     consecutive_errors      INTEGER NOT NULL,

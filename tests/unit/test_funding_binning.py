@@ -9,7 +9,6 @@ import pytest
 from dojiwick.application.services.backtest_builder import _bin_funding  # pyright: ignore[reportPrivateUsage]
 from dojiwick.domain.models.value_objects.funding_rate import FundingRate
 
-
 _T0 = datetime(2026, 1, 1, tzinfo=UTC)
 
 
@@ -49,14 +48,14 @@ def test_empty_rates_raise() -> None:
 def test_missing_head_coverage_raises() -> None:
     times = _hourly_times(48)
     rates = (_rate(24, "0.0001"), _rate(32, "0.0001"), _rate(40, "0.0001"))
-    with pytest.raises(ValueError, match="starts .* after candles"):
+    with pytest.raises(ValueError, match=r"starts .* after candles"):
         _bin_funding("BTCUSDT", rates, times)
 
 
 def test_missing_tail_coverage_raises() -> None:
     times = _hourly_times(48)
     rates = (_rate(0, "0.0001"), _rate(8, "0.0001"), _rate(16, "0.0001"))
-    with pytest.raises(ValueError, match="ends .* before candles"):
+    with pytest.raises(ValueError, match=r"ends .* before candles"):
         _bin_funding("BTCUSDT", rates, times)
 
 

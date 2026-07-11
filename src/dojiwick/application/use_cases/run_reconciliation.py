@@ -8,12 +8,12 @@ logged, and persisted for observability.
 import logging
 from dataclasses import dataclass
 
-from dojiwick.domain.enums import AuditSeverity
-from dojiwick.domain.errors import ReconciliationError
-from dojiwick.domain.models.value_objects.reconciliation import ReconciliationResult
 from dojiwick.domain.contracts.gateways.audit_log import AuditLogPort
 from dojiwick.domain.contracts.gateways.notification import NotificationPort
 from dojiwick.domain.contracts.gateways.reconciliation import ReconciliationPort
+from dojiwick.domain.enums import AuditSeverity
+from dojiwick.domain.errors import ReconciliationError
+from dojiwick.domain.models.value_objects.reconciliation import ReconciliationResult
 
 log = logging.getLogger(__name__)
 

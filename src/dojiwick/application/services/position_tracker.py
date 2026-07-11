@@ -11,10 +11,10 @@ from dojiwick.domain.contracts.repositories.position_event import PositionEventR
 from dojiwick.domain.contracts.repositories.position_leg import PositionLegRepositoryPort
 from dojiwick.domain.enums import ExecutionStatus, PositionEventType, PositionSide
 from dojiwick.domain.errors import AdapterError
-from dojiwick.domain.numerics import Price, Quantity
 from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan
 from dojiwick.domain.models.value_objects.outcome_models import ExecutionReceipt
 from dojiwick.domain.models.value_objects.position_leg import PositionEventRecord, PositionLeg
+from dojiwick.domain.numerics import Price, Quantity
 
 log = logging.getLogger(__name__)
 

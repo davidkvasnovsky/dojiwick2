@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from dojiwick.domain.models.value_objects.params import StrategyParams, resolve_param_vector
 from dojiwick.domain.indicator_schema import INDICATOR_INDEX
+from dojiwick.domain.models.value_objects.params import StrategyParams, resolve_param_vector
 from dojiwick.domain.type_aliases import BoolVector, FloatMatrix, FloatVector
 
 

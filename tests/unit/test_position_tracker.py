@@ -4,8 +4,11 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-
-from dojiwick.domain.errors import AdapterError
+from fixtures.fakes.clock import FixedClock
+from fixtures.fakes.instrument_repository import FakeInstrumentRepo
+from fixtures.fakes.order_request_repository import FakeOrderRequestRepo
+from fixtures.fakes.position_event_repository import FakePositionEventRepo
+from fixtures.fakes.position_leg_repository import FakePositionLegRepo
 
 from dojiwick.application.services.position_tracker import PositionTracker
 from dojiwick.domain.enums import (
@@ -15,16 +18,12 @@ from dojiwick.domain.enums import (
     PositionEventType,
     PositionSide,
 )
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
+from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan, LegDelta
 from dojiwick.domain.models.value_objects.order_request import OrderRequest
 from dojiwick.domain.models.value_objects.outcome_models import ExecutionReceipt
-from fixtures.fakes.clock import FixedClock
-from fixtures.fakes.instrument_repository import FakeInstrumentRepo
-from fixtures.fakes.order_request_repository import FakeOrderRequestRepo
-from fixtures.fakes.position_event_repository import FakePositionEventRepo
-from fixtures.fakes.position_leg_repository import FakePositionLegRepo
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 
 _NOW = datetime(2025, 1, 1, tzinfo=UTC)
 _IID = InstrumentId(

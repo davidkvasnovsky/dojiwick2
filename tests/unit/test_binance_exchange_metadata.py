@@ -4,12 +4,11 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from fixtures.fakes.clock import FixedClock
 
 from dojiwick.domain.errors import ExchangeError
-from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
+from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.infrastructure.exchange.binance.exchange_metadata import BinanceExchangeMetadataProvider
 
 

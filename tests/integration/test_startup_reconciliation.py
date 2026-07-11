@@ -1,15 +1,14 @@
 """Integration tests for startup reconciliation gate."""
 
 import pytest
+from fixtures.fakes.audit_log import CapturingAuditLog
+from fixtures.fakes.notification import CapturingNotification
+from fixtures.fakes.reconciliation import CleanReconciliation, DivergentReconciliation
 
 from dojiwick.application.use_cases.run_reconciliation import ReconciliationService
 from dojiwick.domain.contracts.gateways.reconciliation import ReconciliationPort
 from dojiwick.domain.errors import ReconciliationError
 from dojiwick.domain.models.value_objects.reconciliation import ReconciliationResult
-from fixtures.fakes.audit_log import CapturingAuditLog
-from fixtures.fakes.notification import CapturingNotification
-from fixtures.fakes.reconciliation import CleanReconciliation, DivergentReconciliation
-
 
 # Startup gate blocks until reconciliation completes
 

@@ -1,9 +1,10 @@
 """Tests for veto prompt builder."""
 
+from fixtures.factories.compute import RegimeProfileBuilder, TradeCandidateBuilder
+from fixtures.factories.domain import ContextBuilder
+
 from dojiwick.domain.models.value_objects.batch_models import BatchDecisionContext
 from dojiwick.infrastructure.ai.prompts.veto_prompt import build_veto_system_prompt, build_veto_user_prompt
-from fixtures.factories.domain import ContextBuilder
-from fixtures.factories.compute import RegimeProfileBuilder, TradeCandidateBuilder
 
 
 def _make_context() -> BatchDecisionContext:
