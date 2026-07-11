@@ -24,9 +24,11 @@ log = logging.getLogger(__name__)
 
 
 def setup_env() -> None:
-    """Load .env and configure basic logging — shared across CLI entrypoints."""
+    """Load .env and configure JSON logging — shared across CLI entrypoints."""
+    from dojiwick.config.logging import configure_logging
+
     load_dotenv()
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    configure_logging()
 
 
 def add_common_args(parser: argparse.ArgumentParser) -> None:
@@ -116,6 +118,24 @@ def print_gate_result(result: object) -> None:
     print(f"  Agg OOS Sharpe:  {r.aggregate_oos_sharpe:.3f}")
     if r.rejection_reasons:
         print(f"  Rejections:      {', '.join(r.rejection_reasons)}")
+
+
+def print_gate_block(result: object) -> int:
+    """Print the full gate banner block and return the process exit code.
+
+    0 when the gate passed, 2 when it rejected — automation gates on it.
+    """
+    from dojiwick.application.use_cases.validation.research_gate import GateResult
+
+    r = cast(GateResult, result)
+    verdict = "PASS" if r.passed else "FAIL"
+    print(f"\n{'=' * 50}")
+    print(f"RESEARCH GATE: {verdict}")
+    print(f"{'=' * 50}")
+    print_gate_result(r)
+    print(f"{'=' * 50}")
+    print_wf_windows(r.wf_windows)
+    return 0 if r.passed else 2
 
 
 def print_wf_windows(windows: object) -> None:

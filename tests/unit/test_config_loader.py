@@ -72,7 +72,8 @@ def test_load_settings_rejects_unknown_section(tmp_path: Path) -> None:
         load_settings(config)
 
 
-def test_load_settings_ignores_env_overrides(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_load_settings_ignores_unknown_env_overrides(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.delenv("DOJIWICK_DB_URL", raising=False)
     monkeypatch.setenv("DOJIWICK_DB_DSN", "postgresql://env:env@localhost:5432/env")
     monkeypatch.setenv("DOJIWICK_LOG_LEVEL", "DEBUG")
     monkeypatch.setenv("DOJIWICK_TICK_INTERVAL", "1")
@@ -82,6 +83,15 @@ def test_load_settings_ignores_env_overrides(monkeypatch: pytest.MonkeyPatch, tm
     assert settings.database.dsn == "postgresql://dojiwick:dojiwick@postgres:5432/dojiwick"
     assert settings.system.log_level == "INFO"
     assert settings.system.tick_interval_sec == 90
+
+
+def test_dojiwick_db_url_overrides_dsn(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """The Atlas env var wins over [database].dsn so app and migrations share one target."""
+    monkeypatch.setenv("DOJIWICK_DB_URL", "postgresql://env:env@localhost:5499/envdb")
+
+    settings = load_settings(_write_base_config(tmp_path))
+
+    assert settings.database.dsn == "postgresql://env:env@localhost:5499/envdb"
 
 
 def test_load_settings_parses_all_sections(tmp_path: Path) -> None:

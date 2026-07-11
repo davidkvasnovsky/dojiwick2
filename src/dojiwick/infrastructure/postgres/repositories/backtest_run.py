@@ -14,17 +14,17 @@ _INSERT_SQL = """
 INSERT INTO backtest_runs (
     config_hash, start_date, end_date, timeframe, pairs,
     target_ids, venue, product,
-    trades, total_pnl_usd, win_rate, expectancy_usd, sharpe_like,
+    trades, total_pnl_usd, win_rate, expectancy_usd, sharpe_like, daily_sharpe,
     max_drawdown_pct, sortino, calmar, profit_factor,
     max_consecutive_losses, payoff_ratio, source, params_json
-) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 RETURNING id
 """
 
 _SELECT_BY_HASH_SQL = """
 SELECT config_hash, start_date, end_date, timeframe, pairs,
        target_ids, venue, product,
-       trades, total_pnl_usd, win_rate, expectancy_usd, sharpe_like,
+       trades, total_pnl_usd, win_rate, expectancy_usd, sharpe_like, daily_sharpe,
        max_drawdown_pct, sortino, calmar, profit_factor,
        max_consecutive_losses, payoff_ratio, source, params_json
 FROM backtest_runs
@@ -59,6 +59,7 @@ class PgBacktestRunRepository:
                         s.win_rate,
                         s.expectancy_usd,
                         s.sharpe_like,
+                        s.daily_sharpe,
                         s.max_drawdown_pct,
                         s.sortino,
                         s.calmar,
@@ -101,15 +102,16 @@ class PgBacktestRunRepository:
                     win_rate=row[10],
                     expectancy_usd=float(row[11]),
                     sharpe_like=row[12],
-                    max_drawdown_pct=row[13],
-                    sortino=row[14],
-                    calmar=row[15],
-                    profit_factor=row[16],
-                    max_consecutive_losses=row[17],
-                    payoff_ratio=row[18],
+                    daily_sharpe=row[13],
+                    max_drawdown_pct=row[14],
+                    sortino=row[15],
+                    calmar=row[16],
+                    profit_factor=row[17],
+                    max_consecutive_losses=row[18],
+                    payoff_ratio=row[19],
                 ),
-                source=row[19],
-                params_json=_parse_params_json(row[20]),
+                source=row[20],
+                params_json=_parse_params_json(row[21]),
             )
             for row in rows
         )

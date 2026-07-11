@@ -707,6 +707,7 @@ CREATE TABLE backtest_runs (
     win_rate            DOUBLE PRECISION NOT NULL,
     expectancy_usd      NUMERIC(18,8)    NOT NULL,
     sharpe_like         DOUBLE PRECISION NOT NULL,
+    daily_sharpe        DOUBLE PRECISION NOT NULL DEFAULT 0.0,
     max_drawdown_pct    DOUBLE PRECISION NOT NULL,
     sortino             DOUBLE PRECISION NOT NULL DEFAULT 0.0,
     calmar              DOUBLE PRECISION NOT NULL DEFAULT 0.0,

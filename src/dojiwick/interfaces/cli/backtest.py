@@ -214,7 +214,7 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-async def _run() -> None:
+async def _run() -> int:
     args = _parse_args()
 
     from dojiwick.interfaces.cli._shared import build_service, load_settings_and_series
@@ -324,19 +324,21 @@ async def _run() -> None:
                     writer.writerow([i, float(eq), float(d)])
             log.info("wrote equity curve to %s", args.equity_csv)
 
+        return 0
+
     finally:
         await cleanup()
 
 
-def main() -> None:
+def main() -> int:
     from dojiwick.interfaces.cli._shared import setup_env
 
     setup_env()
     try:
-        asyncio.run(_run())
+        return asyncio.run(_run())
     except KeyboardInterrupt:
-        sys.exit(130)
+        return 130
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

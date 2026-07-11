@@ -1,6 +1,7 @@
 """Strict TOML settings loader with deterministic scope parsing."""
 
 import logging
+import os
 import types
 from dataclasses import fields
 from pathlib import Path
@@ -167,6 +168,14 @@ def load_settings(path: Path) -> Settings:
         raise ConfigurationError(str(exc)) from exc
 
     _enforce_explicit_config(raw, settings)
+
+    # DOJIWICK_DB_URL overrides [database].dsn -- Atlas migrations read the
+    # same env var, so the app and migrations always target one database.
+    env_dsn = os.environ.get("DOJIWICK_DB_URL")
+    if env_dsn:
+        log.info("database.dsn overridden by DOJIWICK_DB_URL")
+        settings = settings.model_copy(update={"database": settings.database.model_copy(update={"dsn": env_dsn})})
+
     return settings
 
 

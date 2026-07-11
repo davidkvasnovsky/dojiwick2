@@ -9,8 +9,19 @@ from pathlib import Path
 from dojiwick.config.fingerprint import fingerprint_settings
 from dojiwick.config.loader import load_settings
 from dojiwick.config.risk_scope import RiskResolutionTrace, RISK_FIELDS
-from dojiwick.config.scope import ResolutionTrace, parse_regime, regime_name
+from dojiwick.config.scope import ResolutionTrace, parse_regime, regime_name, STRATEGY_FIELDS
 from dojiwick.domain.enums import MarketState
+
+# Read only from the global StrategyParams, never from per-pair resolutions:
+# the registry gates confluence on `settings.*` (strategy_registry.py) and
+# trend_volatile_ema_enabled is a global toggle (NOTE in trend_follow.py).
+_GLOBAL_ONLY_FIELDS = frozenset(
+    {
+        "confluence_filter_enabled",
+        "min_confluence_score",
+        "trend_volatile_ema_enabled",
+    }
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,10 +72,9 @@ def _render_table(trace: ResolutionTrace, risk_trace: RiskResolutionTrace, confi
 
     lines.append("")
     lines.append("Resolved strategy:")
-    lines.append(f"- default_variant={trace.resolved.default_variant}")
-    lines.append(f"- stop_atr_mult={trace.resolved.stop_atr_mult}")
-    lines.append(f"- rr_ratio={trace.resolved.rr_ratio}")
-    lines.append(f"- min_stop_distance_pct={trace.resolved.min_stop_distance_pct}")
+    for field in STRATEGY_FIELDS:
+        suffix = "  [global-only: per-pair overrides ignored]" if field in _GLOBAL_ONLY_FIELDS else ""
+        lines.append(f"- {field}={getattr(trace.resolved, field)}{suffix}")
 
     lines.append("")
     lines.append("Resolved risk:")

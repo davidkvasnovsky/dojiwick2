@@ -1,9 +1,11 @@
 """CLI entrypoint for strategy optimization on historical data.
 
+Trial count comes from ``[optimization].trials`` in config.toml.
+
 Usage::
 
     python -m dojiwick.interfaces.cli.optimize \
-        --config config.toml --start 2025-01-01 --end 2025-06-01 --trials 50
+        --config config.toml --start 2025-01-01 --end 2025-06-01 --gate --workers 8
 """
 
 from __future__ import annotations
@@ -108,7 +110,7 @@ def _worker_fn(
     venue: str,
     product: str,
 ) -> None:
-    """Run optimization trials in a forked worker process."""
+    """Run optimization trials in a spawned worker process."""
     from dojiwick.interfaces.cli._shared import setup_env
 
     setup_env()
@@ -149,7 +151,7 @@ def _generate_warm_start(settings: Settings) -> tuple[ParamSet, ...]:
     return trials
 
 
-async def _run() -> None:
+async def _run() -> int:
     args = _parse_args()
 
     from dojiwick.application.use_cases.optimization.runner import (
@@ -197,9 +199,9 @@ async def _run() -> None:
 
             from dojiwick.application.use_cases.optimization.runner import create_study_from_spec
 
-            # Close DB/HTTP connections before forking -- candle data is already
-            # loaded into ``series``; keeping the connections open would leak
-            # file descriptors into forked workers (shared socket corruption).
+            # Close DB/HTTP connections before spawning workers -- candle data
+            # is already loaded into ``series``, and the parent's sockets must
+            # not stay open while workers run against the same DB.
             await cleanup()
 
             async def _noop() -> None:
@@ -207,12 +209,11 @@ async def _run() -> None:
 
             cleanup = _noop  # prevent double-close in finally block
 
-            # Create study and enqueue warm-start trials BEFORE forking so
+            # Create study and enqueue warm-start trials BEFORE spawning so
             # workers don't duplicate warm-start enqueue
             study = create_study_from_spec(spec)
 
-            # Release parent's SQLAlchemy connections before forking --
-            # pooled connections must NOT be shared across fork() boundaries.
+            # Release the parent's SQLAlchemy connections before workers start
             del study
             gc.collect()
 
@@ -255,7 +256,7 @@ async def _run() -> None:
             failed = [i for i, p in enumerate(procs) if p.exitcode != 0]
             if failed:
                 log.error("worker(s) %s failed", failed)
-                sys.exit(1)
+                return 1
 
             from dojiwick.application.use_cases.optimization.runner import build_storage
 
@@ -307,30 +308,27 @@ async def _run() -> None:
                 perturb_exits=perturb_exit_geometry,
             )
             gate_result = await evaluator.evaluate(result.best_params, workers=workers)
-            from dojiwick.interfaces.cli._shared import print_gate_result, print_wf_windows
+            from dojiwick.interfaces.cli._shared import print_gate_block
 
-            print(f"\n{'=' * 50}")
-            print("RESEARCH GATE")
-            print(f"{'=' * 50}")
-            print_gate_result(gate_result)
-            print(f"{'=' * 50}")
-            print_wf_windows(gate_result.wf_windows)
+            return print_gate_block(gate_result)
+
+        return 0
 
     finally:
         await cleanup()
 
 
-def main() -> None:
+def main() -> int:
     from dojiwick.interfaces.cli._shared import setup_env
 
     setup_env()
     # Suppress noisy per-bar backtest logs during optimization
     logging.getLogger("dojiwick.application.use_cases.run_backtest").setLevel(logging.WARNING)
     try:
-        asyncio.run(_run())
+        return asyncio.run(_run())
     except KeyboardInterrupt:
-        sys.exit(130)
+        return 130
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

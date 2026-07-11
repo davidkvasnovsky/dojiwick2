@@ -189,6 +189,7 @@ history_alignment = "rolling_joined"
 
 # PostgreSQL connection
 [database]
+# DOJIWICK_DB_URL env var overrides dsn (same source Atlas migrations use)
 dsn = "postgresql://dojiwick:dojiwick@postgres:5432/dojiwick"
 app_name = "dojiwick"
 connect_timeout_sec = 5.0

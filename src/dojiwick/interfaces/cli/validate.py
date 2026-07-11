@@ -123,11 +123,11 @@ async def _run_cross_validate(
 
 async def _run_full_gate(
     args: argparse.Namespace,
-) -> None:
+) -> int:
     """Run full research gate: CV + PBO + walk-forward + all 9 criteria."""
     from dojiwick.application.use_cases.validation.gate_evaluator import DefaultGateEvaluator
     from dojiwick.config.targets import resolve_target_ids
-    from dojiwick.interfaces.cli._shared import load_settings_and_series, print_gate_result, print_wf_windows
+    from dojiwick.interfaces.cli._shared import load_settings_and_series, print_gate_block
 
     settings, series, cleanup = await load_settings_and_series(args)
     try:
@@ -147,39 +147,37 @@ async def _run_full_gate(
         )
 
         log.info("running full research gate evaluation")
+        # No apply_tuned and an empty param set: the evaluator gates the
+        # loaded config exactly as promoted, with no re-tuning applied.
         gate = await evaluator.evaluate(best_params={})
 
-        verdict = "PASS" if gate.passed else "FAIL"
-        print(f"\n{'=' * 60}")
-        print(f"RESEARCH GATE: {verdict}")
-        print(f"{'=' * 60}")
-        print_gate_result(gate)
-        print_wf_windows(gate.wf_windows)
+        return print_gate_block(gate)
     finally:
         await cleanup()
 
 
-async def _run() -> None:
+async def _run() -> int:
     args = _parse_args()
     mode = args.mode
 
     if mode == "walk-forward":
         await _run_walk_forward(args)
-    elif mode == "cross-validate":
+        return 0
+    if mode == "cross-validate":
         await _run_cross_validate(args)
-    else:
-        await _run_full_gate(args)
+        return 0
+    return await _run_full_gate(args)
 
 
-def main() -> None:
+def main() -> int:
     from dojiwick.interfaces.cli._shared import setup_env
 
     setup_env()
     try:
-        asyncio.run(_run())
+        return asyncio.run(_run())
     except KeyboardInterrupt:
-        sys.exit(130)
+        return 130
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

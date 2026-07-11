@@ -28,7 +28,7 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-async def _run() -> None:
+async def _run() -> int:
     args = _parse_args()
 
     from dojiwick.config.param_tuning import apply_params
@@ -66,28 +66,23 @@ async def _run() -> None:
         log.info("running research gate evaluation")
         result = await evaluator.evaluate(params)
 
-        from dojiwick.interfaces.cli._shared import print_gate_result, print_wf_windows
+        from dojiwick.interfaces.cli._shared import print_gate_block
 
-        print(f"\n{'=' * 50}")
-        print("RESEARCH GATE RESULTS")
-        print(f"{'=' * 50}")
-        print_gate_result(result)
-        print(f"{'=' * 50}")
-        print_wf_windows(result.wf_windows)
+        return print_gate_block(result)
 
     finally:
         await cleanup()
 
 
-def main() -> None:
+def main() -> int:
     from dojiwick.interfaces.cli._shared import setup_env
 
     setup_env()
     try:
-        asyncio.run(_run())
+        return asyncio.run(_run())
     except KeyboardInterrupt:
-        sys.exit(130)
+        return 130
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

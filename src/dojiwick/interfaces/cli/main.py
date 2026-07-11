@@ -40,6 +40,8 @@ def main() -> None:
     # Rewrite sys.argv so each module's argparse sees the right prog name.
     sys.argv = [f"dojiwick {command}", *rest]
 
+    # Every subcommand returns its exit code: 0 success, 1 error,
+    # 2 research-gate rejection, 130 SIGINT.
     if command == "run":
         from dojiwick.interfaces.cli.runner import main as run_main
 
@@ -48,27 +50,26 @@ def main() -> None:
     if command == "backtest":
         from dojiwick.interfaces.cli.backtest import main as backtest_main
 
-        backtest_main()
+        raise SystemExit(backtest_main())
 
-    elif command == "optimize":
+    if command == "optimize":
         from dojiwick.interfaces.cli.optimize import main as optimize_main
 
-        optimize_main()
+        raise SystemExit(optimize_main())
 
-    elif command == "gate":
+    if command == "gate":
         from dojiwick.interfaces.cli.gate import main as gate_main
 
-        gate_main()
+        raise SystemExit(gate_main())
 
-    elif command == "validate":
+    if command == "validate":
         from dojiwick.interfaces.cli.validate import main as validate_main
 
-        validate_main()
+        raise SystemExit(validate_main())
 
-    elif command == "explain":
-        from dojiwick.interfaces.cli.config_explain import main as explain_main
+    from dojiwick.interfaces.cli.config_explain import main as explain_main
 
-        raise SystemExit(explain_main(rest))
+    raise SystemExit(explain_main(rest))
 
 
 if __name__ == "__main__":
