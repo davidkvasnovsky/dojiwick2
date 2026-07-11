@@ -40,7 +40,7 @@ class BinanceOrderEventStream:
     clock: ClockPort
 
     _ws: aiohttp.ClientWebSocketResponse | None = field(default=None, init=False, repr=False)
-    _listen_key: str = field(default="", init=False)
+    _listen_key: str = field(default="", init=False, repr=False)
     _keepalive_task: asyncio.Task[None] | None = field(default=None, init=False, repr=False)
     _sequence: int = field(default=0, init=False)
     _connected: bool = field(default=False, init=False)

@@ -1,5 +1,7 @@
 """Model cost repository protocol."""
 
+from datetime import datetime
+from decimal import Decimal
 from typing import Protocol
 
 from dojiwick.domain.models.value_objects.model_cost import ModelCostRecord
@@ -14,4 +16,8 @@ class ModelCostRepositoryPort(Protocol):
 
     async def batch_record_costs(self, records: tuple[ModelCostRecord, ...]) -> None:
         """Persist multiple model cost entries in a single batch."""
+        ...
+
+    async def sum_costs_since(self, start: datetime) -> Decimal:
+        """Return total recorded cost since *start* (inclusive)."""
         ...

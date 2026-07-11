@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from dojiwick.domain.contracts.gateways.clock import ClockPort
+from dojiwick.domain.errors import AIServiceError
 from dojiwick.domain.contracts.gateways.llm_client import LLMRequest, LLMResponse
 
 if TYPE_CHECKING:
@@ -23,7 +24,7 @@ class AnthropicLLMClient:
     """LLMClientPort backed by the Anthropic SDK (lazy-imported)."""
 
     clock: ClockPort
-    api_key: str
+    api_key: str = field(repr=False)
     max_retries: int = 3
     timeout_sec: float = 10.0
     _client: anthropic.AsyncAnthropic | None = None
@@ -51,19 +52,22 @@ class AnthropicLLMClient:
                 )
             except TimeoutError:
                 last_exc = TimeoutError(f"LLM call timed out after {self.timeout_sec}s")
-                log.warning("LLM timeout attempt=%d/%d", attempt + 1, self.max_retries + 1)
+                delay = min(2**attempt, 30)
+                log.warning("LLM timeout attempt=%d/%d delay=%ds", attempt + 1, self.max_retries + 1, delay)
+                await asyncio.sleep(delay)
             except Exception as exc:
-                if _is_retryable(exc):
-                    last_exc = exc
-                    delay = min(2**attempt, 30)
-                    log.warning(
-                        "LLM retryable error attempt=%d/%d delay=%ds: %s", attempt + 1, self.max_retries + 1, delay, exc
-                    )
-                    await asyncio.sleep(delay)
-                else:
+                if not _is_retryable(exc):
+                    if _is_api_error(exc):
+                        raise AIServiceError(f"LLM call failed: {exc}") from exc
                     raise
+                last_exc = exc
+                delay = min(2**attempt, 30)
+                log.warning(
+                    "LLM retryable error attempt=%d/%d delay=%ds: %s", attempt + 1, self.max_retries + 1, delay, exc
+                )
+                await asyncio.sleep(delay)
 
-        raise last_exc if last_exc is not None else OSError("LLM call failed")
+        raise AIServiceError(f"LLM call failed after {self.max_retries + 1} attempts: {last_exc}") from last_exc
 
     @staticmethod
     def _extract_text(response: anthropic.types.Message) -> str:
@@ -79,7 +83,9 @@ class AnthropicLLMClient:
         if self._client is None:
             import anthropic as _anthropic
 
-            self._client = _anthropic.AsyncAnthropic(api_key=self.api_key)
+            # This wrapper owns retries — the SDK's internal layer would
+            # multiply attempts and stretch a single tick's veto latency
+            self._client = _anthropic.AsyncAnthropic(api_key=self.api_key, max_retries=0)
         return self._client
 
     async def _call_api(self, client: anthropic.AsyncAnthropic, request: LLMRequest) -> anthropic.types.Message:
@@ -99,4 +105,13 @@ def _is_retryable(exc: Exception) -> bool:
         return True
     if isinstance(exc, OSError | ConnectionError):
         return True
-    return False
+    import anthropic as _anthropic
+
+    # APIConnectionError wraps httpx transport errors — not an OSError subclass
+    return isinstance(exc, _anthropic.APIConnectionError)
+
+
+def _is_api_error(exc: Exception) -> bool:
+    import anthropic as _anthropic
+
+    return isinstance(exc, _anthropic.APIError)

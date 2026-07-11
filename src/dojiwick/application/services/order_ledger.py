@@ -11,6 +11,7 @@ from dojiwick.domain.contracts.repositories.order_event import OrderEventReposit
 from dojiwick.domain.contracts.repositories.order_report import OrderReportRepositoryPort
 from dojiwick.domain.contracts.repositories.order_request import OrderRequestRepositoryPort
 from dojiwick.domain.enums import ExecutionStatus, OrderEventType, OrderStatus
+from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.hashing import compute_client_order_id
 from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan
 from dojiwick.domain.models.value_objects.order_event import OrderEvent
@@ -70,8 +71,7 @@ class OrderLedgerService:
                 resolved_ids[cache_key] = await self.instrument_repo.resolve_id(iid.venue, iid.product, iid.symbol)
             instrument_id_int = resolved_ids[cache_key]
             if instrument_id_int is None:
-                log.warning("unknown instrument %s/%s/%s — skipping ledger entry", iid.venue, iid.product, iid.symbol)
-                continue
+                raise AdapterError(f"unknown instrument {iid.venue}/{iid.product}/{iid.symbol} for executed order")
 
             client_order_id = compute_client_order_id(
                 tick_id, iid.symbol, delta.side, delta.position_side, leg_seq, delta.order_type

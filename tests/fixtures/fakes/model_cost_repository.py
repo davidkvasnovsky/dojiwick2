@@ -1,5 +1,7 @@
 """Fake model cost repository for tests."""
 
+from datetime import datetime
+from decimal import Decimal
 from dataclasses import dataclass, field
 
 from dojiwick.domain.models.value_objects.model_cost import ModelCostRecord
@@ -16,3 +18,6 @@ class FakeModelCostRepository:
 
     async def batch_record_costs(self, records: tuple[ModelCostRecord, ...]) -> None:
         self.costs.extend(records)
+
+    async def sum_costs_since(self, start: datetime) -> Decimal:
+        return sum((c.cost_usd for c in self.costs if c.created_at >= start), Decimal(0))

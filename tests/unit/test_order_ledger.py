@@ -5,6 +5,8 @@ from decimal import Decimal
 
 import pytest
 
+from dojiwick.domain.errors import AdapterError
+
 from dojiwick.application.services.order_ledger import OrderLedgerService
 from dojiwick.domain.enums import (
     ExecutionStatus,
@@ -183,7 +185,7 @@ async def test_multiple_deltas_mixed_statuses() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unknown_instrument_skipped_no_crash() -> None:
+async def test_unknown_instrument_raises() -> None:
     svc, _, req_repo, _, _, _ = _make_service()
     unknown_iid = InstrumentId(
         venue=BINANCE_VENUE,
@@ -204,7 +206,8 @@ async def test_unknown_instrument_skipped_no_crash() -> None:
     plan = _plan(delta)
     receipts = (_filled_receipt(),)
 
-    await svc.record_execution(plan, receipts, tick_id="tick_005")
+    with pytest.raises(AdapterError, match="unknown instrument"):
+        await svc.record_execution(plan, receipts, tick_id="tick_005")
 
     assert len(req_repo.requests) == 0
 

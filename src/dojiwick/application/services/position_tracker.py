@@ -9,6 +9,7 @@ from dojiwick.domain.contracts.repositories.instrument import InstrumentReposito
 from dojiwick.domain.contracts.repositories.position_event import PositionEventRepositoryPort
 from dojiwick.domain.contracts.repositories.position_leg import PositionLegRepositoryPort
 from dojiwick.domain.enums import ExecutionStatus, PositionEventType, PositionSide
+from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.numerics import Price, Quantity
 from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan
 from dojiwick.domain.models.value_objects.outcome_models import ExecutionReceipt
@@ -46,10 +47,9 @@ class PositionTracker:
                 resolved_ids[cache_key] = await self.instrument_repo.resolve_id(iid.venue, iid.product, iid.symbol)
             instrument_id_int = resolved_ids[cache_key]
             if instrument_id_int is None:
-                log.warning(
-                    "unknown instrument %s/%s/%s — skipping position update", iid.venue, iid.product, iid.symbol
-                )
-                continue
+                # This is OUR order on an instrument the DB doesn't know —
+                # skipping would silently drop a real fill from position state
+                raise AdapterError(f"unknown instrument {iid.venue}/{iid.product}/{iid.symbol} for filled order")
 
             is_decreasing = delta.reduce_only or delta.close_position
             await self._apply_single_fill(
@@ -108,6 +108,13 @@ class PositionTracker:
         elif is_decreasing:
             assert active_leg.id is not None
             remaining = active_leg.quantity - fill_qty
+            if remaining < 0:
+                log.error(
+                    "overfill on leg %s: fill %s exceeds quantity %s — closing leg, excess unaccounted",
+                    active_leg.id,
+                    fill_qty,
+                    active_leg.quantity,
+                )
             pnl = _compute_pnl(active_leg.position_side, active_leg.entry_price, fill_price, fill_qty)
             if remaining <= 0:
                 await self.position_leg_repo.close_leg(active_leg.id, now)
@@ -150,7 +157,11 @@ class PositionTracker:
 
 
 def _compute_pnl(position_side: PositionSide, entry_price: Decimal, fill_price: Decimal, qty: Decimal) -> Decimal:
-    """Compute realized PnL for a fill against an entry price."""
-    if position_side is PositionSide.LONG or position_side is PositionSide.NET:
-        return (fill_price - entry_price) * qty
-    return (entry_price - fill_price) * qty
+    """Compute realized PnL for a fill against an entry price.
+
+    NET legs carry signed quantity (negative = short), so the long formula
+    with the signed qty yields the correct sign for both directions.
+    """
+    if position_side is PositionSide.SHORT:
+        return (entry_price - fill_price) * abs(qty)
+    return (fill_price - entry_price) * qty

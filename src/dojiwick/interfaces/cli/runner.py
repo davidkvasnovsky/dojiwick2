@@ -26,7 +26,7 @@ from dojiwick.config.logging import configure_logging
 from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.contracts.gateways.market_data_feed import MarketDataFeedPort
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
-from dojiwick.domain.enums import ReconciliationHealth
+from dojiwick.domain.enums import DecisionStatus, ReconciliationHealth
 from dojiwick.domain.errors import (
     AdapterError,
     AuthenticationError,
@@ -55,6 +55,7 @@ from dojiwick.infrastructure.postgres.connection import (
 from dojiwick.infrastructure.exchange.reconciliation import ExchangeReconciliation
 from dojiwick.infrastructure.postgres.gateways.audit_log import PgAuditLog
 from dojiwick.infrastructure.postgres.repositories.bot_config_snapshot import PgBotConfigSnapshotRepository
+from dojiwick.infrastructure.postgres.repositories.model_cost import PgModelCostRepository
 from dojiwick.infrastructure.postgres.repositories.decision_trace import PgDecisionTraceRepository
 from dojiwick.infrastructure.postgres.repositories.instrument import PgInstrumentRepository
 from dojiwick.infrastructure.postgres.repositories.fill import PgFillRepository
@@ -111,7 +112,7 @@ async def _wire_services(
     notification: LogNotification,
     pair_symbols: tuple[str, ...],
     target_ids: tuple[str, ...],
-    instrument_map: dict[str, InstrumentId] | None = None,  # kept optional for signature compat
+    instrument_map: dict[str, InstrumentId],
 ) -> _WiredServices:
     """Create all repositories, services, and connections."""
     main_raw = cast(DbConnection, await pool.getconn())
@@ -163,7 +164,13 @@ async def _wire_services(
     consumer_cursor_repo = PgStreamCursorRepository(connection=consumer_conn)
     consumer_position_tracker = _build_position_tracker(consumer_conn)
 
-    ai_services = build_ai_services(settings.ai, clock=clock)
+    # Cost persistence: without a repository the daily AI budget resets on
+    # every restart, making the cap circumventable via crash loops
+    model_cost_repo = PgModelCostRepository(connection=main_conn)
+    ai_services = build_ai_services(settings.ai, clock=clock, cost_repository=model_cost_repo)
+    if ai_services.cost_tracker is not None:
+        await ai_services.cost_tracker.restore_day_spend()
+        log.info("AI day spend restored: $%.4f", ai_services.cost_tracker.day_spend_usd)
     bot_state_repository = PgBotStateRepository(connection=main_conn)
     tick_repository = PgTickRepository(connection=main_conn)
 
@@ -317,9 +324,11 @@ async def _run_tick_loop(
                 cost_tracker.current_tick_id = compute_tick_id(
                     fingerprint.sha256, observed_at, settings.trading.active_pairs
                 )
-            await service.run_tick(at=observed_at)
+            outcomes = await service.run_tick(at=observed_at)
             consecutive_errors = 0
             tick_count += 1
+            vetoed = sum(1 for o in outcomes if o.status is DecisionStatus.VETOED)
+            alert_evaluator.evaluate_veto_rate(vetoed, len(outcomes))
             if cost_tracker is not None:
                 await cost_tracker.flush()
                 alert_evaluator.evaluate_budget(

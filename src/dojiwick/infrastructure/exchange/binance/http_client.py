@@ -60,8 +60,8 @@ class _TokenBucket:
 class BinanceHttpClient:
     """Async HTTP client for Binance Futures REST API."""
 
-    api_key: str
-    api_secret: str
+    api_key: str = field(repr=False)
+    api_secret: str = field(repr=False)
     clock: ClockPort
     testnet: bool = True
     recv_window_ms: int = 5000

@@ -12,7 +12,7 @@ from dojiwick.domain.errors import (
     PostExecutionPersistenceError,
     RateLimitError,
     ReconciliationError,
-    VetoServiceError,
+    AIServiceError,
 )
 
 
@@ -27,7 +27,7 @@ def test_all_exceptions_inherit_from_engine_error() -> None:
         ExchangeError,
         RateLimitError,
         ExchangeTimeoutError,
-        VetoServiceError,
+        AIServiceError,
         PostExecutionPersistenceError,
     ]
     for exc_class in exceptions:
@@ -37,7 +37,7 @@ def test_all_exceptions_inherit_from_engine_error() -> None:
 def test_adapter_subtypes() -> None:
     assert issubclass(NetworkError, AdapterError)
     assert issubclass(ExchangeError, AdapterError)
-    assert issubclass(VetoServiceError, AdapterError)
+    assert issubclass(AIServiceError, AdapterError)
 
 
 def test_exchange_subtypes() -> None:

@@ -86,6 +86,19 @@ Ran on Hetzner CCX63 (48 workers, ~1.5 h): **10,000 trials** on 2019-09-08 → 2
 
 Config note: `config.toml` keeps `study_name = "dojiwick_v39"` (matches the completed study in the local store; bump to v40 for the next search).
 
+## v40 study + engine-shift halt (2026-07-11, late session)
+
+**v40 ran and validated the methodology fixes:** 10,000 trials on the train window 2019-09-08 → 2026-04-01 (Apr–Jul reserved as untouched holdout), with the new per-regime PF objective penalty and the volatile entry-throttle search dims. **Best trial #6857 passed the research gate on the first attempt** (CV 6.68, PBO 0.00, WF OOS Sharpe 6.74) — versus v39 where the top two trials failed on ranging PF the objective couldn't see. The optimizer's volatile solution: mild trend-entry throttle (`scope_volatile__trend_breakout_adx_min` 26.7, `trend_pullback_adx_min` 19.3) plus much looser vol_revert triggers (`vol_extreme` 44.5/55.3 vs 33.3/62.7) and tight volatile exits.
+
+**Promotion was halted by an engine change, not by the candidate.** During the session the backtest engine gained liquidation modeling, funding accrual, and gap-through fills. Controlled replay (identical #7109 config, identical 2026-03-09→07-10 window, identical cached candles): old engine daily Sharpe −0.09 / DD 16.3%, new engine **−5.82 / DD 67.8%**. At ~2.9× leverage the new engine liquidates positions the old physics let survive. v40 #6857 fares worse still on the tail under new physics (DD 87%).
+
+Consequences:
+- Every optimization to date (v38/v39/v40) was scored under the old physics. Under the new, more realistic engine none of those parameter sets is deployable at current leverage.
+- `config.toml` stays on v38 #7109 with `study_name = "dojiwick_v40"`; no new promotion.
+- v40 artifacts preserved: `research/params_v40_trial{6857,8488,7782,9478}.json`, `research/config_v40_6857.toml` (fingerprint-verified), gate output in `research/results/v40_hetzner.log`.
+
+**Next step (v41), once the engine changes are finalized and committed:** re-run the same disciplined pipeline — train to T−3 months, per-regime PF penalty, volatile throttle dims — under the new physics. Expect materially lower leverage/risk to win (liquidation is now lethal), and treat all pre-v41 numbers as optimistic-physics history.
+
 ## Follow-ups
 
 1. ~~Fix `CachingCandleFetcher` partial-hit bug~~ **FIXED (2026-07-11):** cache now returns data only when it covers both range boundaries (`_covers_range` + new `interval_to_seconds` in `domain/timebase.py`); partial overlap triggers a full refetch. Regression tests added; verified on the real path (post-fix OOS re-run: 6/6 cache hits, metrics identical). Interior exchange-maintenance gaps are still tolerated by design.

@@ -90,7 +90,7 @@ def _build_order_params(delta: LegDelta, *, tick_id: str, leg_seq: int) -> dict[
         "side": format_order_side(delta.side),
         "type": format_order_type(delta.order_type),
         "positionSide": format_position_side(delta.position_side),
-        "quantity": format_quantity(delta.quantity),
+        "quantity": _positive_quantity(delta),
         "newClientOrderId": compute_client_order_id(
             tick_id, symbol, delta.side, delta.position_side, leg_seq, delta.order_type
         ),
@@ -106,6 +106,16 @@ def _build_order_params(delta: LegDelta, *, tick_id: str, leg_seq: int) -> dict[
         delta.working_type,
     )
     return params
+
+
+def _positive_quantity(delta: LegDelta) -> str:
+    """Format quantity, refusing non-positive values — a sign bug upstream
+    must fail here, not on the exchange."""
+    if delta.quantity <= 0:
+        raise AdapterError(f"non-positive order quantity {delta.quantity} for {delta.instrument_id.symbol}")
+    if delta.price is not None and delta.price <= 0:
+        raise AdapterError(f"non-positive order price {delta.price} for {delta.instrument_id.symbol}")
+    return format_quantity(delta.quantity)
 
 
 def _parse_order_response(raw: dict[str, object]) -> ExecutionReceipt:

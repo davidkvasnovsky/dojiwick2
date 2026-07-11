@@ -287,8 +287,10 @@ def test_parse_regime_supports_sql_literals() -> None:
 
 
 def test_exchange_settings_validates_recv_window() -> None:
-    with pytest.raises(ValueError, match="exchange.recv_window_ms must be >= 1000"):
+    with pytest.raises(ValueError, match="exchange.recv_window_ms must be in"):
         default_exchange_settings(recv_window_ms=500)
+    with pytest.raises(ValueError, match="exchange.recv_window_ms must be in"):
+        default_exchange_settings(recv_window_ms=120_000)
 
 
 def test_exchange_settings_validates_rate_limit() -> None:

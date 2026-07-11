@@ -49,6 +49,16 @@ class CostTracker:
                 )
             )
 
+    async def restore_day_spend(self) -> None:
+        """Seed today's accumulator from persisted costs — the daily budget
+        must survive restarts, or a crash loop could spend it repeatedly."""
+        if self.cost_repository is None:
+            return
+        self._maybe_reset()
+        day_start = self.clock.now_utc().replace(hour=0, minute=0, second=0, microsecond=0)
+        persisted = await self.cost_repository.sum_costs_since(day_start)
+        self._day_spend_usd = float(persisted)
+
     async def flush(self) -> None:
         """Flush pending cost records to the repository in a single batch."""
         if not self._pending or self.cost_repository is None:

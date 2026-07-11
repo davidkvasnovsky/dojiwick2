@@ -1,10 +1,12 @@
 """PostgreSQL model cost repository."""
 
 from dataclasses import dataclass
+from datetime import datetime
+from decimal import Decimal
 
 from dojiwick.domain.models.value_objects.model_cost import ModelCostRecord
 from dojiwick.infrastructure.postgres.connection import DbConnection
-from dojiwick.infrastructure.postgres.helpers import pg_execute, pg_execute_many
+from dojiwick.infrastructure.postgres.helpers import pg_execute, pg_execute_many, pg_fetch_one
 
 _INSERT_SQL = """
 INSERT INTO model_costs (tick_id, model, input_tokens, output_tokens, cost_usd, purpose, created_at)
@@ -40,3 +42,13 @@ class PgModelCostRepository:
             return
         rows = [_to_row(r) for r in records]
         await pg_execute_many(self.connection, _INSERT_SQL, rows, error_msg="failed to batch record model costs")
+
+    async def sum_costs_since(self, start: datetime) -> Decimal:
+        """Return total recorded cost since *start* (inclusive)."""
+        row = await pg_fetch_one(
+            self.connection,
+            "SELECT COALESCE(SUM(cost_usd), 0) FROM model_costs WHERE created_at >= %s",
+            (start,),
+            error_msg="failed to sum model costs",
+        )
+        return Decimal(str(row[0])) if row is not None else Decimal(0)

@@ -41,7 +41,7 @@ class ExchangeTimeoutError(ExchangeError):
     """Raised when an exchange API call times out (transient)."""
 
 
-class VetoServiceError(AdapterError):
+class AIServiceError(AdapterError):
     """Raised when the AI veto service fails."""
 
 

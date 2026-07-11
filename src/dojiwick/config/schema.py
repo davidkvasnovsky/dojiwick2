@@ -586,8 +586,8 @@ class ExchangeSettings(BaseModel):
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
-        if self.recv_window_ms < 1000:
-            raise ValueError("exchange.recv_window_ms must be >= 1000")
+        if not (1000 <= self.recv_window_ms <= 60000):
+            raise ValueError("exchange.recv_window_ms must be in [1000, 60000] (Binance max)")
         if self.connect_timeout_sec <= 0:
             raise ValueError("exchange.connect_timeout_sec must be > 0")
         if self.read_timeout_sec <= 0:

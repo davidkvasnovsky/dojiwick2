@@ -22,6 +22,7 @@ from dojiwick.compute.kernels.sizing.fixed_fraction import size_intents
 from dojiwick.domain.contracts.policies.regime_classifier import AIRegimeClassifierPort
 from dojiwick.domain.contracts.policies.veto import VetoServicePort
 from dojiwick.domain.enums import DecisionAuthority, MarketState, TradeAction, safe_market_state
+from dojiwick.domain.errors import AIServiceError
 from dojiwick.domain.indicator_schema import INDICATOR_INDEX
 from dojiwick.domain.models.value_objects.params import RiskParams, StrategyParams
 from dojiwick.domain.models.value_objects.batch_models import (
@@ -238,6 +239,18 @@ def _apply_veto(candidates: BatchTradeCandidate, veto: BatchVetoDecision) -> Bat
     )
 
 
+def _veto_error_decision(size: int, settings: PipelineSettings) -> BatchVetoDecision:
+    if settings.ai.fail_open_on_error:
+        return BatchVetoDecision(
+            approved_mask=np.ones(size, dtype=np.bool_),
+            reason_codes=(AI_VETO_ERROR,) * size,
+        )
+    return BatchVetoDecision(
+        approved_mask=np.zeros(size, dtype=np.bool_),
+        reason_codes=(AI_VETO_ERROR,) * size,
+    )
+
+
 async def _evaluate_veto(
     context: BatchDecisionContext,
     candidates: BatchTradeCandidate,
@@ -261,23 +274,15 @@ async def _evaluate_veto(
                 reason_codes=result.reason_codes,
             )
         return result
-    except (OSError, TimeoutError, ConnectionError):  # fmt: skip
+    except (OSError, TimeoutError, ConnectionError, AIServiceError):  # fmt: skip
         log.exception("veto evaluation failed (transient)")
-        if settings.ai.fail_open_on_error:
-            return BatchVetoDecision(
-                approved_mask=np.ones(size, dtype=np.bool_),
-                reason_codes=(AI_VETO_ERROR,) * size,
-            )
-        return BatchVetoDecision(
-            approved_mask=np.zeros(size, dtype=np.bool_),
-            reason_codes=(AI_VETO_ERROR,) * size,
-        )
+        return _veto_error_decision(size, settings)
     except Exception:
-        log.exception("veto evaluation failed (unexpected)")
-        return BatchVetoDecision(
-            approved_mask=np.zeros(size, dtype=np.bool_),
-            reason_codes=(AI_VETO_ERROR,) * size,
-        )
+        # Even a bug in the AI layer must respect the operator's explicit
+        # fail-open/fail-closed choice — an outage variant we misclassified
+        # must not silently halt all trading
+        log.critical("veto evaluation failed (unexpected)", exc_info=True)
+        return _veto_error_decision(size, settings)
 
 
 async def _evaluate_ai_regime(
@@ -295,13 +300,13 @@ async def _evaluate_ai_regime(
 
     try:
         ai_regimes = await regime_classifier.classify_batch(context, regimes)
-    except (OSError, TimeoutError, ConnectionError):  # fmt: skip
+    except (OSError, TimeoutError, ConnectionError, AIServiceError):  # fmt: skip
         log.exception("ai regime classification failed (transient)")
         if settings.ai.regime_fail_open_on_error:
             return regimes, False
         raise
     except Exception:
-        log.exception("ai regime classification failed (unexpected)")
+        log.critical("ai regime classification failed (unexpected)", exc_info=True)
         if settings.ai.regime_fail_open_on_error:
             return regimes, False
         raise

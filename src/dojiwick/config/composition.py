@@ -91,6 +91,7 @@ def _build_binance_adapters(settings: Settings, clock: ClockPort) -> ComposedAda
     api_key, api_secret = assert_binance_ready(
         api_key_env=settings.exchange.api_key_env,
         api_secret_env=settings.exchange.api_secret_env,
+        require_live_ack=not settings.exchange.testnet,
     )
 
     from dojiwick.infrastructure.exchange.binance.account_state import BinanceAccountStateProvider

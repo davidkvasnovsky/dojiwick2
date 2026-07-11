@@ -5,6 +5,8 @@ from decimal import Decimal
 
 import pytest
 
+from dojiwick.domain.errors import AdapterError
+
 from dojiwick.application.services.position_tracker import PositionTracker
 from dojiwick.domain.enums import (
     ExecutionStatus,
@@ -261,7 +263,7 @@ async def test_skipped_and_error_receipts_ignored() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unknown_instrument_skipped() -> None:
+async def test_unknown_instrument_raises() -> None:
     tracker, _, leg_repo, event_repo = _make_tracker()
     unknown_iid = InstrumentId(
         venue=BINANCE_VENUE,
@@ -282,7 +284,10 @@ async def test_unknown_instrument_skipped() -> None:
     plan = _plan(delta)
     receipts = (_filled(),)
 
-    await tracker.apply_fills(plan, receipts)
+    # Our own filled order on an unknown instrument is a broken invariant —
+    # silently skipping would drop a real fill from position state
+    with pytest.raises(AdapterError, match="unknown instrument"):
+        await tracker.apply_fills(plan, receipts)
 
     assert len(leg_repo.legs) == 0
     assert len(event_repo.events) == 0

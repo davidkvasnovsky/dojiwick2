@@ -100,9 +100,21 @@ async def test_veto_timeout_fail_closed() -> None:
     assert not any(o.status == DecisionStatus.EXECUTED for o in outcomes)
 
 
-async def test_veto_unexpected_error_always_blocks() -> None:
-    """FailVeto(RuntimeError) → all candidates vetoed regardless of fail_open."""
+async def test_veto_unexpected_error_honors_fail_open() -> None:
+    """FailVeto(RuntimeError) with fail_open=True → trading continues (operator intent wins)."""
     settings = SettingsBuilder().with_ai_veto(enabled=True, veto_enabled=True, fail_open_on_error=True).build()
+    service, _repo = _make_service(settings=settings, veto_service=FailVeto(RuntimeError))
+    fixed_time = datetime(2024, 6, 15, 12, 0, 0, tzinfo=UTC)
+
+    outcomes = await service.run_tick(pairs=settings.trading.active_pairs, at=fixed_time)
+
+    assert len(outcomes) > 0
+    assert any(o.status == DecisionStatus.EXECUTED for o in outcomes)
+
+
+async def test_veto_unexpected_error_fail_closed_blocks() -> None:
+    """FailVeto(RuntimeError) with fail_open=False → all candidates vetoed."""
+    settings = SettingsBuilder().with_ai_veto(enabled=True, veto_enabled=True, fail_open_on_error=False).build()
     service, _repo = _make_service(settings=settings, veto_service=FailVeto(RuntimeError))
     fixed_time = datetime(2024, 6, 15, 12, 0, 0, tzinfo=UTC)
 
