@@ -1,0 +1,276 @@
+======================================================================
+  DOJIWICK POST-OPTIMIZATION ANALYSIS: dojiwick_v40
+======================================================================
+
+======================================================================
+  1. OPTUNA STUDY OVERVIEW
+======================================================================
+Total: 10000 | Completed: 3092 | Pruned: 6908
+Prune rate: 69%
+Top 10: [59.3, 58.9, 58.8, 58.5, 58.4, 58.3, 58.3, 58.1, 58.1, 58.0]
+Scores > 0: 3084 | = -20: 6
+Pruned with intermediate values: 6908/6908 (OK)
+
+======================================================================
+  2. TOP 20 PARAM CONVERGENCE
+======================================================================
+  adaptive_ranging_max_bars                avg=   21.3500 [18.000 - 23.000]
+  adaptive_trending_trail_scale            avg=    0.9992 [0.865 - 1.124]
+  adaptive_volatile_max_bars               avg=   28.0000 [28.000 - 28.000]
+  adaptive_volatile_rr_mult                avg=    1.3290 [1.118 - 2.509]
+  adaptive_volatile_stop_scale             avg=    1.0461 [1.000 - 1.085]
+  adx_trend_min                            avg=   14.9176 [14.005 - 16.207]
+  atr_high_pct                             avg=    0.9376 [0.900 - 1.019]
+  atr_low_pct                              avg=    0.3833 [0.344 - 0.404]
+  breakeven_after_rr                       avg=    1.3880 [1.318 - 1.444]
+  ema_spread_weak_bps                      avg=    4.7096 [4.002 - 5.417]
+  leverage                                 avg=    2.8750 [2.701 - 2.939]
+  max_hold_bars                            avg=   64.7000 [14.000 - 108.000]
+  max_loss_per_trade_pct                   avg=    7.2579 [7.007 - 7.983]
+  max_portfolio_risk_pct                   avg=   14.0492 [9.940 - 18.739]
+  mean_revert_max_bb_width                 avg=    0.0509 [0.047 - 0.055]
+  mean_rsi_overbought                      avg=   59.5843 [55.680 - 61.430]
+  mean_rsi_oversold                        avg=   33.3641 [30.906 - 34.888]
+  min_confidence                           avg=    0.3589 [0.191 - 0.476]
+  min_confluence_score                     avg=   41.5220 [39.514 - 44.608]
+  min_stop_distance_pct                    avg=    0.3024 [0.238 - 0.354]
+  min_volume_ratio                         avg=    0.1866 [0.100 - 0.524]
+  partial_tp1_fraction                     avg=    0.3063 [0.300 - 0.325]
+  partial_tp1_rr                           avg=    0.6080 [0.524 - 0.727]
+  risk_per_trade_pct                       avg=    3.2938 [2.890 - 3.571]
+  rr_ratio                                 avg=    2.5731 [2.056 - 3.235]
+  scope_ranging__breakeven_after_rr        avg=    0.8527 [0.359 - 1.178]
+  scope_ranging__max_hold_bars             avg=   48.3500 [32.000 - 57.000]
+  scope_ranging__rr_ratio                  avg=    2.2014 [1.426 - 2.479]
+  scope_ranging__stop_atr_mult             avg=    1.0439 [1.000 - 1.093]
+  scope_ranging__trailing_stop_atr_mult    avg=    0.3826 [0.349 - 0.407]
+  scope_trending__breakeven_after_rr       avg=    1.9629 [1.427 - 2.487]
+  scope_trending__max_hold_bars            avg=   81.0500 [72.000 - 103.000]
+  scope_trending__rr_ratio                 avg=    2.9170 [2.795 - 3.425]
+  scope_trending__stop_atr_mult            avg=    2.4200 [2.259 - 2.563]
+  scope_trending__trailing_stop_atr_mult   avg=    0.5975 [0.500 - 0.704]
+  scope_volatile__breakeven_after_rr       avg=    1.3904 [1.316 - 1.456]
+  scope_volatile__max_hold_bars            avg=   49.2500 [47.000 - 52.000]
+  scope_volatile__rr_ratio                 avg=    1.9617 [1.747 - 2.840]
+  scope_volatile__stop_atr_mult            avg=    1.5317 [1.500 - 1.591]
+  scope_volatile__trailing_stop_atr_mult   avg=    0.3106 [0.300 - 0.345]
+  scope_volatile__trend_breakout_adx_min   avg=   26.2314 [25.013 - 27.472]
+  scope_volatile__trend_pullback_adx_min   avg=   19.6159 [16.899 - 23.476]
+  stop_atr_mult                            avg=    3.4059 [2.623 - 3.751]
+  trailing_stop_activation_rr              avg=    0.5519 [0.517 - 0.608]
+  trailing_stop_atr_mult                   avg=    0.7922 [0.766 - 0.832]
+  trend_breakout_adx_min                   avg=   25.8562 [25.003 - 28.547]
+  trend_max_regime_confidence              avg=    0.9639 [0.937 - 0.975]
+  trend_overbought_rsi_min                 avg=   49.4043 [47.381 - 51.968]
+  trend_pullback_rsi_max                   avg=   64.2535 [62.563 - 64.997]
+  vol_extreme_overbought                   avg=   55.2542 [54.013 - 58.353]
+  vol_extreme_oversold                     avg=   43.7730 [42.275 - 44.852]
+  risk x leverage                          avg=      9.47% [8.4% - 10.5%]
+
+Best trial #6857 fold scores:
+  Fold 0: 83.58
+  Fold 1: 63.06
+  Fold 2: 49.99
+  Fold 3: 52.18
+  Fold 4: 50.93
+
+======================================================================
+  3. PnL VALIDATION
+======================================================================
+Trades: 8369 | PnL: $-8,598.70 | WR: 75.7%
+Per-trade return: mean=1.228% median=2.440% std=4.828%
+  Min: -43.803% | Max: 42.593%
+
+Position sizes:
+  P25: $      236.43
+  P50: $      446.98
+  P75: $      985.43
+  P90: $    2,157.53
+  P95: $    3,445.40
+  P99: $    6,772.75
+  Max:  $   14,062.89
+  > $0M: 0 trades, PnL=$0.00
+  > $1M: 0 trades, PnL=$0.00
+  > $2M: 0 trades, PnL=$0.00
+
+Compounding:
+  After    50 trades: $      8,258.19
+  After   100 trades: $      7,665.69
+  After   200 trades: $      7,042.95
+  After   500 trades: $      7,285.76
+  After  1000 trades: $      8,611.11
+  After  8369 trades: $      1,401.30
+
+======================================================================
+  4. MONTHLY PERFORMANCE
+======================================================================
+Month      Trades            PnL       AvgNot    WR
+2022-01       143 $    -1,438.55 $   2,159.66  76%
+2022-02       170 $    -1,520.50 $   1,209.04  73%
+2022-03       190 $       327.57 $   1,123.58  81% !
+2022-04       193 $     3,186.90 $   2,641.25  83% !
+2022-05       127 $    -2,569.56 $   1,889.24  69%
+2022-06       258 $     2,301.88 $   1,141.64  83% !
+2022-07       261 $     5,387.05 $   3,996.72  81% !
+2022-08       156 $    -1,501.51 $   4,672.42  76%
+2022-09       139 $    -1,931.38 $   1,920.60  72%
+2022-10       193 $       204.17 $   1,748.74  77%
+2022-11       124 $    -1,506.45 $   1,656.95  72%
+2022-12       144 $      -942.62 $   2,016.58  70%
+2023-01       165 $    -1,736.25 $   1,346.78  69%
+2023-02       132 $       670.53 $   1,305.64  77%
+2023-03       184 $    -2,394.03 $   1,144.42  70%
+2023-04       156 $    -1,231.65 $   1,147.87  71%
+2023-05       165 $      -785.33 $   1,020.50  72%
+2023-06       114 $      -404.50 $     673.86  73%
+2023-07       147 $      -759.72 $     659.66  71%
+2023-08       105 $      -516.79 $     672.86  66%
+2023-09       162 $       100.56 $     689.16  77%
+2023-10       186 $       352.84 $     503.63  82% !
+2023-11       197 $      -208.90 $     439.83  74%
+2023-12       162 $      -288.59 $     407.65  77%
+2024-01       171 $       -44.15 $     446.44  75%
+2024-02       238 $       700.12 $     372.62  83% !
+2024-03       224 $      -199.88 $     352.21  76%
+2024-04       162 $      -819.51 $     362.20  68%
+2024-05       117 $      -331.75 $     374.51  74%
+2024-06       167 $       378.50 $     342.25  78%
+2024-07       243 $       640.33 $     322.50  82% !
+2024-08       136 $      -644.86 $     430.85  71%
+2024-09       175 $      -548.32 $     362.09  73%
+2024-10       177 $       299.44 $     337.95  83% !
+2024-11       186 $      -249.43 $     216.01  71%
+2024-12       172 $       210.24 $     254.41  81% !
+2025-01       191 $       129.87 $     269.19  79%
+2025-02       203 $        92.79 $     264.51  76%
+2025-03       162 $       154.96 $     346.40  77%
+2025-04       147 $       116.50 $     402.18  82% !
+2025-05       147 $      -386.18 $     381.68  71%
+2025-06       169 $      -221.55 $     402.59  71%
+2025-07       213 $       243.73 $     303.29  80%
+2025-08       122 $      -466.24 $     375.15  68%
+2025-09       179 $       -20.72 $     324.17  78%
+2025-10       173 $       155.59 $     229.45  77%
+2025-11       111 $      -324.43 $     227.89  67%
+2025-12       125 $      -160.30 $     327.94  71%
+2026-01       218 $        64.11 $     225.49  78%
+2026-02        68 $      -162.73 $     244.07  66%
+
+======================================================================
+  5. EXIT TYPE PERFORMANCE
+======================================================================
+  trailing_stop   n=3440 WR=88% avg=$     28.75 total=$   98,894.74 hold=6bars
+  partial_tp      n=3276 WR=100% avg=$     13.88 total=$   45,455.13 hold=5bars
+  stop_loss       n=1512 WR=0% avg=$    -98.84 total=$ -149,441.64 hold=8bars
+  time_exit       n= 141 WR=18% avg=$    -24.87 total=$   -3,506.93 hold=25bars
+
+======================================================================
+  6. STOP LOSS DEEP DIVE
+======================================================================
+Stops: 1512/8369 = 18%
+Avg loss: $-98.84 | Median: $-45.92
+Risk asymmetry: avg_loss/avg_win = 4.18x
+
+Stop timing (bad entry detection):
+  Within 1 bars: 105 (7%) loss=$  -10,407.67
+  Within 2 bars: 273 (18%) loss=$  -25,656.67
+  Within 3 bars: 437 (29%) loss=$  -43,154.42
+  Within 5 bars: 721 (48%) loss=$  -70,130.63
+  Within 8 bars: 1012 (67%) loss=$  -96,057.99
+
+Stops by strategy:
+  mean_revert           20/115 (17%)
+  trend_follow         1489/8236 (18%)
+  volatility_revert      3/18 (17%)
+
+Stops by regime:
+  ranging               20 loss=$   -1,642.79
+  trending_down        262 loss=$  -30,311.66
+  trending_up          394 loss=$  -38,979.14
+  volatile             836 loss=$  -78,508.06
+
+======================================================================
+  7. STRATEGY BREAKDOWN
+======================================================================
+  mean_revert          n= 115 WR=71% PnL=$     -770.70
+  trend_follow         n=8236 WR=76% PnL=$   -7,301.23
+  volatility_revert    n=  18 WR=78% PnL=$     -526.77
+
+Direction:
+  Short  n=3416 WR=74.6% PnL=$   -6,639.03
+  Long   n=4953 WR=76.4% PnL=$   -1,959.67
+
+======================================================================
+  8. REGIME PERFORMANCE
+======================================================================
+  ranging              n= 115 WR=71% PnL=$     -770.70
+  trending_down        n=1515 WR=76% PnL=$   -4,195.31
+  trending_up          n=2015 WR=77% PnL=$   -6,113.44
+  volatile             n=4724 WR=75% PnL=$    2,480.75
+
+======================================================================
+  9. DRAWDOWN ANALYSIS (from equity CSV — includes unrealized P&L)
+======================================================================
+Max DD: 94.29% (at row 35540)
+  DD 32.4%: rows 77-2543 (2466 bars) 2422 trades WR=77% stops=404
+  DD 15.1%: rows 2630-2786 (156 bars) 156 trades WR=71% stops=33
+  DD 11.5%: rows 2847-2883 (36 bars) 36 trades WR=86% stops=4
+  DD 34.3%: rows 3008-4489 (1481 bars) 1477 trades WR=77% stops=254
+  DD 12.5%: rows 4509-4521 (12 bars) 12 trades WR=67% stops=1
+  DD 15.8%: rows 4545-4568 (23 bars) 23 trades WR=74% stops=5
+  DD 17.9%: rows 4635-4792 (157 bars) 154 trades WR=68% stops=42
+  DD 27.4%: rows 4859-5141 (282 bars) 282 trades WR=78% stops=42
+  DD 16.7%: rows 5216-5330 (114 bars) 114 trades WR=83% stops=12
+  DD 94.3%: rows 5375-36280 3049 trades WR=76% stops=567 [ongoing]
+  Total DD events > 10%: 10
+
+======================================================================
+  10. CONSECUTIVE LOSS STREAKS
+======================================================================
+Max streak: 13 | Avg: 1.8
+  Streaks >= 3: 235 (theoretical P=1.436%)
+  Streaks >= 5: 49 (theoretical P=0.085%)
+  Streaks >= 7: 10 (theoretical P=0.005%)
+  Streaks >= 10: 1 (theoretical P=0.000%)
+
+======================================================================
+  11. PAIR PERFORMANCE
+======================================================================
+  BNB/USDT     n=1192 WR=75% PnL=$   -1,837.07
+  BTC/USDT     n=1179 WR=75% PnL=$   -2,056.47
+  DOGE/USDT    n=1609 WR=77% PnL=$    1,411.30
+  ETH/USDT     n=1316 WR=77% PnL=$    1,235.13
+  SOL/USDT     n=1664 WR=75% PnL=$     -612.81
+  XRP/USDT     n=1409 WR=75% PnL=$   -6,738.78
+
+Simultaneous stops (same bar, 2+ pairs): 166
+
+======================================================================
+  12. POSITION SIZING & COMPOUNDING
+======================================================================
+  2022-H1: 1081 trades, avg_notional=$    1,639.30
+  2022-H2: 1017 trades, avg_notional=$    2,824.35
+  2023-H1:  916 trades, avg_notional=$    1,123.81
+  2023-H2:  959 trades, avg_notional=$      548.10
+  2024-H1: 1079 trades, avg_notional=$      374.02
+  2024-H2: 1089 trades, avg_notional=$      315.96
+  2025-H1: 1019 trades, avg_notional=$      338.07
+  2025-H2:  923 trades, avg_notional=$      297.27
+  2026-H1:  286 trades, avg_notional=$      229.90
+
+======================================================================
+  13. LIVE TRADING FEASIBILITY
+======================================================================
+Max position: $14,062.89
+Avg position: $911.91
+Trades/month: 168.6
+Avg hold: 6.2 bars (0.3 days)
+Est round-trip cost: $7,631.75 (~10bps per trade)
+Gross wins: $149,944.33 | Gross losses: $158,543.04
+Net PnL: $-8,598.70 (costs already deducted by backtest)
+
+======================================================================
+  14. RECOMMENDATIONS
+======================================================================
+  ! DD 94.3% > 20% -> Lower max_loss_per_trade_pct or leverage
+  ! Profit factor 0.95 < 1.5 -> Review stop/TP ratio
