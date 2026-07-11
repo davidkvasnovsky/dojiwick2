@@ -8,9 +8,6 @@ depends on this protocol instead.
 from typing import Protocol
 
 from dojiwick.domain.enums import (
-    AdaptiveMode,
-    BacktestGapPolicy,
-    BenchmarkMode,
     EntryPriceModel,
     FundingMode,
     HistoryAlignment,
@@ -190,10 +187,6 @@ class BacktestSettingsPort(Protocol):
     def funding_mode(self) -> FundingMode: ...
     @property
     def history_alignment(self) -> HistoryAlignment: ...
-    @property
-    def inactive_gap_policy(self) -> BacktestGapPolicy: ...
-    @property
-    def benchmark_mode(self) -> BenchmarkMode: ...
 
 
 class ExchangeSettingsPort(Protocol):
@@ -381,11 +374,6 @@ class ResearchSettingsPort(Protocol):
     def pair_robustness_min_pf_threshold(self) -> float: ...
 
 
-class AdaptiveSettingsPort(Protocol):
-    @property
-    def mode(self) -> AdaptiveMode: ...
-
-
 class DatabaseSettingsPort(Protocol):
     @property
     def dsn(self) -> str: ...
@@ -453,8 +441,6 @@ class PipelineSettings(Protocol):
     def database(self) -> DatabaseSettingsPort: ...
     @property
     def optimization(self) -> OptimizationSettingsPort: ...
-    @property
-    def adaptive(self) -> AdaptiveSettingsPort: ...
     @property
     def research(self) -> ResearchSettingsPort: ...
     @property

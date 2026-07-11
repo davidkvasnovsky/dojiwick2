@@ -1,7 +1,7 @@
 """Architecture acceptance tests verifying core hexagonal guarantees.
 
-Seven tests cover: plugin extensibility, adapter swappability, live/backtest
-parity, adaptive roundtrip, adaptive fallback, and veto fail-open behaviour.
+Tests cover: plugin extensibility, adapter swappability, live/backtest
+parity and veto fail-open behaviour.
 """
 
 from decimal import Decimal
@@ -9,16 +9,14 @@ from decimal import Decimal
 import numpy as np
 
 from dojiwick.application.orchestration.execution_planner import DefaultExecutionPlanner
-from dojiwick.application.policies.adaptive.service import AdaptiveService
 from dojiwick.application.policies.risk.defaults import build_default_risk_engine
 from dojiwick.application.registry.strategy_registry import build_default_strategy_registry
 from dojiwick.application.use_cases.run_backtest import BacktestService, BacktestTimeSeries
 from dojiwick.application.use_cases.run_tick import TickService
 from dojiwick.compute.kernels.regime.classify import classify_regime_batch
 from fixtures.factories.infrastructure import default_instrument_map, default_risk_settings, default_settings
-from dojiwick.domain.enums import AdaptiveMode, DecisionStatus, PositionMode
+from dojiwick.domain.enums import DecisionStatus, PositionMode
 from dojiwick.domain.models.value_objects.account_state import AccountBalance, AccountSnapshot
-from dojiwick.domain.models.value_objects.adaptive import AdaptiveArmKey, AdaptivePosterior
 from dojiwick.domain.models.value_objects.batch_models import BatchSignalFragment
 from dojiwick.domain.models.value_objects.params import StrategyParams
 from dojiwick.domain.type_aliases import FloatMatrix, FloatVector, IntVector
@@ -79,33 +77,6 @@ class _DummyPlugin:
             buy_mask=np.ones(size, dtype=np.bool_),
             short_mask=np.zeros(size, dtype=np.bool_),
         )
-
-
-class _MockSelectionPolicy:
-    """Returns a fixed arm key."""
-
-    def __init__(self, arm: AdaptiveArmKey) -> None:
-        self._arm = arm
-
-    async def select(
-        self,
-        regime_idx: int,
-        posteriors: tuple[AdaptivePosterior, ...],
-    ) -> AdaptiveArmKey:
-        _ = (regime_idx, posteriors)
-        return self._arm
-
-
-class _FailingSelectionPolicy:
-    """Always raises on select."""
-
-    async def select(
-        self,
-        regime_idx: int,
-        posteriors: tuple[AdaptivePosterior, ...],
-    ) -> AdaptiveArmKey:
-        _ = (regime_idx, posteriors)
-        raise RuntimeError("policy failure")
 
 
 # Test 1 — Strategy registry extensibility
@@ -249,43 +220,6 @@ async def test_live_backtest_parity() -> None:
     for outcome in live_outcomes:
         assert outcome.strategy_name != "", "every outcome must have a strategy name"
         assert outcome.reason_code != "", "every outcome must have a reason code"
-
-
-# Test 5 — Adaptive roundtrip
-
-
-async def test_adaptive_roundtrip_disabled() -> None:
-    """AdaptiveService.select_variant() returns 'baseline' when mode is disabled."""
-
-    svc = AdaptiveService(mode=AdaptiveMode.DISABLED)
-    result = await svc.select_variant()
-    assert result == "baseline"
-
-
-async def test_adaptive_roundtrip_enabled() -> None:
-    """When mode is enabled with a mock selection policy, returns the policy's chosen arm key."""
-
-    expected_arm = AdaptiveArmKey(regime_idx=0, config_idx=42)
-    svc = AdaptiveService(
-        mode=AdaptiveMode.CONTINUOUS,
-        selection_policy=_MockSelectionPolicy(expected_arm),
-    )
-    result = await svc.select_variant()
-    assert result == expected_arm
-
-
-# Test 6 — Adaptive fallback
-
-
-async def test_adaptive_fallback_on_error() -> None:
-    """BUCKET_FALLBACK + selection error → falls back to 'baseline'."""
-
-    svc = AdaptiveService(
-        mode=AdaptiveMode.BUCKET_FALLBACK,
-        selection_policy=_FailingSelectionPolicy(),
-    )
-    result = await svc.select_variant()
-    assert result == "baseline"
 
 
 # Test 7 — Veto fail-open

@@ -177,7 +177,6 @@ funding_mode = "historical"
 # Simulation
 warmup_bars = 200
 entry_price_model = "next_open"
-max_volume_pct = 0.1
 # Conservative single rate: Binance tier-1 maintenance margin for major alts
 maintenance_margin_rate = 0.01
 # Partial fills
@@ -185,12 +184,9 @@ partial_fill_enabled = false
 partial_fill_threshold_pct = 0.05
 partial_fill_min_ratio = 0.1
 # Flags
-simulated_execution = false
 use_candle_cache = true
 # Rolling universe
 history_alignment = "rolling_joined"
-inactive_gap_policy = "freeze"
-benchmark_mode = "rolling_joined"
 
 # PostgreSQL connection
 [database]
@@ -260,8 +256,6 @@ venue = "binance"
 product = "usd_c"
 position_mode = "one_way"
 testnet = false
-ws_enabled = true
-rest_fallback_enabled = true
 recv_window_ms = 5000
 connect_timeout_sec = 10.0
 read_timeout_sec = 10.0
@@ -315,11 +309,6 @@ execution_instrument = "BNBUSDT"
 market_data_instrument = "BNBUSDT"
 
 # Thompson-sampling arm selection
-[adaptive]
-mode = "disabled"
-exploration_rate = 0.1
-min_samples = 30
-
 # Anti-overfitting validation (CV, PBO, walk-forward)
 [research]
 enabled = true

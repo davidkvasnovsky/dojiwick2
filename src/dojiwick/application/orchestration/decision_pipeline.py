@@ -91,12 +91,11 @@ def _resolve_variants(
     stable_state: np.ndarray,
     valid_mask: np.ndarray,
     settings: PipelineSettings,
-    adaptive_variant: str | None,
     scope_cache: dict[tuple[str, int | None], StrategyParams] | None = None,
 ) -> tuple[tuple[str, ...], tuple[StrategyParams, ...]]:
     """Resolve per-pair variants and strategy params using scope overrides.
 
-    Priority: adaptive selection > scope override > default.
+    Priority: scope override > default.
     Returns (variants, per_pair_params).
     """
     per_pair_params = _cached_resolve(
@@ -106,7 +105,7 @@ def _resolve_variants(
         lambda pair, regime: settings.strategy_scope.resolve(pair, regime, settings.strategy),
         cache=scope_cache,
     )
-    variants = tuple(adaptive_variant if adaptive_variant is not None else p.default_variant for p in per_pair_params)
+    variants = tuple(p.default_variant for p in per_pair_params)
     return variants, per_pair_params
 
 
@@ -367,7 +366,6 @@ def _run_core_pipeline(
     settings: PipelineSettings,
     strategy_registry: StrategyRegistry,
     hysteresis: RegimeHysteresis | None = None,
-    adaptive_variant: str | None = None,
     strategy_scope_cache: dict[tuple[str, int | None], StrategyParams] | None = None,
     has_strategy_rules: bool | None = None,
     phase2_scope_cache: dict[tuple[str, int | None, str | None], StrategyParams] | None = None,
@@ -417,7 +415,6 @@ def _run_core_pipeline(
         regimes.coarse_state,
         regimes.valid_mask,
         settings,
-        adaptive_variant,
         scope_cache=strategy_scope_cache,
     )
 
@@ -489,7 +486,6 @@ def run_decision_pipeline_sync(
     strategy_registry: StrategyRegistry,
     risk_engine: RiskPolicyEngine,
     hysteresis: RegimeHysteresis | None = None,
-    adaptive_variant: str | None = None,
     strategy_scope_cache: dict[tuple[str, int | None], StrategyParams] | None = None,
     risk_scope_cache: dict[tuple[str, int | None], RiskParams] | None = None,
     has_strategy_rules: bool | None = None,
@@ -508,7 +504,6 @@ def run_decision_pipeline_sync(
         settings=settings,
         strategy_registry=strategy_registry,
         hysteresis=hysteresis,
-        adaptive_variant=adaptive_variant,
         strategy_scope_cache=strategy_scope_cache,
         has_strategy_rules=has_strategy_rules,
         phase2_scope_cache=phase2_scope_cache,
@@ -554,7 +549,6 @@ async def run_decision_pipeline(
     hysteresis: RegimeHysteresis | None = None,
     veto_service: VetoServicePort | None = None,
     regime_classifier: AIRegimeClassifierPort | None = None,
-    adaptive_variant: str | None = None,
     strategy_scope_cache: dict[tuple[str, int | None], StrategyParams] | None = None,
     risk_scope_cache: dict[tuple[str, int | None], RiskParams] | None = None,
     has_strategy_rules: bool | None = None,
@@ -578,15 +572,12 @@ async def run_decision_pipeline(
         Optional AI veto filter (``None`` -> all-approved).
     regime_classifier:
         Optional AI regime classifier (``None`` -> deterministic-only).
-    adaptive_variant:
-        Optional adaptive variant override (``None`` -> scope-only resolution).
     """
     core = _run_core_pipeline(
         context=context,
         settings=settings,
         strategy_registry=strategy_registry,
         hysteresis=hysteresis,
-        adaptive_variant=adaptive_variant,
         strategy_scope_cache=strategy_scope_cache,
         has_strategy_rules=has_strategy_rules,
         phase2_scope_cache=phase2_scope_cache,

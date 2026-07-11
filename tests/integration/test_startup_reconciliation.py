@@ -93,19 +93,6 @@ async def test_startup_gate_persists_result_for_observability() -> None:
     assert ctx["mismatch_count"] == 1
 
 
-# Backward compatibility: run_startup_check delegates to startup gate
-
-
-async def test_run_startup_check_delegates_to_gate() -> None:
-    """run_startup_check is backward-compatible with run_startup_gate."""
-    service = ReconciliationService(
-        reconciliation_port=CleanReconciliation(),
-    )
-
-    result = await service.run_startup_check(("BTCUSDC",))
-    assert result.is_clean
-
-
 # Periodic check also persists results
 
 

@@ -23,8 +23,6 @@ def size_intents(
     assessment: BatchRiskAssessment,
     risk_params: tuple[RiskParams, ...],
     leverage: float = 1.0,
-    volume: np.ndarray | None = None,
-    max_volume_pct: float = 0.1,
 ) -> BatchExecutionIntent:
     """Build execution intents with deterministic fixed-fraction sizing."""
 
@@ -75,10 +73,6 @@ def size_intents(
     max_notional = np.minimum(max_notional_pct_cap, max_notional_usd_arr)
 
     clipped_notional = np.clip(raw_notional, min_notional_arr, max_notional)
-    if volume is not None:
-        max_qty_by_volume = volume * max_volume_pct
-        max_notional_by_volume = max_qty_by_volume * prices
-        clipped_notional = np.minimum(clipped_notional, max_notional_by_volume)
     clipped_notional[~active] = 0.0
     quantity[active] = clipped_notional[active] / prices[active]
     notional[active] = clipped_notional[active]

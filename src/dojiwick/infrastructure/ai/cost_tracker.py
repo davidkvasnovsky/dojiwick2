@@ -7,7 +7,6 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from dojiwick.domain.contracts.gateways.clock import ClockPort
-from dojiwick.domain.contracts.gateways.metrics import MetricsSinkPort
 from dojiwick.domain.models.value_objects.model_cost import ModelCostRecord
 
 if TYPE_CHECKING:
@@ -22,7 +21,6 @@ class CostTracker:
     clock: ClockPort
     input_cost_per_token: float
     output_cost_per_token: float
-    metrics: MetricsSinkPort | None = None
     cost_repository: ModelCostRepositoryPort | None = None
     current_tick_id: str = ""
     _day_start_date: str = field(default="", init=False, repr=False)
@@ -34,8 +32,6 @@ class CostTracker:
         self._maybe_reset()
         cost = (input_tokens * self.input_cost_per_token) + (output_tokens * self.output_cost_per_token)
         self._day_spend_usd += cost
-        if self.metrics is not None:
-            self.metrics.gauge("ai_cost_usd_daily", self._day_spend_usd)
         if self.cost_repository is not None and self.current_tick_id:
             self._pending.append(
                 ModelCostRecord(

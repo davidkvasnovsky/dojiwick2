@@ -5,14 +5,12 @@ from decimal import Decimal
 
 from dojiwick.domain.enums import PositionSide
 from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
-from dojiwick.domain.contracts.gateways.order_event_stream import StreamCursor, StreamGap
 from dojiwick.domain.models.value_objects.account_state import (
     AccountBalance,
     AccountSnapshot,
     ExchangePositionLeg,
 )
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
-from dojiwick.domain.models.value_objects.order_event import OrderEvent
 from dojiwick.infrastructure.exchange.cache import ExchangeCache
 from dojiwick.infrastructure.exchange.cached_context_provider import CachedContextProvider
 from dojiwick.infrastructure.exchange.feed import ExchangeDataFeed, FeedStatus
@@ -236,17 +234,6 @@ async def test_feed_falls_back_to_rest_when_ws_unavailable() -> None:
         def is_connected(self) -> bool:
             return self._connected
 
-        async def detect_gaps(self, since: StreamCursor) -> tuple[StreamGap, ...]:
-            _ = since
-            return ()
-
-        async def recover_gap(self, gap: StreamGap) -> tuple[OrderEvent, ...]:
-            _ = gap
-            return ()
-
-        async def get_cursor(self) -> StreamCursor:
-            return StreamCursor(stream_name="fail", sequence=0, timestamp_ms=0)
-
     cache = ExchangeCache(clock=FixedClock())
     market_data = InMemoryMarketDataProvider()
     account_state = FakeAccountState()
@@ -314,30 +301,3 @@ async def test_feed_stop_disconnects_ws() -> None:
     await feed.stop()
     assert feed.status == FeedStatus.DISCONNECTED
     assert not order_stream.is_connected
-
-
-# Gap detection and recovery
-
-
-async def test_feed_gap_recovery_returns_zero_when_no_gaps() -> None:
-    """check_and_recover_gaps returns 0 when no gaps detected."""
-    cache = ExchangeCache(clock=FixedClock())
-    market_data = _make_market_data({"BTCUSDC": 95_000.0})
-
-    account_state = FakeAccountState()
-    account_state.set_snapshot("default", _sample_snapshot())
-
-    order_stream = InMemoryOrderEventStream()
-
-    feed = ExchangeDataFeed(
-        cache=cache,
-        market_data=market_data,
-        account_state=account_state,
-        order_stream=order_stream,
-        pairs=("BTCUSDC",),
-        account="default",
-    )
-
-    await feed.start()
-    recovered = await feed.check_and_recover_gaps()
-    assert recovered == ()

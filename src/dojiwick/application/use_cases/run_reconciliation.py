@@ -74,10 +74,6 @@ class ReconciliationService:
             )
         return result
 
-    async def run_startup_check(self, pairs: tuple[str, ...]) -> ReconciliationResult:
-        """Run reconciliation at startup and alert on divergences."""
-        return await self.run_startup_gate(pairs)
-
     async def run_periodic_check(self, pairs: tuple[str, ...]) -> ReconciliationResult:
         """Run periodic reconciliation between ticks."""
         result = await self.reconciliation_port.reconcile(pairs)

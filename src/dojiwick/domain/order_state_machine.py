@@ -19,7 +19,6 @@ When an order is CANCELED or EXPIRED from PARTIALLY_FILLED:
 
 from dojiwick.domain.enums import OrderStatus
 from dojiwick.domain.errors import DomainValidationError
-from dojiwick.domain.numerics import Quantity
 
 VALID_TRANSITIONS: dict[OrderStatus, frozenset[OrderStatus]] = {
     OrderStatus.NEW: frozenset(
@@ -67,16 +66,3 @@ def validate_transition(current: OrderStatus, target: OrderStatus) -> None:
 def is_terminal(status: OrderStatus) -> bool:
     """Return True if the status is a terminal (no further transitions)."""
     return status in TERMINAL_STATES
-
-
-def compute_residual_quantity(original_quantity: Quantity, filled_quantity: Quantity) -> Quantity:
-    """Return the unfilled quantity that is released on cancel/expire.
-
-    The residual is not re-queued — position accounting uses filled_quantity only.
-    """
-    residual = original_quantity - filled_quantity
-    if residual < 0:
-        raise DomainValidationError(
-            f"filled_quantity ({filled_quantity}) exceeds original_quantity ({original_quantity})"
-        )
-    return residual

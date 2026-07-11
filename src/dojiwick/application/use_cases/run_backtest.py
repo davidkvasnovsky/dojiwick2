@@ -109,9 +109,6 @@ def build_backtest_service(
 
     from dojiwick.domain.errors import ConfigurationError
 
-    simulated = getattr(settings.backtest, "simulated_execution", False)
-    if simulated:
-        raise ConfigurationError("simulated_execution is not yet implemented — set to false or remove")
     if not target_ids:
         raise ConfigurationError("build_backtest_service requires non-empty target_ids")
     if not venue or not product:

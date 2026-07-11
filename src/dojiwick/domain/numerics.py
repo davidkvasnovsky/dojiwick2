@@ -29,7 +29,6 @@ type Money = Decimal
 type Quantity = Decimal
 """Asset quantities, position sizes, volumes."""
 
-type Leverage = Decimal
 """Leverage ratios / multipliers."""
 
 type Confidence = float
@@ -73,24 +72,9 @@ def to_quantity(value: str | float | int | Decimal) -> Quantity:
     return _to_decimal(value)
 
 
-def to_leverage(value: str | float | int | Decimal) -> Leverage:
-    """Convert to Leverage (Decimal)."""
-    return _to_decimal(value)
-
-
-# Kernel boundary utilities
 def decimals_to_array(values: Sequence[Decimal]) -> NDArray[np.float64]:
     """Convert a sequence of Decimals to a float64 numpy array."""
     return np.array([float(v) for v in values], dtype=np.float64)
-
-
-def array_to_decimals(arr: NDArray[np.float64]) -> tuple[Decimal, ...]:
-    """Convert a float64 numpy array to a tuple of Decimals.
-
-    Uses ``Decimal(str(float(v)))`` to avoid the excessive-precision trap
-    of ``Decimal(float(v))``.
-    """
-    return tuple(Decimal(str(float(v))) for v in arr)
 
 
 def candles_to_ohlc(

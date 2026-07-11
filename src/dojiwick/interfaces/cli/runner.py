@@ -44,7 +44,6 @@ from dojiwick.domain.reconciliation_health import compute_health
 from dojiwick.infrastructure.ai.factory import AIServices, build_ai_services
 from dojiwick.infrastructure.observability.alert_evaluator import AlertEvaluator
 from dojiwick.infrastructure.observability.log_notification import LogNotification
-from dojiwick.infrastructure.observability.null_metrics import NullMetrics
 from dojiwick.infrastructure.system.clock import SystemClock
 from dojiwick.infrastructure.postgres.connection import (
     DbConnection,
@@ -189,7 +188,6 @@ async def _wire_services(
         bot_state_repository=bot_state_repository,
         veto_service=ai_services.veto_service,
         regime_classifier=ai_services.regime_classifier,
-        metrics=NullMetrics(),
         unit_of_work=main_uow,
         decision_trace_repository=PgDecisionTraceRepository(connection=main_conn),
         order_ledger=order_ledger,

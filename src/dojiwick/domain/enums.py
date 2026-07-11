@@ -46,7 +46,6 @@ class TradeAction(IntEnum):
 
 
 TRADE_ACTION_TO_SQL: dict[int, str] = {0: "hold", 1: "buy", -1: "short"}
-SQL_TO_TRADE_ACTION: dict[str, TradeAction] = {v: TradeAction(k) for k, v in TRADE_ACTION_TO_SQL.items()}
 
 
 class DecisionAuthority(StrEnum):
@@ -137,14 +136,6 @@ class AuditSeverity(StrEnum):
     INFO = "info"
     WARNING = "warning"
     CRITICAL = "critical"
-
-
-class AdaptiveMode(StrEnum):
-    """Adaptive policy operating mode."""
-
-    DISABLED = "disabled"
-    CONTINUOUS = "continuous"
-    BUCKET_FALLBACK = "bucket_fallback"
 
 
 class OrderEventType(StrEnum):
@@ -287,19 +278,6 @@ class HistoryAlignment(StrEnum):
     """Timeline construction mode for backtest series."""
 
     INTERSECTION = "intersection"
-    ROLLING_JOINED = "rolling_joined"
-
-
-class BacktestGapPolicy(StrEnum):
-    """How to handle mid-series data gaps in backtest replay."""
-
-    FREEZE = "freeze"
-
-
-class BenchmarkMode(StrEnum):
-    """Benchmark construction mode for backtest comparison."""
-
-    STATIC_FULL_WINDOW = "static_full_window"
     ROLLING_JOINED = "rolling_joined"
 
 

@@ -14,7 +14,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, cast
 
 from dojiwick.domain.contracts.gateways.clock import ClockPort
-from dojiwick.domain.contracts.gateways.order_event_stream import StreamCursor, StreamGap
+from dojiwick.domain.contracts.gateways.order_event_stream import StreamCursor
 from dojiwick.domain.enums import OrderStatus, STATUS_TO_EVENT_TYPE
 from dojiwick.domain.models.value_objects.exchange_order_update import ExchangeOrderUpdate
 from dojiwick.domain.models.value_objects.order_event import OrderEvent
@@ -171,21 +171,6 @@ class BinanceOrderEventStream:
                 filled_quantity=Decimal(str(item.get("executedQty", "0"))),
                 fees_usd=Decimal(0),
             )
-
-    async def detect_gaps(self, since: StreamCursor) -> tuple[StreamGap, ...]:
-        """Detect gaps — placeholder returning no gaps (sequence tracking is local)."""
-        _ = since
-        return ()
-
-    async def recover_gap(self, gap: StreamGap) -> tuple[OrderEvent, ...]:
-        """REST fetch for missing range."""
-        cursor = StreamCursor(
-            stream_name=self.stream_name, sequence=gap.start_sequence, timestamp_ms=gap.detected_at_ms
-        )
-        events: list[OrderEvent] = []
-        async for event in self.replay_from(cursor):
-            events.append(event)
-        return tuple(events)
 
     async def get_cursor(self) -> StreamCursor:
         """Return the current stream position as a cursor."""

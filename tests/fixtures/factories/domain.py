@@ -25,7 +25,6 @@ from dojiwick.domain.indicator_schema import INDICATOR_COUNT, INDICATOR_INDEX
 from dojiwick.domain.numerics import Confidence, Money, Quantity, to_money, to_price, to_quantity
 from dojiwick.domain.type_aliases import CandleInterval
 from dojiwick.domain.models.entities.pair_state import PairTradingState
-from dojiwick.domain.models.value_objects.adaptive import AdaptiveArmKey, AdaptiveOutcomeEvent
 from dojiwick.domain.models.value_objects.ai_evaluation import AIEvaluationResult
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId, PositionLegKey, TargetLegPosition
 from dojiwick.domain.models.value_objects.order_event import OrderEvent
@@ -515,50 +514,6 @@ class SystemEventBuilder:
             correlation_id=self._correlation_id,
             context=self._context,
             occurred_at=self._occurred_at,
-        )
-
-
-class AdaptiveOutcomeBuilder:
-    """Fluent builder for AdaptiveOutcomeEvent."""
-
-    def __init__(self) -> None:
-        self._position_leg_id = 1
-        self._arm = AdaptiveArmKey(regime_idx=0, config_idx=0)
-        self._reward = 0.5
-        self._observed_at = datetime.now(UTC)
-
-    def with_position_leg_id(self, position_leg_id: int) -> Self:
-        self._position_leg_id = position_leg_id
-        return self
-
-    def with_arm(self, regime_idx: int = 0, config_idx: int = 0) -> Self:
-        self._arm = AdaptiveArmKey(regime_idx=regime_idx, config_idx=config_idx)
-        return self
-
-    def with_reward(self, reward: float) -> Self:
-        self._reward = reward
-        return self
-
-    def with_observed_at(self, at: datetime) -> Self:
-        self._observed_at = at
-        return self
-
-    def success(self, reward: float = 0.9) -> Self:
-        """Preset: successful outcome."""
-        self._reward = reward
-        return self
-
-    def failure(self, reward: float = 0.1) -> Self:
-        """Preset: poor outcome."""
-        self._reward = reward
-        return self
-
-    def build(self) -> AdaptiveOutcomeEvent:
-        return AdaptiveOutcomeEvent(
-            position_leg_id=self._position_leg_id,
-            arm=self._arm,
-            reward=self._reward,
-            observed_at=self._observed_at,
         )
 
 

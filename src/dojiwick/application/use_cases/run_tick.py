@@ -14,7 +14,6 @@ from dojiwick.application.orchestration.decision_pipeline import run_decision_pi
 from dojiwick.application.orchestration.outcome_assembler import OutcomeInputs, build_outcomes
 from dojiwick.application.orchestration.regime_hysteresis import RegimeHysteresis
 from dojiwick.application.orchestration.target_resolver import ResolvedTargets, resolve_targets
-from dojiwick.application.policies.adaptive.service import AdaptiveService
 from dojiwick.application.policies.risk.engine import RiskPolicyEngine
 from dojiwick.application.registry.strategy_registry import StrategyRegistry
 from dojiwick.domain.contracts.gateways.account_state import AccountStatePort
@@ -22,7 +21,6 @@ from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.contracts.gateways.context_provider import ContextProviderPort
 from dojiwick.domain.contracts.gateways.execution import ExecutionGatewayPort
 from dojiwick.domain.contracts.gateways.execution_planner import ExecutionPlannerPort
-from dojiwick.domain.contracts.gateways.metrics import MetricsSinkPort
 from dojiwick.domain.contracts.gateways.pending_order_provider import PendingOrderProviderPort
 from dojiwick.domain.contracts.gateways.unit_of_work import UnitOfWorkPort
 from dojiwick.domain.contracts.policies.regime_classifier import AIRegimeClassifierPort
@@ -128,9 +126,7 @@ class TickService:
     regime_repository: RegimeRepositoryPort | None = None
     veto_service: VetoServicePort | None = None
     regime_classifier: AIRegimeClassifierPort | None = None
-    adaptive_service: AdaptiveService | None = None
     bot_state_repository: BotStateRepositoryPort | None = None
-    metrics: MetricsSinkPort | None = None
     unit_of_work: UnitOfWorkPort | None = None
     decision_trace_repository: DecisionTraceRepositoryPort | None = None
     order_ledger: OrderLedgerService | None = None
@@ -252,8 +248,6 @@ class TickService:
                 )
             except Exception:
                 log.exception("failed to mark tick %s as FAILED", tick_id)
-            if self.metrics is not None:
-                self.metrics.increment("tick_failure_total")
             raise
 
         return outcomes
@@ -268,13 +262,6 @@ class TickService:
         state: BotState | None,
     ) -> tuple[DecisionOutcome, ...]:
         """Execute the full pipeline with tick tracking."""
-        # 4. Adaptive variant selection (influences real variant path)
-        adaptive_variant: str | None = None
-        if self.adaptive_service is not None:
-            selected = await self.adaptive_service.select_variant()
-            if isinstance(selected, str) and selected != "baseline":
-                adaptive_variant = selected
-
         # 5-9. Shared decision pipeline (regime -> variants -> strategy -> veto -> risk -> sizing)
         veto = None if self.settings.flags.disable_llm else self.veto_service
         classifier = None if self.settings.flags.disable_llm else self.regime_classifier
@@ -287,7 +274,6 @@ class TickService:
             hysteresis=self.hysteresis,
             veto_service=veto,
             regime_classifier=classifier,
-            adaptive_variant=adaptive_variant,
         )
         pipeline_duration_us = (self.clock.monotonic_ns() - pipeline_start) // 1_000
 
@@ -424,22 +410,6 @@ class TickService:
                 await self.decision_trace_repository.insert_batch(traces)
             except Exception:
                 log.warning("failed to persist decision traces for tick_id=%s", tick_id, exc_info=True)
-
-        # 16. Adaptive outcome recording
-        if self.adaptive_service is not None:
-            await self.adaptive_service.record_outcome()
-
-        if self.metrics is not None:
-            duration_seconds = (self.clock.monotonic_ns() - start_ns) / 1_000_000_000
-            self.metrics.increment("tick_total")
-            self.metrics.observe("tick_duration_seconds", duration_seconds)
-            self.metrics.gauge("tick_batch_size", float(context.size))
-            vetoed_count = int(np.sum(~pipeline.veto.approved_mask & pipeline.candidates.valid_mask))
-            if vetoed_count > 0:
-                self.metrics.increment("ai_veto_block_total", vetoed_count)
-            risk_blocked = int(np.sum(~pipeline.risk.allowed_mask & pipeline.candidates.valid_mask))
-            if risk_blocked > 0:
-                self.metrics.increment("risk_block_total", risk_blocked)
 
         await self._update_bot_state(state, observed_at)
 

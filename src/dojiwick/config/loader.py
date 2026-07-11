@@ -38,7 +38,6 @@ _KNOWN_SECTIONS = frozenset(
         "optimization",
         "exchange",
         "universe",
-        "adaptive",
         "research",
         "flags",
         "scope",
@@ -55,7 +54,6 @@ _REQUIRED_SECTIONS = (
     "exchange",
     "optimization",
     "universe",
-    "adaptive",
     "research",
 )
 _SCOPE_STRATEGY_KEYS = frozenset(STRATEGY_FIELDS) | {"id", "priority", "pair", "regime", "strategy"}

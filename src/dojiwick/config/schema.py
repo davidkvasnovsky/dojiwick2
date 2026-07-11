@@ -6,9 +6,6 @@ from typing import Annotated, Any, Self, cast
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 from dojiwick.domain.enums import (
-    AdaptiveMode,
-    BacktestGapPolicy,
-    BenchmarkMode,
     EntryPriceModel,
     FundingMode,
     HistoryAlignment,
@@ -374,7 +371,6 @@ class BacktestSettings(BaseModel):
     fee_multiplier: float
     leverage: float
     funding_mode: FundingMode
-    max_volume_pct: float
     equity_usd: float
     warmup_bars: int
     entry_price_model: EntryPriceModel
@@ -382,11 +378,8 @@ class BacktestSettings(BaseModel):
     partial_fill_threshold_pct: float
     partial_fill_min_ratio: float
     maintenance_margin_rate: float
-    simulated_execution: bool
     use_candle_cache: bool
     history_alignment: HistoryAlignment
-    inactive_gap_policy: BacktestGapPolicy
-    benchmark_mode: BenchmarkMode
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
@@ -398,8 +391,6 @@ class BacktestSettings(BaseModel):
             raise ValueError("fee_multiplier must be > 0")
         if self.leverage < 1.0:
             raise ValueError("leverage must be >= 1.0")
-        if not (0.0 < self.max_volume_pct <= 1.0):
-            raise ValueError("max_volume_pct must be in (0, 1]")
         if self.equity_usd <= 0:
             raise ValueError("equity_usd must be > 0")
         if self.warmup_bars < 1:
@@ -414,14 +405,6 @@ class BacktestSettings(BaseModel):
             raise ValueError("maintenance_margin_rate must be > 0 when leverage > 1 (liquidation modeling)")
         if self.leverage > 1.0 and self.maintenance_margin_rate >= 1.0 / self.leverage:
             raise ValueError("maintenance_margin_rate must be < 1/leverage (initial margin rate)")
-        if (
-            self.history_alignment == HistoryAlignment.ROLLING_JOINED
-            and self.benchmark_mode == BenchmarkMode.STATIC_FULL_WINDOW
-        ):
-            raise ValueError(
-                "benchmark_mode must be 'rolling_joined' when history_alignment is 'rolling_joined' "
-                "(static benchmark is invalid with zero-padded initial prices)"
-            )
         return self
 
     @property
@@ -574,8 +557,6 @@ class ExchangeSettings(BaseModel):
     product: ProductCode
     position_mode: PositionMode
     testnet: bool
-    ws_enabled: bool
-    rest_fallback_enabled: bool
     recv_window_ms: int
     connect_timeout_sec: float
     read_timeout_sec: float
@@ -657,24 +638,6 @@ class UniverseSettings(BaseModel):
         display_pairs = [t.display_pair for t in self.targets]
         if len(display_pairs) != len(set(display_pairs)):
             raise ValueError("universe.targets: display_pair must be unique across all targets")
-        return self
-
-
-class AdaptiveSettings(BaseModel):
-    """Adaptive policy configuration."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    mode: AdaptiveMode
-    exploration_rate: float
-    min_samples: int
-
-    @model_validator(mode="after")
-    def _validate(self) -> Self:
-        if not 0.0 <= self.exploration_rate <= 1.0:
-            raise ValueError("adaptive.exploration_rate must be in [0, 1]")
-        if self.min_samples < 1:
-            raise ValueError("adaptive.min_samples must be >= 1")
         return self
 
 
@@ -777,7 +740,6 @@ class Settings(BaseModel):
     ai: AISettings
     backtest: BacktestSettings
     optimization: OptimizationSettings
-    adaptive: AdaptiveSettings
     research: ResearchGateSettings
 
     # Infrastructure/tooling — keep defaults

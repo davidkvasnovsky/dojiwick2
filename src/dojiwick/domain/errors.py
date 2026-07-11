@@ -71,11 +71,3 @@ class AuthenticationError(AdapterError):
 
 class DataFetchError(AdapterError):
     """Raised when candle or indicator fetching fails (distinct from DataQualityError)."""
-
-
-class AdaptivePolicyError(EngineError):
-    """Raised when the adaptive policy encounters an unrecoverable error."""
-
-
-class AdaptiveCalibrationError(AdaptivePolicyError):
-    """Raised when adaptive calibration metrics indicate a misconfigured policy."""

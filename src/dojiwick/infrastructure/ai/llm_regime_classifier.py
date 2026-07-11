@@ -8,13 +8,12 @@ import numpy as np
 
 from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.contracts.gateways.llm_client import LLMClientPort, LLMRequest
-from dojiwick.domain.contracts.gateways.metrics import MetricsSinkPort
 from dojiwick.domain.enums import MarketState
 from dojiwick.domain.models.value_objects.batch_models import (
     BatchDecisionContext,
     BatchRegimeProfile,
 )
-from dojiwick.infrastructure.ai.constants import MAX_RESPONSE_LENGTH, timed_llm_call
+from dojiwick.infrastructure.ai.constants import MAX_RESPONSE_LENGTH
 from dojiwick.infrastructure.ai.cost_tracker import CostTracker
 from dojiwick.infrastructure.ai.prompts.regime_prompt import build_regime_system_prompt, build_regime_user_prompt
 
@@ -38,7 +37,6 @@ class LLMRegimeClassifier:
     cost_tracker: CostTracker | None = None
     max_response_tokens: int = 200
     batch_timeout_sec: float = 30.0
-    metrics: MetricsSinkPort | None = None
 
     async def classify_batch(
         self,
@@ -72,7 +70,7 @@ class LLMRegimeClassifier:
                 max_tokens=self.max_response_tokens,
             )
 
-            response = await timed_llm_call(self.llm_client, request, self.metrics, self.clock)
+            response = await self.llm_client.complete(request)
 
             if len(response.content) > MAX_RESPONSE_LENGTH:
                 log.warning(

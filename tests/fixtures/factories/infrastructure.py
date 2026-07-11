@@ -6,7 +6,6 @@ from typing import Any, Self
 
 from dojiwick.config.schema import (
     AISettings,
-    AdaptiveSettings,
     BacktestSettings,
     ExchangeSettings,
     OptimizationSettings,
@@ -20,9 +19,6 @@ from dojiwick.config.schema import (
     UniverseSettings,
 )
 from dojiwick.domain.enums import (
-    AdaptiveMode,
-    BacktestGapPolicy,
-    BenchmarkMode,
     EntryPriceModel,
     FundingMode,
     HistoryAlignment,
@@ -267,7 +263,6 @@ def default_backtest_settings(**overrides: Any) -> BacktestSettings:
         "fee_multiplier": 2.0,
         "leverage": 1.0,
         "funding_mode": FundingMode.NONE,
-        "max_volume_pct": 0.1,
         "equity_usd": 10_000.0,
         "warmup_bars": 200,
         "entry_price_model": EntryPriceModel.CLOSE,
@@ -275,11 +270,8 @@ def default_backtest_settings(**overrides: Any) -> BacktestSettings:
         "partial_fill_threshold_pct": 0.05,
         "partial_fill_min_ratio": 0.1,
         "maintenance_margin_rate": 0.0,
-        "simulated_execution": False,
         "use_candle_cache": True,
         "history_alignment": HistoryAlignment.INTERSECTION,
-        "inactive_gap_policy": BacktestGapPolicy.FREEZE,
-        "benchmark_mode": BenchmarkMode.STATIC_FULL_WINDOW,
     }
     defaults.update(overrides)
     return BacktestSettings(**defaults)
@@ -294,8 +286,6 @@ def default_exchange_settings(**overrides: Any) -> ExchangeSettings:
         "product": ProductCode("usd_c"),
         "position_mode": PositionMode.ONE_WAY,
         "testnet": True,
-        "ws_enabled": True,
-        "rest_fallback_enabled": True,
         "recv_window_ms": 5000,
         "connect_timeout_sec": 10.0,
         "read_timeout_sec": 10.0,
@@ -396,17 +386,6 @@ def default_instrument_map(settings: Settings | None = None) -> dict[str, Any]:
     return resolve_instrument_map(settings)
 
 
-def default_adaptive_settings(**overrides: Any) -> AdaptiveSettings:
-    """Test defaults for AdaptiveSettings."""
-    defaults: dict[str, Any] = {
-        "mode": AdaptiveMode.DISABLED,
-        "exploration_rate": 0.1,
-        "min_samples": 30,
-    }
-    defaults.update(overrides)
-    return AdaptiveSettings(**defaults)
-
-
 def default_research_gate_settings(**overrides: Any) -> ResearchGateSettings:
     """Test defaults for ResearchGateSettings."""
     defaults: dict[str, Any] = {
@@ -496,7 +475,6 @@ def default_settings(**overrides: Any) -> Settings:
         "exchange": default_exchange_settings(),
         "optimization": default_optimization_settings(),
         "universe": default_universe_settings(),
-        "adaptive": default_adaptive_settings(),
         "research": default_research_gate_settings(),
     }
     defaults.update(overrides)

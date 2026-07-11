@@ -18,8 +18,8 @@ from fixtures.factories.domain import ContextBuilder
 async def test_pipeline_parity_backtest_vs_live() -> None:
     """Same context, same settings → identical intents from shared pipeline.
 
-    Backtest mode: no hysteresis, no veto, no adaptive.
-    Live mode (veto disabled): no hysteresis, NullVetoService, no adaptive.
+    Backtest mode: no hysteresis, no veto.
+    Live mode (veto disabled): no hysteresis, NullVetoService.
     Both must produce identical intents.
     """
     context = ContextBuilder().trending_up().build()

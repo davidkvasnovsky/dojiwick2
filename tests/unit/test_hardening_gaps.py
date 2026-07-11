@@ -14,7 +14,6 @@ from dojiwick.config.schema import (
 )
 from dojiwick.domain.errors import ConfigurationError
 from fixtures.factories.infrastructure import (
-    default_backtest_settings,
     default_settings,
     default_universe_settings,
 )
@@ -333,18 +332,6 @@ def test_no_cache_cli_removed() -> None:
 
 
 # --- Gap 6: Simulated execution ---
-
-
-def test_simulated_execution_true_raises() -> None:
-    """simulated_execution=True raises ConfigurationError."""
-    from dojiwick.application.use_cases.run_backtest import build_backtest_service
-
-    settings = default_settings().model_copy(update={"backtest": default_backtest_settings(simulated_execution=True)})
-    with pytest.raises(ConfigurationError, match="simulated_execution is not yet implemented"):
-        build_backtest_service(settings, target_ids=("btc_usdc", "eth_usdc"), venue="binance", product="usd_c")
-
-
-# --- Phase 2: Planner instrument resolution ---
 
 
 def test_resolve_targets_uses_instrument_map() -> None:

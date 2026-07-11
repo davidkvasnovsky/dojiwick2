@@ -9,7 +9,6 @@ from typing import TYPE_CHECKING
 
 from dojiwick.config.schema import AISettings
 from dojiwick.domain.contracts.gateways.clock import ClockPort
-from dojiwick.domain.contracts.gateways.metrics import MetricsSinkPort
 from dojiwick.domain.contracts.policies.regime_classifier import AIRegimeClassifierPort
 from dojiwick.domain.contracts.policies.veto import VetoServicePort
 
@@ -32,7 +31,6 @@ class AIServices:
 def build_ai_services(
     settings: AISettings,
     clock: ClockPort,
-    metrics: MetricsSinkPort | None = None,
     cost_repository: "ModelCostRepositoryPort | None" = None,
 ) -> AIServices:
     """Build AI services from settings.
@@ -73,7 +71,6 @@ def build_ai_services(
         clock=clock,
         input_cost_per_token=settings.input_cost_per_million / 1_000_000,
         output_cost_per_token=settings.output_cost_per_million / 1_000_000,
-        metrics=metrics,
         cost_repository=cost_repository,
     )
 
@@ -87,7 +84,6 @@ def build_ai_services(
             cost_tracker=cost_tracker,
             max_response_tokens=settings.max_response_tokens,
             batch_timeout_sec=settings.batch_timeout_sec,
-            metrics=metrics,
         )
 
     regime: AIRegimeClassifierPort | None = None
@@ -99,7 +95,6 @@ def build_ai_services(
             cost_tracker=cost_tracker,
             max_response_tokens=settings.max_response_tokens,
             batch_timeout_sec=settings.batch_timeout_sec,
-            metrics=metrics,
         )
 
     log.info("AI services built veto=%s regime=%s", veto is not None, regime is not None)

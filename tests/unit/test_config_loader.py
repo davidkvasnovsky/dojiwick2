@@ -14,12 +14,11 @@ from dojiwick.config.scope import (
     StrategyScopeRule,
     parse_regime,
 )
-from dojiwick.domain.enums import AdaptiveMode, MarketState, PositionMode
+from dojiwick.domain.enums import MarketState, PositionMode
 from dojiwick.infrastructure.exchange.binance.constants import BINANCE_VENUE
 from dojiwick.domain.errors import ConfigurationError
 from dojiwick.domain.models.value_objects.params import StrategyParams
 from fixtures.factories.infrastructure import (
-    default_adaptive_settings,
     default_exchange_settings,
     default_strategy_params,
     default_universe_settings,
@@ -93,7 +92,6 @@ def test_load_settings_parses_all_sections(tmp_path: Path) -> None:
     assert settings.exchange.venue == BINANCE_VENUE
     assert settings.exchange.position_mode == PositionMode.ONE_WAY
     assert settings.universe.quote_asset == "USDT"
-    assert settings.adaptive.mode == AdaptiveMode.DISABLED
 
 
 def test_scope_risk_is_parsed(tmp_path: Path) -> None:
@@ -313,16 +311,6 @@ def test_universe_settings_validates_settle_asset() -> None:
         default_universe_settings(settle_asset="")
 
 
-def test_adaptive_settings_validates_exploration_rate() -> None:
-    with pytest.raises(ValueError, match="adaptive.exploration_rate must be in"):
-        default_adaptive_settings(exploration_rate=1.5)
-
-
-def test_adaptive_settings_validates_min_samples() -> None:
-    with pytest.raises(ValueError, match="adaptive.min_samples must be >= 1"):
-        default_adaptive_settings(min_samples=0)
-
-
 def test_build_adapters_raises_missing_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     """build_adapters raises ConfigurationError when API credentials are missing."""
     monkeypatch.delenv("BINANCE_API_KEY", raising=False)
@@ -351,7 +339,6 @@ def test_config_is_parseable() -> None:
     assert settings.exchange.venue == BINANCE_VENUE
     assert settings.exchange.position_mode == PositionMode.ONE_WAY
     assert settings.universe.quote_asset == "USDT"
-    assert settings.adaptive.mode == AdaptiveMode.DISABLED
 
 
 def test_bool_coerced_to_int_field(tmp_path: Path) -> None:

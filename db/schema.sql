@@ -15,12 +15,10 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- Decision & execution
 CREATE TYPE decision_status     AS ENUM ('executed', 'hold', 'blocked_risk', 'vetoed', 'error');
 CREATE TYPE decision_authority  AS ENUM ('deterministic_only', 'deterministic_plus_ai_veto', 'deterministic_plus_ai_regime', 'deterministic_plus_ai_regime_and_veto');
-CREATE TYPE execution_status    AS ENUM ('filled', 'skipped', 'rejected', 'error', 'cancelled');
 
 -- Trade & market
 CREATE TYPE trade_action        AS ENUM ('hold', 'buy', 'short');
 CREATE TYPE market_state        AS ENUM ('trending_up', 'trending_down', 'ranging', 'volatile');
-CREATE TYPE close_reason        AS ENUM ('stop_loss', 'take_profit', 'trailing_stop', 'emergency', 'manual', 'replaced', 'liquidation', 'double_fill');
 
 -- Order lifecycle
 CREATE TYPE order_side          AS ENUM ('buy', 'sell');
@@ -36,12 +34,8 @@ CREATE TYPE system_event_severity   AS ENUM ('info', 'warning', 'critical');
 -- Tick lifecycle
 CREATE TYPE tick_status            AS ENUM ('started', 'completed', 'failed', 'skipped');
 
--- Adaptive policy
-CREATE TYPE adaptive_outcome_result AS ENUM ('win', 'loss', 'breakeven');
-
 -- Position / execution
 CREATE TYPE position_side       AS ENUM ('net', 'long', 'short');
-CREATE TYPE position_mode       AS ENUM ('one_way', 'hedge');
 CREATE TYPE working_type        AS ENUM ('mark_price', 'contract_price');
 
 -- Reconciliation health
@@ -632,75 +626,6 @@ CREATE TABLE bot_config_snapshots (
 
 CREATE INDEX idx_bot_config_snapshots_snapshot
     ON bot_config_snapshots (snapshot_at DESC);
-
--- ============================================================
--- ADAPTIVE POLICY (Thompson Sampling)
--- ============================================================
-
--- Adaptive configs
-CREATE TABLE adaptive_configs (
-    config_idx      INTEGER PRIMARY KEY,
-    params_json     JSONB            NOT NULL,
-    source          TEXT             NOT NULL DEFAULT '',
-    created_at      TIMESTAMPTZ      NOT NULL DEFAULT now()
-);
-
--- Adaptive posteriors (Beta distribution state)
-CREATE TABLE adaptive_posteriors (
-    regime_idx      INTEGER          NOT NULL,
-    config_idx      INTEGER          NOT NULL,
-    alpha           DOUBLE PRECISION NOT NULL DEFAULT 1,
-    beta            DOUBLE PRECISION NOT NULL DEFAULT 1,
-    n_updates       INTEGER          NOT NULL DEFAULT 0,
-    last_decay_at   TIMESTAMPTZ,
-    PRIMARY KEY (regime_idx, config_idx),
-    CONSTRAINT adaptive_posteriors_alpha_check CHECK (alpha > 0),
-    CONSTRAINT adaptive_posteriors_beta_check CHECK (beta > 0),
-    CONSTRAINT fk_adaptive_posteriors_config
-        FOREIGN KEY (config_idx) REFERENCES adaptive_configs(config_idx)
-);
-
--- Adaptive selections (which config was used per position leg)
-CREATE TABLE adaptive_selections (
-    position_leg_id BIGINT PRIMARY KEY,
-    regime_idx      INTEGER          NOT NULL,
-    config_idx      INTEGER          NOT NULL,
-    selected_at     TIMESTAMPTZ      NOT NULL DEFAULT now(),
-    CONSTRAINT fk_adaptive_selections_position_leg
-        FOREIGN KEY (position_leg_id) REFERENCES position_legs(id),
-    CONSTRAINT fk_adaptive_selections_config
-        FOREIGN KEY (config_idx) REFERENCES adaptive_configs(config_idx)
-);
-
-CREATE INDEX idx_adaptive_selections_config_idx
-    ON adaptive_selections (config_idx);
-
--- Adaptive outcomes (observed reward after position closes)
-CREATE TABLE adaptive_outcomes (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    selection_id    BIGINT                  NOT NULL,
-    result          adaptive_outcome_result NOT NULL,
-    reward          DOUBLE PRECISION        NOT NULL,
-    recorded_at     TIMESTAMPTZ             NOT NULL DEFAULT now(),
-    CONSTRAINT fk_adaptive_outcomes_selection
-        FOREIGN KEY (selection_id) REFERENCES adaptive_selections(position_leg_id),
-    CONSTRAINT adaptive_outcomes_reward_check CHECK (reward BETWEEN 0 AND 1)
-);
-
-CREATE INDEX idx_adaptive_outcomes_selection
-    ON adaptive_outcomes (selection_id);
-
--- Adaptive calibration metrics (diagnostic metrics per regime)
-CREATE TABLE adaptive_calibration_metrics (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    regime_idx      INTEGER          NOT NULL,
-    metric_name     TEXT             NOT NULL,
-    metric_value    DOUBLE PRECISION NOT NULL,
-    computed_at     TIMESTAMPTZ      NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_adaptive_calibration_regime
-    ON adaptive_calibration_metrics (regime_idx, computed_at DESC);
 
 -- ============================================================
 -- MODEL COSTS (LLM token usage and cost tracking)

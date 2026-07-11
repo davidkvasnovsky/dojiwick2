@@ -8,7 +8,6 @@ import numpy as np
 
 from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.contracts.gateways.llm_client import LLMClientPort, LLMRequest
-from dojiwick.domain.contracts.gateways.metrics import MetricsSinkPort
 from dojiwick.domain.models.value_objects.batch_models import (
     BatchDecisionContext,
     BatchTradeCandidate,
@@ -26,7 +25,7 @@ from dojiwick.domain.reason_codes import (
     AI_VETO_STALE_SIGNAL,
 )
 from dojiwick.infrastructure.ai.confidence_gate import compute_llm_review_mask
-from dojiwick.infrastructure.ai.constants import MAX_RESPONSE_LENGTH, timed_llm_call
+from dojiwick.infrastructure.ai.constants import MAX_RESPONSE_LENGTH
 from dojiwick.infrastructure.ai.cost_tracker import CostTracker
 from dojiwick.infrastructure.ai.prompts.veto_prompt import build_veto_system_prompt, build_veto_user_prompt
 
@@ -52,7 +51,6 @@ class LLMVetoService:
     cost_tracker: CostTracker | None = None
     max_response_tokens: int = 200
     batch_timeout_sec: float = 30.0
-    metrics: MetricsSinkPort | None = None
 
     async def evaluate_batch(
         self,
@@ -102,7 +100,7 @@ class LLMVetoService:
                 max_tokens=self.max_response_tokens,
             )
 
-            response = await timed_llm_call(self.llm_client, request, self.metrics, self.clock)
+            response = await self.llm_client.complete(request)
 
             if len(response.content) > MAX_RESPONSE_LENGTH:
                 log.warning(

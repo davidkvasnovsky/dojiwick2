@@ -54,11 +54,6 @@ async def clean_tables(db_cursor: DbCursor) -> None:
     """
     await db_cursor.execute("""
         TRUNCATE
-            adaptive_calibration_metrics,
-            adaptive_outcomes,
-            adaptive_selections,
-            adaptive_posteriors,
-            adaptive_configs,
             backtest_runs,
             model_costs,
             decision_traces,

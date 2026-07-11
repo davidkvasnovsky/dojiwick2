@@ -1,4 +1,4 @@
-"""Order event stream gateway protocol with cursor-based replay and gap detection."""
+"""Order event stream gateway protocol with cursor-based replay."""
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -17,18 +17,8 @@ class StreamCursor:
     timestamp_ms: int = 0
 
 
-@dataclass(slots=True, frozen=True, kw_only=True)
-class StreamGap:
-    """Describes a gap in the event stream between two sequence numbers."""
-
-    stream_name: str
-    start_sequence: int
-    end_sequence: int
-    detected_at_ms: int
-
-
 class OrderEventStreamPort(Protocol):
-    """Real-time order event stream from the exchange with replay and gap detection."""
+    """Real-time order event stream from the exchange with cursor replay."""
 
     @property
     def stream_name(self) -> str:
@@ -58,14 +48,6 @@ class OrderEventStreamPort(Protocol):
 
     def replay_from(self, cursor: StreamCursor) -> AsyncIterator[OrderEvent]:
         """Resume event delivery from the given cursor position."""
-        ...
-
-    async def detect_gaps(self, since: StreamCursor) -> tuple[StreamGap, ...]:
-        """Identify missing sequence ranges since the given cursor."""
-        ...
-
-    async def recover_gap(self, gap: StreamGap) -> tuple[OrderEvent, ...]:
-        """Fetch missing events for a detected gap via REST fallback."""
         ...
 
     async def get_cursor(self) -> StreamCursor:

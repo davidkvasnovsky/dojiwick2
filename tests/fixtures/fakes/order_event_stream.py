@@ -3,7 +3,7 @@
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 
-from dojiwick.domain.contracts.gateways.order_event_stream import OrderEventStreamPort, StreamCursor, StreamGap
+from dojiwick.domain.contracts.gateways.order_event_stream import OrderEventStreamPort, StreamCursor
 from dojiwick.domain.models.value_objects.exchange_order_update import ExchangeOrderUpdate
 from dojiwick.domain.models.value_objects.order_event import OrderEvent
 
@@ -57,15 +57,6 @@ class InMemoryOrderEventStream(OrderEventStreamPort):
         """Resume event delivery from the given cursor position."""
         for event in self._events[cursor.sequence :]:
             yield event
-
-    async def detect_gaps(self, since: StreamCursor) -> tuple[StreamGap, ...]:
-        """In-memory stream has no gaps."""
-        _ = since
-        return ()
-
-    async def recover_gap(self, gap: StreamGap) -> tuple[OrderEvent, ...]:
-        """Return events in the gap range."""
-        return tuple(self._events[gap.start_sequence : gap.end_sequence])
 
     async def get_cursor(self) -> StreamCursor:
         """Return the current stream position as a cursor."""

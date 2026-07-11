@@ -1,3 +1,4 @@
-h1:KQBpXWuZaB0LPDzcGnauq84yjkmi9eO6O8qE6LLI4fI=
+h1:ludgPBvr2qkj5ZW7YNrHmGI1BzeZKjoU59BqydsWxsQ=
 20260710221803_v3_baseline.sql h1:i2KUUpGf+4+T3lJI0TssEFWXDvdWRObNqPv6xmm7VR0=
 20260711152800_add_funding_rates.sql h1:KslJQC6q3lZwEsEQVqFEru0CQ+MxzB4QFVm3muRp8Ss=
+20260711162619_drop_adaptive_and_unused_enums.sql h1:0D1iTNMRWQ6gg2DX4aTNA1dNMFVWOeESxCYtMLHSp8k=
