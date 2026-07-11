@@ -45,3 +45,10 @@ class BinanceOpenOrderAdapter:
         """Cancel all open orders for a symbol."""
         await self.client.request("DELETE", "/fapi/v1/allOpenOrders", params={"symbol": symbol}, signed=True)
         log.info("cancelled all open orders for %s", symbol)
+
+    async def cancel_order(self, symbol: str, exchange_order_id: str) -> None:
+        """Cancel a single open order by exchange id."""
+        await self.client.request(
+            "DELETE", "/fapi/v1/order", params={"symbol": symbol, "orderId": exchange_order_id}, signed=True
+        )
+        log.info("cancelled order %s on %s", exchange_order_id, symbol)

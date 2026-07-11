@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from fixtures.fakes.clock import FixedClock
+
 from dojiwick.domain.errors import ExchangeError
 from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
@@ -16,7 +18,10 @@ def _make_provider() -> tuple[BinanceExchangeMetadataProvider, MagicMock]:
     mock_client.request = AsyncMock()
     provider = BinanceExchangeMetadataProvider.__new__(BinanceExchangeMetadataProvider)
     object.__setattr__(provider, "client", mock_client)
+    object.__setattr__(provider, "clock", FixedClock())
+    object.__setattr__(provider, "refresh_sec", 21_600.0)
     object.__setattr__(provider, "_exchange_info", None)
+    object.__setattr__(provider, "_fetched_at_ns", 0)
     return provider, mock_client
 
 

@@ -10,7 +10,7 @@ from decimal import Decimal
 import numpy as np
 
 from dojiwick.application.models.pipeline_settings import PipelineSettings
-from dojiwick.application.orchestration.decision_pipeline import run_decision_pipeline
+from dojiwick.application.orchestration.decision_pipeline import PipelineResult, run_decision_pipeline
 from dojiwick.application.orchestration.outcome_assembler import OutcomeInputs, build_outcomes
 from dojiwick.application.orchestration.regime_hysteresis import RegimeHysteresis
 from dojiwick.application.orchestration.target_resolver import ResolvedTargets, resolve_targets
@@ -32,7 +32,8 @@ from dojiwick.domain.contracts.repositories.decision_trace import DecisionTraceR
 from dojiwick.domain.contracts.repositories.tick import TickRepositoryPort
 from dojiwick.application.services.order_ledger import OrderLedgerService
 from dojiwick.application.services.position_tracker import PositionTracker
-from dojiwick.domain.enums import ExecutionStatus, MissingBarPolicy, ReconciliationHealth, TickStatus
+from dojiwick.application.services.protective_orders import ProtectiveOrderService
+from dojiwick.domain.enums import ExecutionStatus, MissingBarPolicy, OrderSide, ReconciliationHealth, TickStatus
 from dojiwick.domain.errors import CircuitBreakerTrippedError, DataQualityError, PostExecutionPersistenceError
 from dojiwick.domain.timebase import assert_timebase_valid, interval_to_seconds
 from dojiwick.domain.models.entities.bot_state import BotState
@@ -131,6 +132,7 @@ class TickService:
     decision_trace_repository: DecisionTraceRepositoryPort | None = None
     order_ledger: OrderLedgerService | None = None
     position_tracker: PositionTracker | None = None
+    protective_orders: ProtectiveOrderService | None = None
     pending_order_provider: PendingOrderProviderPort | None = None
     hysteresis: RegimeHysteresis = field(default_factory=RegimeHysteresis)
     shutdown_event: asyncio.Event | None = None
@@ -306,7 +308,9 @@ class TickService:
 
         # 11. Execution via planner (tracked for ops hashing)
         exec_start = self.clock.monotonic_ns()
-        receipts, plan, plan_receipts = await self._execute_via_planner_tracked(pipeline.intents, tick_id=tick_id)
+        receipts, plan, plan_receipts, request_ids, resolved = await self._execute_via_planner_tracked(
+            pipeline.intents, tick_id=tick_id
+        )
         exec_duration_us = (self.clock.monotonic_ns() - exec_start) // 1_000
 
         # 12. Compute stage hashes (pure -- no I/O dependency on ledger)
@@ -340,9 +344,10 @@ class TickService:
         async def _do_persist() -> None:
             if plan is not None and plan_receipts:
                 if self.order_ledger is not None:
-                    await self.order_ledger.record_execution(plan, plan_receipts, tick_id=tick_id)
+                    await self.order_ledger.record_results(plan, plan_receipts, request_ids)
                 if self.position_tracker is not None:
-                    await self.position_tracker.apply_fills(plan, plan_receipts)
+                    await self.position_tracker.apply_fills(plan, plan_receipts, request_ids)
+                await self._register_protective_entries(pipeline, plan, plan_receipts, request_ids, resolved)
             await self.outcome_repository.append_outcomes(
                 outcomes,
                 venue=self.settings.exchange.venue,
@@ -375,6 +380,18 @@ class TickService:
             log.critical("post-execution persistence failed: %s", exc)
             raise PostExecutionPersistenceError(str(exc)) from exc
         persist_duration_us = (self.clock.monotonic_ns() - persist_start) // 1_000
+
+        # 14b. Protective order maintenance — exchange I/O, deliberately outside
+        # the persistence transaction; a crash here is healed by startup sync
+        if self.protective_orders is not None:
+            assert self.instrument_map is not None
+            prices_by_symbol = {
+                self.instrument_map[pair].symbol: float(context.market.price[i])
+                for i, pair in enumerate(context.market.pairs)
+                if pair in self.instrument_map
+            }
+            await self.protective_orders.update_trailing(prices_by_symbol)
+            await self.protective_orders.sync()
 
         # 15. Decision traces (fire-and-forget -- must not crash tick)
         if self.decision_trace_repository is not None:
@@ -421,7 +438,13 @@ class TickService:
         intents: BatchExecutionIntent,
         *,
         tick_id: str = "",
-    ) -> tuple[tuple[ExecutionReceipt, ...], ExecutionPlan | None, tuple[ExecutionReceipt, ...]]:
+    ) -> tuple[
+        tuple[ExecutionReceipt, ...],
+        ExecutionPlan | None,
+        tuple[ExecutionReceipt, ...],
+        dict[int, int],
+        ResolvedTargets | None,
+    ]:
         """Target-position planner execution path, returning plan for ops hashing."""
         assert self.instrument_map is not None  # validated in __post_init__
         resolved = resolve_targets(
@@ -436,7 +459,7 @@ class TickService:
             instrument_map=self.instrument_map,
         )
         if not resolved.targets:
-            return _skipped_receipts(len(intents.pairs)), None, ()
+            return _skipped_receipts(len(intents.pairs)), None, (), {}, None
 
         snapshot = await self.account_state_provider.get_account_snapshot(self.settings.universe.account)
         plan = await self.execution_planner.plan(snapshot, resolved.targets)
@@ -445,10 +468,22 @@ class TickService:
             plan = await self._apply_pending_order_guard(plan)
 
         if plan.is_empty:
-            return _skipped_receipts(len(intents.pairs)), plan, ()
+            return _skipped_receipts(len(intents.pairs)), plan, (), {}, resolved
+
+        # A reduce/flip market order racing its own protective stop can double
+        # close — free the protection first
+        if self.protective_orders is not None:
+            reduce_symbols = {d.instrument_id.symbol for d in plan.deltas if d.reduce_only or d.close_position}
+            if reduce_symbols:
+                await self.protective_orders.release_for_symbols(reduce_symbols)
+
+        request_ids: dict[int, int] = {}
+        if self.order_ledger is not None:
+            request_ids = await self.order_ledger.record_requests(plan, tick_id=tick_id)
 
         plan_receipts = await self.execution_gateway.execute_plan(plan, tick_id=tick_id)
-        return align_plan_receipts(len(intents.pairs), resolved, plan, plan_receipts), plan, plan_receipts
+        aligned = align_plan_receipts(len(intents.pairs), resolved, plan, plan_receipts)
+        return aligned, plan, plan_receipts, request_ids, resolved
 
     async def _apply_pending_order_guard(self, plan: ExecutionPlan) -> ExecutionPlan:
         """Deduct pending (in-flight) quantities from plan deltas."""
@@ -518,6 +553,92 @@ class TickService:
         state.last_tick_at = observed_at
         state.consecutive_errors = 0
         await self.bot_state_repository.update_state(state)
+
+    async def _register_protective_entries(
+        self,
+        pipeline: "PipelineResult",
+        plan: ExecutionPlan,
+        plan_receipts: tuple[ExecutionReceipt, ...],
+        request_ids: dict[int, int],
+        resolved: ResolvedTargets | None,
+    ) -> None:
+        """Persist exit state for freshly filled entry legs (backtest _open_position twin).
+
+        Stop/TP come from the intent; trailing/breakeven/TP1 anchors are
+        re-derived from the ACTUAL fill price so live protection matches what
+        was really paid, not the last close.
+        """
+        if self.protective_orders is None or self.position_tracker is None or resolved is None:
+            return
+        assert self.instrument_map is not None
+
+        target_to_batch = dict(enumerate(resolved.batch_indices))
+        intents = pipeline.intents
+        per_pair_params = pipeline.per_pair_params
+
+        for delta_index, delta in enumerate(plan.deltas):
+            if delta.reduce_only or delta.close_position:
+                continue
+            receipt = plan_receipts[delta_index] if delta_index < len(plan_receipts) else None
+            if receipt is None or receipt.status is not ExecutionStatus.FILLED or receipt.fill_price is None:
+                continue
+            batch_idx = target_to_batch.get(delta.target_index)
+            if batch_idx is None:
+                continue
+
+            stop = float(intents.stop_price[batch_idx])
+            tp = float(intents.take_profit_price[batch_idx])
+            if stop <= 0.0 or tp <= 0.0:
+                continue
+            fill_price = float(receipt.fill_price)
+            is_long = delta.side is OrderSide.BUY
+            direction = 1.0 if is_long else -1.0
+            stop_distance = abs(fill_price - stop)
+
+            params = per_pair_params[batch_idx] if batch_idx < len(per_pair_params) else None
+            trailing_activation = 0.0
+            trailing_distance = 0.0
+            breakeven = 0.0
+            max_hold = 0
+            tp1_price = 0.0
+            tp1_fraction = 0.0
+            if params is not None:
+                if params.trailing_stop_activation_rr is not None and params.trailing_stop_atr_mult is not None:
+                    trailing_activation = fill_price + direction * stop_distance * params.trailing_stop_activation_rr
+                    # ATR is not carried on the intent; derive the trail from
+                    # the stop geometry, which is itself ATR-based
+                    trailing_distance = stop_distance * params.trailing_stop_atr_mult / max(params.stop_atr_mult, 1e-9)
+                if params.breakeven_after_rr is not None:
+                    breakeven = fill_price + direction * stop_distance * params.breakeven_after_rr
+                max_hold = params.max_hold_bars if params.max_hold_bars is not None else 0
+                if params.partial_tp_enabled and params.partial_tp1_rr > 0:
+                    tp1_price = fill_price + direction * stop_distance * params.partial_tp1_rr
+                    tp1_fraction = params.partial_tp1_fraction
+
+            iid = delta.instrument_id
+            instrument_int = await self.position_tracker.instrument_repo.resolve_id(iid.venue, iid.product, iid.symbol)
+            if instrument_int is None:
+                continue
+            leg = await self.position_tracker.position_leg_repo.get_active_leg(
+                plan.account, instrument_int, delta.position_side
+            )
+            if leg is None or leg.id is None:
+                log.warning("filled entry for %s has no active leg — protective registration skipped", iid.symbol)
+                continue
+
+            await self.protective_orders.register_entry(
+                position_leg_id=leg.id,
+                is_long=is_long,
+                entry_price=fill_price,
+                stop_price=stop,
+                take_profit_price=tp,
+                trailing_activation_price=trailing_activation,
+                trailing_distance=trailing_distance,
+                breakeven_price=breakeven,
+                max_hold_bars=max_hold,
+                tp1_price=tp1_price,
+                tp1_fraction=tp1_fraction,
+            )
 
     def _update_entry_risk_scale(self, context: BatchDecisionContext, observed_at: datetime) -> float:
         """Combined ECF + drawdown entry scale, mirroring the backtest formulas.

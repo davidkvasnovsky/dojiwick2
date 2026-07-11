@@ -1,4 +1,5 @@
-h1:ludgPBvr2qkj5ZW7YNrHmGI1BzeZKjoU59BqydsWxsQ=
+h1:CwZo/bPmV/W0+m8YzyTc39T++qjZxeB2mRdANxrDtOA=
 20260710221803_v3_baseline.sql h1:i2KUUpGf+4+T3lJI0TssEFWXDvdWRObNqPv6xmm7VR0=
 20260711152800_add_funding_rates.sql h1:KslJQC6q3lZwEsEQVqFEru0CQ+MxzB4QFVm3muRp8Ss=
 20260711162619_drop_adaptive_and_unused_enums.sql h1:0D1iTNMRWQ6gg2DX4aTNA1dNMFVWOeESxCYtMLHSp8k=
+20260711163319_add_order_lifecycle_and_exit_state.sql h1:n3V3rsWz4+l8cj+aRlES8Xx70Gb56wBOdXbZ+aQPuHk=

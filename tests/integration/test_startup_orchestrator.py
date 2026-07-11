@@ -14,6 +14,7 @@ from dojiwick.domain.enums import (
     OrderEventType,
     OrderSide,
     OrderStatus,
+    OrderType,
     PositionSide,
     ReconciliationHealth,
 )
@@ -26,7 +27,8 @@ from dojiwick.domain.models.value_objects.account_state import (
 )
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.models.value_objects.order_event import OrderEvent
-from dojiwick.domain.models.value_objects.order_request import OrderReport
+from dojiwick.domain.models.value_objects.exchange_order_update import ExchangeOrderUpdate
+from dojiwick.domain.models.value_objects.order_request import OrderRequest
 from dojiwick.domain.models.value_objects.stream_cursor_record import StreamCursorRecord
 from dojiwick.infrastructure.exchange.reconciliation import ExchangeReconciliation
 from fixtures.fakes.account_state import FakeAccountState
@@ -47,6 +49,32 @@ from fixtures.fakes.position_leg_repository import FakePositionLegRepo
 from fixtures.fakes.stream_cursor_repository import FakeStreamCursorRepo
 
 PAIR_SYMBOLS = ("BTCUSDC",)
+
+
+def _replay_update(client_order_id: str) -> ExchangeOrderUpdate:
+    return ExchangeOrderUpdate(
+        exchange_order_id="EX2",
+        client_order_id=client_order_id,
+        symbol="BTCUSDC",
+        side=OrderSide.BUY,
+        order_type=OrderType.MARKET,
+        order_status=OrderStatus.FILLED,
+        execution_type="TRADE",
+        position_side=PositionSide.NET,
+        last_filled_qty=Decimal("0.01"),
+        last_filled_price=Decimal("95000"),
+        cumulative_filled_qty=Decimal("0.01"),
+        avg_price=Decimal("95000"),
+        commission=Decimal("0.01"),
+        commission_asset="USDC",
+        trade_id=555,
+        order_trade_time=datetime(2026, 1, 1, 0, 1, tzinfo=UTC),
+        reduce_only=False,
+        close_position=False,
+        realized_profit=Decimal(0),
+        event_time=datetime(2026, 1, 1, 0, 1, tzinfo=UTC),
+        transaction_time=datetime(2026, 1, 1, 0, 1, tzinfo=UTC),
+    )
 
 
 def _empty_snapshot(account: str = "test") -> AccountSnapshot:
@@ -97,6 +125,7 @@ def _build_orchestrator(
     clk = clock or FixedClock()
     inst_repo = instrument_repo or FakeInstrumentRepo()
     pos_leg_repo = position_leg_repo or FakePositionLegRepo()
+    req_repo = order_request_repo or FakeOrderRequestRepo()
     aud = audit_log or CapturingAuditLog()
     notif = notification or CapturingNotification()
 
@@ -104,6 +133,7 @@ def _build_orchestrator(
         instrument_repo=inst_repo,
         position_leg_repo=pos_leg_repo,
         position_event_repo=FakePositionEventRepo(),
+        order_request_repo=req_repo,
         clock=clk,
     )
 
@@ -124,7 +154,7 @@ def _build_orchestrator(
         order_stream=order_stream,
         open_order_port=open_order_port,
         reconciliation_service=recon_svc,
-        order_request_repo=order_request_repo or FakeOrderRequestRepo(),
+        order_request_repo=req_repo,
         order_report_repo=order_report_repo or FakeOrderReportRepo(),
         fill_repo=fill_repo or FakeFillRepo(),
         order_event_repo=order_event_repo or FakeOrderEventRepository(),
@@ -409,7 +439,7 @@ async def test_divergence_degraded_continues() -> None:
 
 
 async def test_replay_missed_events() -> None:
-    """Seed cursor + events + order report → replayed_events > 0, order_id resolved."""
+    """Seed cursor + replay trades + order request → fills applied to positions."""
     feed = FakeExchangeDataFeed()
     cursor_repo = FakeStreamCursorRepo()
     cursor_repo.cursors["in_memory"] = StreamCursorRecord(
@@ -418,39 +448,45 @@ async def test_replay_missed_events() -> None:
         last_event_time=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
-    stream = InMemoryOrderEventStream()
-    event = OrderEvent(
-        order_id=0,
-        event_type=OrderEventType.FILLED,
-        occurred_at=datetime(2026, 1, 1, 0, 1, tzinfo=UTC),
-        exchange_order_id="EX2",
-    )
-    stream.push_event(event)
-
-    # Seed an order report so replay can resolve the order_id
-    order_report_repo = FakeOrderReportRepo()
-    await order_report_repo.upsert_report(
-        OrderReport(
-            order_request_id=42,
-            exchange_order_id="EX2",
-            status=OrderStatus.FILLED,
+    req_repo = FakeOrderRequestRepo()
+    request_id = await req_repo.insert_request(
+        OrderRequest(
+            client_order_id="dw_replay_1",
+            instrument_id=1,
+            account="test",
+            venue=str(BINANCE_VENUE),
+            product=str(BINANCE_USD_C),
+            side=OrderSide.BUY,
+            order_type=OrderType.MARKET,
+            quantity=Decimal("0.01"),
         )
     )
 
+    instrument_repo = FakeInstrumentRepo()
+    instrument_repo.seed(BINANCE_VENUE, BINANCE_USD_C, "BTCUSDC", db_id=1)
+
+    stream = InMemoryOrderEventStream()
+    stream.push_replay_update(_replay_update(client_order_id="dw_replay_1"))
+
     order_event_repo = FakeOrderEventRepository()
+    leg_repo = FakePositionLegRepo()
     orch = _build_orchestrator(
         feed=feed,
         order_stream=stream,
         cursor_repo=cursor_repo,
+        order_request_repo=req_repo,
+        instrument_repo=instrument_repo,
+        position_leg_repo=leg_repo,
         order_event_repo=order_event_repo,
-        order_report_repo=order_report_repo,
     )
 
     result = await orch.run()
 
     assert result.replayed_events == 1
     assert len(order_event_repo.events) == 1
-    assert order_event_repo.events[0].order_id == 42
+    assert order_event_repo.events[0].order_id == request_id
+    # Replay flows through the high-water mark and rebuilds position legs
+    assert len(leg_repo.legs) == 1
 
     await _cancel_consumer(result)
 
@@ -497,29 +533,29 @@ async def test_re_reconciliation_after_replay() -> None:
         last_event_time=datetime(2026, 1, 1, tzinfo=UTC),
     )
     stream = InMemoryOrderEventStream()
-    stream.push_event(
-        OrderEvent(
-            order_id=0,
-            event_type=OrderEventType.FILLED,
-            occurred_at=datetime(2026, 1, 1, 0, 1, tzinfo=UTC),
-            exchange_order_id="EX2",
+    stream.push_replay_update(_replay_update(client_order_id="dw_replay_2"))
+    req_repo = FakeOrderRequestRepo()
+    await req_repo.insert_request(
+        OrderRequest(
+            client_order_id="dw_replay_2",
+            instrument_id=1,
+            account="test",
+            venue=str(BINANCE_VENUE),
+            product=str(BINANCE_USD_C),
+            side=OrderSide.BUY,
+            order_type=OrderType.MARKET,
+            quantity=Decimal("0.01"),
         )
     )
-    # Seed order report so replay resolves the event
-    order_report_repo = FakeOrderReportRepo()
-    await order_report_repo.upsert_report(
-        OrderReport(
-            order_request_id=1,
-            exchange_order_id="EX2",
-            status=OrderStatus.FILLED,
-        )
-    )
+    instrument_repo = FakeInstrumentRepo()
+    instrument_repo.seed(BINANCE_VENUE, BINANCE_USD_C, "BTCUSDC", db_id=1)
     audit = CapturingAuditLog()
     orch = _build_orchestrator(
         feed=feed,
         order_stream=stream,
         cursor_repo=cursor_repo,
-        order_report_repo=order_report_repo,
+        order_request_repo=req_repo,
+        instrument_repo=instrument_repo,
         audit_log=audit,
     )
 
@@ -607,27 +643,28 @@ async def test_stale_recon_result_after_replay() -> None:
         last_event_time=datetime(2026, 1, 1, tzinfo=UTC),
     )
     stream = InMemoryOrderEventStream()
-    stream.push_event(
-        OrderEvent(
-            order_id=0,
-            event_type=OrderEventType.FILLED,
-            occurred_at=datetime(2026, 1, 1, 0, 1, tzinfo=UTC),
-            exchange_order_id="EX2",
+    stream.push_replay_update(_replay_update(client_order_id="dw_replay_3"))
+    req_repo = FakeOrderRequestRepo()
+    await req_repo.insert_request(
+        OrderRequest(
+            client_order_id="dw_replay_3",
+            instrument_id=1,
+            account="test",
+            venue=str(BINANCE_VENUE),
+            product=str(BINANCE_USD_C),
+            side=OrderSide.BUY,
+            order_type=OrderType.MARKET,
+            quantity=Decimal("0.01"),
         )
     )
-    order_report_repo = FakeOrderReportRepo()
-    await order_report_repo.upsert_report(
-        OrderReport(
-            order_request_id=1,
-            exchange_order_id="EX2",
-            status=OrderStatus.FILLED,
-        )
-    )
+    instrument_repo = FakeInstrumentRepo()
+    instrument_repo.seed(BINANCE_VENUE, BINANCE_USD_C, "BTCUSDC", db_id=1)
     orch = _build_orchestrator(
         feed=feed,
         order_stream=stream,
         cursor_repo=cursor_repo,
-        order_report_repo=order_report_repo,
+        order_request_repo=req_repo,
+        instrument_repo=instrument_repo,
         reconciliation_service_override=ResolvedAfterReplayReconciliation(),  # type: ignore[arg-type]
     )
 

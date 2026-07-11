@@ -90,7 +90,7 @@ async def test_stale_orders_cancelled() -> None:
     assert len(result.cancelled) == 2
     assert result.cancelled[0].exchange_order_id == "exch_1"
     assert result.cancelled[1].exchange_order_id == "exch_2"
-    assert "BTCUSDC" in adapter.cancel_calls
+    assert "BTCUSDC:exch_1" in adapter.cancel_calls
 
 
 @pytest.mark.asyncio
@@ -140,7 +140,7 @@ async def test_multiple_symbols_processed() -> None:
 
     assert len(result.cancelled) == 1
     assert result.cancelled[0].symbol == "ETHUSDC"
-    assert "ETHUSDC" in adapter.cancel_calls
+    assert "ETHUSDC:exch_eth" in adapter.cancel_calls
     assert "BTCUSDC" not in adapter.cancel_calls
 
 
@@ -158,6 +158,9 @@ async def test_exchange_error_recorded() -> None:
             raise AdapterError(f"timeout for {symbol}")
 
         async def cancel_all_open_orders(self, symbol: str) -> None:
+            pass
+
+        async def cancel_order(self, symbol: str, exchange_order_id: str) -> None:
             pass
 
     svc = StartupOrderCleanupService(

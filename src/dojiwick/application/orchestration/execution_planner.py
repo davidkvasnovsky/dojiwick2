@@ -1,13 +1,15 @@
 """Default execution planner — computes leg deltas from current vs target positions."""
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from dojiwick.domain.contracts.gateways.exchange_metadata import ExchangeMetadataPort
 from dojiwick.domain.enums import OrderSide, OrderType, PositionMode, PositionSide
 from dojiwick.domain.models.value_objects.account_state import AccountSnapshot, ExchangePositionLeg
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId, TargetLegPosition
 from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan, LegDelta
-from dojiwick.domain.numerics import ZERO, Money, Quantity
+from dojiwick.domain.models.value_objects.instrument_metadata import InstrumentFilter
+from dojiwick.domain.numerics import ZERO, Money, Quantity, meets_min_notional, quantize_qty_to_step
 
 log = logging.getLogger(__name__)
 
@@ -33,14 +35,19 @@ def _compute_estimated_notional(deltas: tuple[LegDelta, ...]) -> Money:
     return total
 
 
-@dataclass(slots=True, frozen=True, kw_only=True)
+@dataclass(slots=True, kw_only=True)
 class DefaultExecutionPlanner:
     """Computes leg deltas to move from current positions to target positions.
 
     Handles both one-way mode (NET-only) and hedge mode (independent LONG/SHORT legs).
+    With exchange metadata available, quantities are quantized to the venue's
+    step size and sub-minimum entries are dropped — raw sizing output almost
+    never conforms to LOT_SIZE and would be rejected order by order.
     """
 
     position_mode: PositionMode = PositionMode.ONE_WAY
+    exchange_metadata: ExchangeMetadataPort | None = None
+    _filter_cache: dict[str, InstrumentFilter] = field(default_factory=dict)
 
     async def plan(
         self,
@@ -53,7 +60,10 @@ class DefaultExecutionPlanner:
         for target_index, target in enumerate(targets):
             target_qty = target.target_qty if target.target_qty is not None else ZERO
             leg_deltas = self._plan_leg(account_snapshot, target, target_qty, target_index)
-            deltas.extend(leg_deltas)
+            for delta in leg_deltas:
+                quantized = await self._quantize(delta)
+                if quantized is not None:
+                    deltas.append(quantized)
 
         result = tuple(deltas)
         return ExecutionPlan(
@@ -61,6 +71,59 @@ class DefaultExecutionPlanner:
             deltas=result,
             estimated_notional=_compute_estimated_notional(result),
         )
+
+    async def _quantize(self, delta: LegDelta) -> LegDelta | None:
+        """Snap quantity to the exchange step grid; drop sub-minimum entries.
+
+        Reduce/close deltas are quantized but never dropped for min-notional —
+        exchange minimums do not apply to reduce-only exits, and dropping one
+        would strand a position.
+        """
+        if self.exchange_metadata is None:
+            return delta
+        filters = await self._filters_for(delta.instrument_id)
+        qty = quantize_qty_to_step(delta.quantity, filters.step_size)
+        is_reduce = delta.reduce_only or delta.close_position
+
+        if qty <= 0:
+            if is_reduce:
+                # Residual below one step cannot be closed tighter than the grid
+                log.warning("reduce delta for %s below step size — dropped", delta.instrument_id.symbol)
+            return None
+        if not is_reduce:
+            if qty < filters.min_qty:
+                log.info("entry for %s below min_qty — dropped", delta.instrument_id.symbol)
+                return None
+            if filters.max_qty is not None and qty > filters.max_qty:
+                qty = quantize_qty_to_step(filters.max_qty, filters.step_size)
+            if delta.price is not None and not meets_min_notional(qty, delta.price, filters.min_notional):
+                log.info("entry for %s below min notional — dropped", delta.instrument_id.symbol)
+                return None
+        if qty == delta.quantity:
+            return delta
+        return LegDelta(
+            instrument_id=delta.instrument_id,
+            target_index=delta.target_index,
+            position_side=delta.position_side,
+            side=delta.side,
+            order_type=delta.order_type,
+            quantity=qty,
+            price=delta.price,
+            reduce_only=delta.reduce_only,
+            close_position=delta.close_position,
+            time_in_force=delta.time_in_force,
+            working_type=delta.working_type,
+            sequence=delta.sequence,
+        )
+
+    async def _filters_for(self, instrument_id: InstrumentId) -> InstrumentFilter:
+        assert self.exchange_metadata is not None
+        cached = self._filter_cache.get(instrument_id.symbol)
+        if cached is None:
+            info = await self.exchange_metadata.get_instrument(instrument_id)
+            cached = info.filters
+            self._filter_cache[instrument_id.symbol] = cached
+        return cached
 
     def _plan_leg(
         self,

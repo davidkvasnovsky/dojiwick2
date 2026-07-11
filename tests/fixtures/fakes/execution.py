@@ -32,6 +32,9 @@ class PlanCall(NamedTuple):
 class DryRunGateway(ExecutionGatewayPort):
     """Fills all plan deltas."""
 
+    def __init__(self) -> None:
+        self.cancelled: list[str] = []
+
     async def execute_plan(self, plan: ExecutionPlan, *, tick_id: str = "") -> tuple[ExecutionReceipt, ...]:
         receipts: list[ExecutionReceipt] = []
         for i, delta in enumerate(plan.deltas):
@@ -57,6 +60,7 @@ class DryRunGateway(ExecutionGatewayPort):
         return tuple(receipts)
 
     async def cancel_order(self, pair: str, order_id: str) -> SubmissionAck:
+        self.cancelled.append(f"{pair}:{order_id}")
         return SubmissionAck(
             status=SubmissionStatus.CANCELLED,
             reason=f"dry_run_cancel pair={pair} order_id={order_id}",

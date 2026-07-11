@@ -59,8 +59,17 @@ def _apply_order_type_params(
     reduce_only: bool,
     close_position: bool,
     working_type: WorkingType,
+    price_protect: bool = False,
 ) -> None:
-    """Mutate params dict with order-type-specific fields."""
+    """Mutate params dict with order-type-specific fields.
+
+    Binance rejects reduceOnly together with closePosition (-1106), and
+    closePosition is only valid for STOP_MARKET/TAKE_PROFIT_MARKET — where
+    it also excludes an explicit quantity. MARKET closes therefore carry
+    reduceOnly + quantity only.
+    """
+    is_conditional_close = close_position and order_type in (OrderType.STOP_MARKET, OrderType.TAKE_PROFIT_MARKET)
+
     if order_type == OrderType.LIMIT:
         if price is not None:
             params["price"] = format_price(price)
@@ -73,14 +82,17 @@ def _apply_order_type_params(
     elif order_type in (OrderType.STOP_MARKET, OrderType.TAKE_PROFIT_MARKET):
         if price is not None:
             params["stopPrice"] = format_price(price)
-    # MARKET: no price, no timeInForce
 
-    if reduce_only:
-        params["reduceOnly"] = "true"
-    if close_position:
+    if is_conditional_close:
         params["closePosition"] = "true"
+        params.pop("quantity", None)
+        params.pop("reduceOnly", None)
+    elif reduce_only:
+        params["reduceOnly"] = "true"
     if order_type in _STOP_TYPES:
         params["workingType"] = format_working_type(working_type)
+        if price_protect:
+            params["priceProtect"] = "TRUE"
 
 
 def _build_order_params(delta: LegDelta, *, tick_id: str, leg_seq: int) -> dict[str, str]:
@@ -247,7 +259,9 @@ class BinanceExecutionGateway:
         if client_order_id:
             params["newClientOrderId"] = client_order_id
 
-        _apply_order_type_params(params, order_type, price, time_in_force, reduce_only, close_position, working_type)
+        _apply_order_type_params(
+            params, order_type, price, time_in_force, reduce_only, close_position, working_type, price_protect
+        )
 
         try:
             raw = await self.client.request("POST", "/fapi/v1/order", params=params, signed=True)

@@ -32,3 +32,7 @@ class OpenOrderPort(Protocol):
     async def cancel_all_open_orders(self, symbol: str) -> None:
         """Cancel all open orders for a symbol."""
         ...
+
+    async def cancel_order(self, symbol: str, exchange_order_id: str) -> None:
+        """Cancel a single open order by exchange id."""
+        ...

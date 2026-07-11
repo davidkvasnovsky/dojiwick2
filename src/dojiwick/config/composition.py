@@ -106,8 +106,12 @@ def _build_binance_adapters(settings: Settings, clock: ClockPort) -> ComposedAda
 
     http_client = _build_http_client(settings, clock, api_key=api_key, api_secret=api_secret)
 
+    metadata_provider = BinanceExchangeMetadataProvider(
+        client=http_client, clock=clock, refresh_sec=settings.exchange.metadata_refresh_sec
+    )
     execution_planner: ExecutionPlannerPort = DefaultExecutionPlanner(
         position_mode=settings.exchange.position_mode,
+        exchange_metadata=metadata_provider,
     )
 
     symbols = resolve_execution_symbols(settings)
@@ -147,7 +151,7 @@ def _build_binance_adapters(settings: Settings, clock: ClockPort) -> ComposedAda
         ),
         execution_gateway=BinanceExecutionGateway(client=http_client),
         execution_planner=execution_planner,
-        exchange_metadata=BinanceExchangeMetadataProvider(client=http_client),
+        exchange_metadata=metadata_provider,
         account_state=account_state,
         open_order_port=BinanceOpenOrderAdapter(client=http_client),
         order_stream=order_stream,

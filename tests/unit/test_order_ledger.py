@@ -8,6 +8,8 @@ import pytest
 from dojiwick.domain.errors import AdapterError
 
 from dojiwick.application.services.order_ledger import OrderLedgerService
+
+
 from dojiwick.domain.enums import (
     ExecutionStatus,
     OrderEventType,
@@ -29,6 +31,19 @@ from fixtures.fakes.order_report_repository import FakeOrderReportRepo
 from fixtures.fakes.order_request_repository import FakeOrderRequestRepo
 
 _NOW = datetime(2025, 1, 1, tzinfo=UTC)
+
+
+async def _record(
+    svc: OrderLedgerService,
+    plan: "ExecutionPlan",
+    receipts: "tuple[ExecutionReceipt, ...]",
+    tick_id: str,
+) -> dict[int, int]:
+    request_ids = await svc.record_requests(plan, tick_id=tick_id)
+    await svc.record_results(plan, receipts, request_ids)
+    return request_ids
+
+
 _IID = InstrumentId(
     venue=BINANCE_VENUE,
     product=BINANCE_USD_C,
@@ -57,7 +72,6 @@ def _make_service() -> tuple[
         instrument_repo=instrument_repo,
         order_request_repo=request_repo,
         order_report_repo=report_repo,
-        fill_repo=fill_repo,
         order_event_repo=event_repo,
         clock=FixedClock(_NOW),
     )
@@ -110,12 +124,12 @@ def _filled_receipt(
 
 
 @pytest.mark.asyncio
-async def test_filled_receipt_records_request_report_fill_event() -> None:
+async def test_filled_receipt_records_request_report_event() -> None:
     svc, _, req_repo, rpt_repo, fill_repo, evt_repo = _make_service()
     plan = _plan(_delta())
     receipts = (_filled_receipt(),)
 
-    await svc.record_execution(plan, receipts, tick_id="tick_001")
+    await _record(svc, plan, receipts, tick_id="tick_001")
 
     assert len(req_repo.requests) == 1
     assert req_repo.requests[0].instrument_id == 42
@@ -124,8 +138,8 @@ async def test_filled_receipt_records_request_report_fill_event() -> None:
     assert len(rpt_repo.reports) == 1
     assert rpt_repo.reports[0].status == OrderStatus.FILLED
 
-    assert len(fill_repo.fills) == 1
-    assert fill_repo.fills[0].price == Decimal("50000")
+    # Fill rows are written exclusively by the WS consumer (trade-id keyed)
+    assert len(fill_repo.fills) == 0
 
     assert len(evt_repo.events) == 1
     assert evt_repo.events[0].event_type == OrderEventType.FILLED
@@ -137,7 +151,7 @@ async def test_skipped_receipt_no_fill() -> None:
     plan = _plan(_delta())
     receipts = (ExecutionReceipt(status=ExecutionStatus.SKIPPED, reason="no_fill"),)
 
-    await svc.record_execution(plan, receipts, tick_id="tick_002")
+    await _record(svc, plan, receipts, tick_id="tick_002")
 
     assert len(req_repo.requests) == 1
     assert len(rpt_repo.reports) == 1
@@ -153,7 +167,7 @@ async def test_error_receipt_no_fill() -> None:
     plan = _plan(_delta())
     receipts = (ExecutionReceipt(status=ExecutionStatus.ERROR, reason="gateway_error"),)
 
-    await svc.record_execution(plan, receipts, tick_id="tick_003")
+    await _record(svc, plan, receipts, tick_id="tick_003")
 
     assert len(req_repo.requests) == 1
     assert len(rpt_repo.reports) == 1
@@ -175,10 +189,11 @@ async def test_multiple_deltas_mixed_statuses() -> None:
         ExecutionReceipt(status=ExecutionStatus.REJECTED, reason="rejected"),
     )
 
-    await svc.record_execution(plan, receipts, tick_id="tick_004")
+    await _record(svc, plan, receipts, tick_id="tick_004")
 
     assert len(req_repo.requests) == 2
-    assert len(fill_repo.fills) == 1
+    # Fill rows are written exclusively by the WS consumer
+    assert len(fill_repo.fills) == 0
     assert len(evt_repo.events) == 2
     assert evt_repo.events[0].event_type == OrderEventType.FILLED
     assert evt_repo.events[1].event_type == OrderEventType.REJECTED
@@ -207,7 +222,7 @@ async def test_unknown_instrument_raises() -> None:
     receipts = (_filled_receipt(),)
 
     with pytest.raises(AdapterError, match="unknown instrument"):
-        await svc.record_execution(plan, receipts, tick_id="tick_005")
+        await _record(svc, plan, receipts, tick_id="tick_005")
 
     assert len(req_repo.requests) == 0
 
@@ -220,7 +235,7 @@ async def test_client_order_id_matches_compute() -> None:
     receipts = (_filled_receipt(),)
     tick_id = "tick_006"
 
-    await svc.record_execution(plan, receipts, tick_id=tick_id)
+    await _record(svc, plan, receipts, tick_id=tick_id)
 
     expected_coid = compute_client_order_id(tick_id, "BTCUSDC", d.side, d.position_side, 0, d.order_type)
     assert req_repo.requests[0].client_order_id == expected_coid

@@ -102,6 +102,21 @@ class CloseReason(StrEnum):
     TIME_EXIT = "time_exit"
 
 
+class OrderKind(StrEnum):
+    """Intent class of an order request — values match SQL order_kind enum."""
+
+    ENTRY = "entry"
+    EXIT = "exit"
+    PROTECTIVE_STOP = "protective_stop"
+    PROTECTIVE_TP = "protective_tp"
+    PROTECTIVE_TP1 = "protective_tp1"
+
+
+PROTECTIVE_ORDER_KINDS: frozenset["OrderKind"] = frozenset(
+    {OrderKind.PROTECTIVE_STOP, OrderKind.PROTECTIVE_TP, OrderKind.PROTECTIVE_TP1}
+)
+
+
 class OrderSide(StrEnum):
     """Order direction."""
 

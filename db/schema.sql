@@ -26,6 +26,7 @@ CREATE TYPE order_type          AS ENUM ('limit', 'market', 'stop_market', 'stop
 CREATE TYPE order_status        AS ENUM ('new', 'partially_filled', 'filled', 'canceled', 'expired', 'rejected');
 CREATE TYPE order_event_type    AS ENUM ('placed', 'partially_filled', 'filled', 'canceled', 'expired', 'rejected');
 CREATE TYPE order_time_in_force AS ENUM ('gtc', 'ioc', 'fok', 'gtx');
+CREATE TYPE order_kind          AS ENUM ('entry', 'exit', 'protective_stop', 'protective_tp', 'protective_tp1');
 
 -- Audit & observability
 CREATE TYPE audit_severity          AS ENUM ('info', 'warning', 'critical');
@@ -264,6 +265,27 @@ CREATE TABLE position_events (
 CREATE INDEX idx_position_events_leg_id
     ON position_events (position_leg_id);
 
+-- Live exit-management state per open position leg (protective order reconciler)
+CREATE TABLE position_exit_state (
+    position_leg_id             BIGINT           PRIMARY KEY REFERENCES position_legs(id),
+    is_long                     BOOLEAN          NOT NULL,
+    entry_price                 NUMERIC(20,8)    NOT NULL,
+    stop_price                  NUMERIC(20,8)    NOT NULL,
+    original_stop               NUMERIC(20,8)    NOT NULL,
+    take_profit_price           NUMERIC(20,8)    NOT NULL,
+    trailing_activation_price   NUMERIC(20,8)    NOT NULL DEFAULT 0,
+    trailing_distance           NUMERIC(20,8)    NOT NULL DEFAULT 0,
+    breakeven_price             NUMERIC(20,8)    NOT NULL DEFAULT 0,
+    extreme_price               NUMERIC(20,8)    NOT NULL DEFAULT 0,
+    max_hold_bars               INTEGER          NOT NULL DEFAULT 0,
+    bars_held                   INTEGER          NOT NULL DEFAULT 0,
+    tp1_price                   NUMERIC(20,8)    NOT NULL DEFAULT 0,
+    tp1_fraction                NUMERIC(6,4)     NOT NULL DEFAULT 0,
+    tp1_filled                  BOOLEAN          NOT NULL DEFAULT false,
+    revision                    INTEGER          NOT NULL DEFAULT 0,
+    updated_at                  TIMESTAMPTZ      NOT NULL DEFAULT now()
+);
+
 CREATE INDEX idx_position_events_occurred
     ON position_events (occurred_at DESC);
 
@@ -290,6 +312,12 @@ CREATE TABLE order_requests (
     working_type        working_type     NOT NULL DEFAULT 'contract_price',
     price_protect       BOOLEAN          NOT NULL DEFAULT false,
     recv_window_ms      INTEGER,
+    order_kind          order_kind       NOT NULL DEFAULT 'entry',
+    position_leg_id     BIGINT           REFERENCES position_legs(id),
+    -- Cumulative fill quantity already applied to position legs: the
+    -- high-water mark that makes REST-receipt and WS-event application
+    -- idempotent regardless of arrival order
+    position_applied_qty NUMERIC(18,8)   NOT NULL DEFAULT 0,
     tick_id             TEXT             REFERENCES ticks(tick_id),
     created_at          TIMESTAMPTZ      NOT NULL DEFAULT now(),
     CONSTRAINT fk_order_requests_instrument
@@ -306,6 +334,10 @@ CREATE INDEX idx_order_requests_account
 
 CREATE INDEX idx_order_requests_venue_product
     ON order_requests (venue, product, created_at DESC);
+
+CREATE INDEX idx_order_requests_protective
+    ON order_requests (position_leg_id)
+    WHERE order_kind IN ('protective_stop', 'protective_tp', 'protective_tp1');
 
 -- Order reports (exchange-acknowledged order state)
 CREATE TABLE order_reports (

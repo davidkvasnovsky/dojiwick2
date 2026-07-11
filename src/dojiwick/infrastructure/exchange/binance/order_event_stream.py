@@ -15,9 +15,8 @@ from typing import TYPE_CHECKING, cast
 
 from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.contracts.gateways.order_event_stream import StreamCursor
-from dojiwick.domain.enums import OrderStatus, STATUS_TO_EVENT_TYPE
+from dojiwick.domain.enums import OrderSide, OrderStatus, OrderType, PositionSide
 from dojiwick.domain.models.value_objects.exchange_order_update import ExchangeOrderUpdate
-from dojiwick.domain.models.value_objects.order_event import OrderEvent
 
 from .boundary import ms_to_utc, parse_ws_order_update, str_field
 from .http_client import BinanceHttpClient
@@ -38,6 +37,7 @@ class BinanceOrderEventStream:
 
     client: BinanceHttpClient
     clock: ClockPort
+    keepalive_failure_threshold: int = 2
 
     _ws: aiohttp.ClientWebSocketResponse | None = field(default=None, init=False, repr=False)
     _listen_key: str = field(default="", init=False, repr=False)
@@ -66,14 +66,29 @@ class BinanceOrderEventStream:
         log.info("WS user-data stream connected")
 
     async def _keepalive_loop(self) -> None:
-        """PUT listenKey every 30 minutes to prevent expiry."""
+        """PUT listenKey every 30 minutes to prevent expiry.
+
+        After ``keepalive_failure_threshold`` consecutive failures the socket
+        is force-closed: the listenKey expires at ~60 minutes, and a silently
+        dead key means order events stop with no visible signal. Closing lets
+        the consumer's supervisor reconnect with a fresh key.
+        """
+        failures = 0
         while True:
             await asyncio.sleep(_KEEPALIVE_INTERVAL_SEC)
             try:
                 await self.client.request("PUT", "/fapi/v1/listenKey", signed=True)
+                failures = 0
                 log.debug("listenKey keepalive sent")
             except Exception:
-                log.warning("listenKey keepalive failed", exc_info=True)
+                failures += 1
+                log.warning("listenKey keepalive failed (%d consecutive)", failures, exc_info=True)
+                if failures >= self.keepalive_failure_threshold:
+                    log.critical("listenKey keepalive failing — forcing reconnect with fresh key")
+                    self._connected = False
+                    if self._ws is not None:
+                        await self._ws.close()
+                    return
 
     async def disconnect(self) -> None:
         """Cancel keepalive, close WS, DELETE listenKey."""
@@ -126,51 +141,70 @@ class BinanceOrderEventStream:
                 log.warning("WS connection closed/errored")
                 break
 
-    async def events(self) -> AsyncIterator[OrderEvent]:
-        """Yield OrderEvent objects converted from ExchangeOrderUpdate."""
-        async for update in self.raw_updates():
-            event_type = STATUS_TO_EVENT_TYPE.get(update.order_status)
-            if event_type is None:
-                continue
-            yield OrderEvent(
-                order_id=0,
-                event_type=event_type,
-                occurred_at=update.event_time,
-                exchange_order_id=update.exchange_order_id,
-                filled_quantity=update.last_filled_qty,
-                fees_usd=update.commission,
-                fee_asset=update.commission_asset,
-                native_fee_amount=update.commission,
-            )
+    async def replay_trades(self, symbol: str, start_time_ms: int) -> tuple[ExchangeOrderUpdate, ...]:
+        """REST recovery sweep for one symbol: userTrades since *start_time_ms*.
 
-    async def replay_from(self, cursor: StreamCursor) -> AsyncIterator[OrderEvent]:
-        """REST GET /fapi/v1/allOrders since cursor timestamp, convert to OrderEvent."""
-        params: dict[str, str] = {}
-        if cursor.timestamp_ms > 0:
-            params["startTime"] = str(cursor.timestamp_ms)
+        Both /fapi/v1/userTrades and /fapi/v1/order are per-symbol-mandatory
+        endpoints — the previous account-wide allOrders call was rejected by
+        the exchange on every startup with a stored cursor.
+        """
+        params: dict[str, str] = {"symbol": symbol, "limit": "1000"}
+        if start_time_ms > 0:
+            params["startTime"] = str(start_time_ms)
+        trades = await self.client.request_list("GET", "/fapi/v1/userTrades", params=params, signed=True)
 
-        orders = await self.client.request_list("GET", "/fapi/v1/allOrders", params=params, signed=True)
-        for order_raw in orders:
-            if not isinstance(order_raw, dict):
+        by_order: dict[int, list[dict[str, object]]] = {}
+        for raw in trades:
+            if not isinstance(raw, dict):
                 continue
-            item = cast(dict[str, object], order_raw)
-            status_str = str_field(item, "status")
-            event_type = STATUS_TO_EVENT_TYPE.get(OrderStatus(status_str.lower()))
-            if event_type is None:
-                continue
-            update_time = item.get("updateTime", 0)
-            if isinstance(update_time, int | float):
-                occurred_at = ms_to_utc(int(update_time))
-            else:
-                occurred_at = ms_to_utc(0)
-            yield OrderEvent(
-                order_id=0,
-                event_type=event_type,
-                occurred_at=occurred_at,
-                exchange_order_id=str(item.get("orderId", "")),
-                filled_quantity=Decimal(str(item.get("executedQty", "0"))),
-                fees_usd=Decimal(0),
+            item = cast(dict[str, object], raw)
+            order_id = item.get("orderId")
+            if isinstance(order_id, int):
+                by_order.setdefault(order_id, []).append(item)
+
+        updates: list[ExchangeOrderUpdate] = []
+        for order_id, order_trades in by_order.items():
+            order_raw = await self.client.request(
+                "GET", "/fapi/v1/order", params={"symbol": symbol, "orderId": str(order_id)}, signed=True
             )
+            status = OrderStatus(str_field(order_raw, "status").lower())
+            client_order_id = str_field(order_raw, "clientOrderId")
+            cumulative = Decimal(str(order_raw.get("executedQty", "0")))
+            avg_price = Decimal(str(order_raw.get("avgPrice", "0")))
+            side = OrderSide(str_field(order_raw, "side").lower())
+            position_side = PositionSide(str_field(order_raw, "positionSide", "BOTH").replace("BOTH", "net").lower())
+            reduce_only = bool(order_raw.get("reduceOnly", False))
+            close_position = bool(order_raw.get("closePosition", False))
+
+            for trade in sorted(order_trades, key=lambda t: int(str(t.get("time", 0)))):
+                trade_time = ms_to_utc(int(str(trade.get("time", 0))))
+                updates.append(
+                    ExchangeOrderUpdate(
+                        exchange_order_id=str(order_id),
+                        client_order_id=client_order_id,
+                        symbol=symbol,
+                        side=side,
+                        order_type=OrderType.MARKET,
+                        order_status=status,
+                        execution_type="TRADE",
+                        position_side=position_side,
+                        last_filled_qty=Decimal(str(trade.get("qty", "0"))),
+                        last_filled_price=Decimal(str(trade.get("price", "0"))),
+                        cumulative_filled_qty=cumulative,
+                        avg_price=avg_price,
+                        commission=Decimal(str(trade.get("commission", "0"))),
+                        commission_asset=str(trade.get("commissionAsset", "")),
+                        trade_id=int(str(trade.get("id", 0))),
+                        order_trade_time=trade_time,
+                        reduce_only=reduce_only,
+                        close_position=close_position,
+                        realized_profit=Decimal(str(trade.get("realizedPnl", "0"))),
+                        event_time=trade_time,
+                        transaction_time=trade_time,
+                    )
+                )
+
+        return tuple(updates)
 
     async def get_cursor(self) -> StreamCursor:
         """Return the current stream position as a cursor."""

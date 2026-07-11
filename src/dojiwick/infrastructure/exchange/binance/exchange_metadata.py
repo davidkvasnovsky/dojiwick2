@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import cast
 
+from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.type_aliases import ProductCode, VenueCode
 from dojiwick.domain.errors import ExchangeError
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
@@ -23,15 +24,22 @@ class BinanceExchangeMetadataProvider:
     """Fetches instrument metadata and capabilities from Binance Futures."""
 
     client: BinanceHttpClient
+    clock: ClockPort
+    refresh_sec: float = 21_600.0
     _exchange_info: ExchangeInfoResponse | None = field(default=None, init=False, repr=False)
+    _fetched_at_ns: int = field(default=0, init=False, repr=False)
 
     async def _fetch_exchange_info(self) -> ExchangeInfoResponse:
-        """GET /fapi/v1/exchangeInfo with caching."""
-        if self._exchange_info is None:
+        """GET /fapi/v1/exchangeInfo with TTL caching — filters change on
+        exchange maintenance, so a process running for days must refresh."""
+        now_ns = self.clock.monotonic_ns()
+        expired = (now_ns - self._fetched_at_ns) > self.refresh_sec * 1e9
+        if self._exchange_info is None or expired:
             self._exchange_info = cast(
                 ExchangeInfoResponse,
                 await self.client.request("GET", "/fapi/v1/exchangeInfo"),
             )
+            self._fetched_at_ns = now_ns
         return self._exchange_info
 
     async def list_instruments(

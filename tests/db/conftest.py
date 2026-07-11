@@ -62,6 +62,7 @@ async def clean_tables(db_cursor: DbCursor) -> None:
             order_events,
             order_requests,
             position_events,
+            position_exit_state,
             position_legs,
             instrument_filters,
             instruments,

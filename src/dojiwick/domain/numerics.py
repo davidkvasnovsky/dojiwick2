@@ -10,7 +10,7 @@ Kernel boundary utilities convert between ``Decimal`` sequences and numpy
 
 import math
 from collections.abc import Sequence
-from decimal import Decimal
+from decimal import ROUND_CEILING, ROUND_FLOOR, ROUND_HALF_UP, Decimal
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -88,3 +88,33 @@ def candles_to_ohlc(
     high = decimals_to_array([c.high for c in candles])
     low = decimals_to_array([c.low for c in candles])
     return close, high, low
+
+
+# Exchange filter quantization
+
+
+def quantize_qty_to_step(qty: Quantity, step_size: Quantity) -> Quantity:
+    """Floor quantity to the nearest step multiple — exchanges reject finer precision."""
+    if step_size <= 0:
+        return qty
+    return (qty // step_size) * step_size
+
+
+def round_price_to_tick(price: Price, tick_size: Price, *, away_from: Price | None = None) -> Price:
+    """Round price to the tick grid.
+
+    With *away_from* set (protective stops), rounds away from that price so
+    the rounded trigger never sits closer to the market than intended.
+    """
+    if tick_size <= 0:
+        return price
+    if away_from is None:
+        return ((price / tick_size).to_integral_value(rounding=ROUND_HALF_UP)) * tick_size
+    if price >= away_from:
+        return ((price / tick_size).to_integral_value(rounding=ROUND_CEILING)) * tick_size
+    return ((price / tick_size).to_integral_value(rounding=ROUND_FLOOR)) * tick_size
+
+
+def meets_min_notional(qty: Quantity, price: Price, min_notional: Money) -> bool:
+    """True when qty × price satisfies the exchange's minimum notional filter."""
+    return qty * price >= min_notional

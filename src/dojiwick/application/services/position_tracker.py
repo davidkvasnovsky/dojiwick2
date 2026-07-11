@@ -6,6 +6,7 @@ from decimal import Decimal
 
 from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.contracts.repositories.instrument import InstrumentRepositoryPort
+from dojiwick.domain.contracts.repositories.order_request import OrderRequestRepositoryPort
 from dojiwick.domain.contracts.repositories.position_event import PositionEventRepositoryPort
 from dojiwick.domain.contracts.repositories.position_leg import PositionLegRepositoryPort
 from dojiwick.domain.enums import ExecutionStatus, PositionEventType, PositionSide
@@ -25,14 +26,19 @@ class PositionTracker:
     instrument_repo: InstrumentRepositoryPort
     position_leg_repo: PositionLegRepositoryPort
     position_event_repo: PositionEventRepositoryPort
+    order_request_repo: OrderRequestRepositoryPort
     clock: ClockPort
 
     async def apply_fills(
         self,
         plan: ExecutionPlan,
         plan_receipts: tuple[ExecutionReceipt, ...],
+        request_ids: dict[int, int],
     ) -> None:
-        """Update position legs based on filled receipts."""
+        """Apply filled receipts to position legs via the high-water mark.
+
+        *request_ids* maps delta index -> pre-persisted order_request id.
+        """
         resolved_ids: dict[tuple[str, str, str], int | None] = {}
 
         for i, delta in enumerate(plan.deltas):
@@ -40,6 +46,9 @@ class PositionTracker:
             if receipt is None or receipt.status is not ExecutionStatus.FILLED:
                 continue
             assert receipt.fill_price is not None
+            request_id = request_ids.get(i)
+            if request_id is None:
+                raise AdapterError(f"no pre-persisted order request for filled delta {i}")
 
             iid = delta.instrument_id
             cache_key = (iid.venue, iid.product, iid.symbol)
@@ -52,26 +61,39 @@ class PositionTracker:
                 raise AdapterError(f"unknown instrument {iid.venue}/{iid.product}/{iid.symbol} for filled order")
 
             is_decreasing = delta.reduce_only or delta.close_position
-            await self._apply_single_fill(
-                plan.account,
-                instrument_id_int,
-                delta.position_side,
-                receipt.filled_quantity,
-                receipt.fill_price,
-                is_decreasing,
+            await self.apply_order_fill(
+                order_request_id=request_id,
+                cumulative_filled_qty=receipt.filled_quantity,
+                fill_price=receipt.fill_price,
+                account=plan.account,
+                instrument_id=instrument_id_int,
+                position_side=delta.position_side,
+                is_decreasing=is_decreasing,
             )
 
-    async def update_from_fill(
+    async def apply_order_fill(
         self,
+        *,
+        order_request_id: int,
+        cumulative_filled_qty: Quantity,
+        fill_price: Price,
         account: str,
         instrument_id: int,
         position_side: PositionSide,
-        fill_qty: Quantity,
-        fill_price: Price,
         is_decreasing: bool,
-    ) -> None:
-        """Update position legs from a single fill (used by WS event consumer)."""
-        await self._apply_single_fill(account, instrument_id, position_side, fill_qty, fill_price, is_decreasing)
+    ) -> Quantity:
+        """Apply an order's cumulative fill through the high-water mark.
+
+        Both the tick path (REST receipt, cumulative executedQty) and the WS
+        consumer (cumulative ``z``) call this; whichever arrives second gets a
+        zero delta, so fills are never double-applied and partial fills
+        compose monotonically. Returns the newly applied quantity.
+        """
+        delta = await self.order_request_repo.advance_applied_qty(order_request_id, cumulative_filled_qty)
+        if delta <= 0:
+            return delta
+        await self._apply_single_fill(account, instrument_id, position_side, delta, fill_price, is_decreasing)
+        return delta
 
     async def _apply_single_fill(
         self,

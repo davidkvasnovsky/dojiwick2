@@ -87,14 +87,20 @@ BINANCE_ERROR_MAP: dict[int, ErrorMapping] = {
     -2014: ErrorMapping(AuthenticationError, RetryCategory.NO_RETRY, "API key format invalid"),
     -2015: ErrorMapping(AuthenticationError, RetryCategory.NO_RETRY, "Invalid API key/IP/permissions"),
     -1022: ErrorMapping(AuthenticationError, RetryCategory.NO_RETRY, "Invalid signature"),
-    # Order errors
+    # Order errors — terminal rejections must not burn retries
+    -2010: ErrorMapping(ExchangeError, RetryCategory.NO_RETRY, "New order rejected"),
+    -2011: ErrorMapping(ExchangeError, RetryCategory.NO_RETRY, "Cancel rejected"),
     -2013: ErrorMapping(OrderNotFoundError, RetryCategory.NO_RETRY, "Order does not exist"),
-    -2022: ErrorMapping(ExchangeError, RetryCategory.NO_RETRY, "Order would immediately trigger"),
+    -2021: ErrorMapping(ExchangeError, RetryCategory.NO_RETRY, "Order would immediately trigger"),
+    -2022: ErrorMapping(ExchangeError, RetryCategory.NO_RETRY, "ReduceOnly order rejected"),
+    -1111: ErrorMapping(ExchangeError, RetryCategory.NO_RETRY, "Precision over maximum for symbol"),
     -4003: ErrorMapping(ExchangeError, RetryCategory.NO_RETRY, "Quantity less than zero"),
-    -4014: ErrorMapping(ExchangeError, RetryCategory.NO_RETRY, "Price less than zero"),
-    # Balance / margin
+    -4013: ErrorMapping(ExchangeError, RetryCategory.NO_RETRY, "Price less than minimum"),
+    -4014: ErrorMapping(ExchangeError, RetryCategory.NO_RETRY, "Price not increased by tick size"),
+    -4164: ErrorMapping(ExchangeError, RetryCategory.NO_RETRY, "Order notional below minimum"),
+    # Balance / margin / leverage
     -2019: ErrorMapping(InsufficientBalanceError, RetryCategory.NO_RETRY, "Margin is insufficient"),
-    -4028: ErrorMapping(InsufficientBalanceError, RetryCategory.NO_RETRY, "Insufficient balance for leverage"),
+    -4028: ErrorMapping(ExchangeError, RetryCategory.NO_RETRY, "Invalid leverage"),
     # General
     -1000: ErrorMapping(ExchangeError, RetryCategory.BACKOFF_RETRY, "Unknown error"),
     -1001: ErrorMapping(ExchangeError, RetryCategory.BACKOFF_RETRY, "Disconnected"),

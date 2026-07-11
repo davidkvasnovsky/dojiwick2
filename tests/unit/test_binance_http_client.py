@@ -53,6 +53,7 @@ class TestRequest:
     async def test_successful_request(self) -> None:
         client = _make_client()
         mock_resp = AsyncMock()
+        mock_resp.headers = {}
         mock_resp.ok = True
         mock_resp.json = AsyncMock(return_value={"result": "ok"})
 
@@ -66,6 +67,7 @@ class TestRequest:
     async def test_auth_error_no_retry(self) -> None:
         client = _make_client()
         mock_resp = AsyncMock()
+        mock_resp.headers = {}
         mock_resp.ok = False
         mock_resp.status = 401
         mock_resp.json = AsyncMock(return_value={"code": -2015, "msg": "Invalid API key"})
@@ -81,6 +83,7 @@ class TestRequest:
     async def test_backoff_error_retries(self) -> None:
         client = _make_client(retry_max_attempts=2)
         mock_resp = AsyncMock()
+        mock_resp.headers = {}
         mock_resp.ok = False
         mock_resp.status = 500
         mock_resp.json = AsyncMock(return_value={"code": -1000, "msg": "Unknown error"})
@@ -117,6 +120,7 @@ class TestRequestList:
     async def test_successful_list_response(self) -> None:
         client = _make_client()
         mock_resp = AsyncMock()
+        mock_resp.headers = {}
         mock_resp.ok = True
         mock_resp.json = AsyncMock(return_value=[{"symbol": "BTCUSDT", "price": "50000.00"}])
 
@@ -130,6 +134,7 @@ class TestRequestList:
     async def test_non_list_response_raises(self) -> None:
         client = _make_client()
         mock_resp = AsyncMock()
+        mock_resp.headers = {}
         mock_resp.ok = True
         mock_resp.json = AsyncMock(return_value={"not": "a list"})
 

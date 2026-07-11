@@ -21,3 +21,7 @@ class FakeOpenOrderAdapter:
     async def cancel_all_open_orders(self, symbol: str) -> None:
         self.cancel_calls.append(symbol)
         self._orders[symbol] = []
+
+    async def cancel_order(self, symbol: str, exchange_order_id: str) -> None:
+        self.cancel_calls.append(f"{symbol}:{exchange_order_id}")
+        self._orders[symbol] = [o for o in self._orders.get(symbol, []) if o.exchange_order_id != exchange_order_id]

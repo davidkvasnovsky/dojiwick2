@@ -13,6 +13,7 @@ class InMemoryOrderEventStream(OrderEventStreamPort):
     """In-memory order event stream for tests."""
 
     _events: list[OrderEvent] = field(default_factory=list)
+    _replay_updates: list[ExchangeOrderUpdate] = field(default_factory=list)
     _raw_updates: list[ExchangeOrderUpdate] = field(default_factory=list)
     _connected: bool = False
     _sequence: int = 0
@@ -32,12 +33,6 @@ class InMemoryOrderEventStream(OrderEventStreamPort):
         """Close the event stream connection."""
         self._connected = False
 
-    async def events(self) -> AsyncIterator[OrderEvent]:
-        """Yield order events as they arrive."""
-        for event in self._events:
-            self._sequence += 1
-            yield event
-
     async def raw_updates(self) -> AsyncIterator[ExchangeOrderUpdate]:
         """Yield raw exchange order updates."""
         yielded = 0
@@ -53,10 +48,9 @@ class InMemoryOrderEventStream(OrderEventStreamPort):
         """Return True if the stream is currently connected."""
         return self._connected
 
-    async def replay_from(self, cursor: StreamCursor) -> AsyncIterator[OrderEvent]:
-        """Resume event delivery from the given cursor position."""
-        for event in self._events[cursor.sequence :]:
-            yield event
+    async def replay_trades(self, symbol: str, start_time_ms: int) -> tuple[ExchangeOrderUpdate, ...]:
+        """Return stored replay updates for the symbol."""
+        return tuple(u for u in self._replay_updates if u.symbol == symbol)
 
     async def get_cursor(self) -> StreamCursor:
         """Return the current stream position as a cursor."""
@@ -74,3 +68,7 @@ class InMemoryOrderEventStream(OrderEventStreamPort):
         """Test helper: raise error after yielding n raw updates."""
         self._error_after = n
         self._error = error
+
+    def push_replay_update(self, update: ExchangeOrderUpdate) -> None:
+        """Test helper: add an update returned by replay_trades."""
+        self._replay_updates.append(update)

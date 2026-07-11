@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from dojiwick.application.models.startup_result import StartupResult
+from dojiwick.application.services.instrument_sync import InstrumentSyncService
 from dojiwick.application.services.order_event_consumer import OrderEventConsumer
+from dojiwick.application.services.protective_orders import ProtectiveOrderService
 from dojiwick.application.services.position_tracker import PositionTracker
 from dojiwick.application.services.startup_order_cleanup import StartupOrderCleanupService
 from dojiwick.application.use_cases.run_reconciliation import ReconciliationService
@@ -19,10 +21,8 @@ from dojiwick.domain.contracts.gateways.audit_log import AuditLogPort
 from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.contracts.gateways.market_data_feed import MarketDataFeedPort
 from dojiwick.domain.contracts.gateways.open_order import OpenOrderPort
-from dojiwick.domain.contracts.gateways.order_event_stream import (
-    OrderEventStreamPort,
-    StreamCursor,
-)
+from dojiwick.domain.contracts.gateways.order_event_stream import OrderEventStreamPort
+from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.contracts.repositories.bot_state import BotStateRepositoryPort
 from dojiwick.domain.contracts.repositories.fill import FillRepositoryPort
 from dojiwick.domain.contracts.repositories.order_event import OrderEventRepositoryPort
@@ -60,6 +60,11 @@ class StartupOrchestrator:
     pair_symbols: tuple[str, ...]
     degraded_timeout_sec: int
     uncertain_timeout_sec: int
+    instrument_sync: InstrumentSyncService | None = None
+    instrument_ids: tuple[InstrumentId, ...] = ()
+    protective_orders: ProtectiveOrderService | None = None
+    consumer_reconnect_base_delay_sec: float = 1.0
+    consumer_reconnect_max_delay_sec: float = 60.0
 
     async def run(self) -> StartupResult:
         """Execute the full startup sequence and return the result."""
@@ -77,6 +82,11 @@ class StartupOrchestrator:
                 replayed_events=0,
             )
 
+        # 0. Instrument sync — every order/position write resolves instruments
+        # through the DB; a fresh database would otherwise silently skip all
+        if self.instrument_sync is not None and self.instrument_ids:
+            await self.instrument_sync.sync(self.instrument_ids)
+
         # 1. Bootstrap feed
         await self._bootstrap_feed()
         await self.feed.start()
@@ -93,6 +103,11 @@ class StartupOrchestrator:
         # 5. Re-reconcile after replay
         if replayed_events > 0:
             recon_result = await self.reconciliation_service.run_startup_gate(self.pair_symbols)
+
+        # 5b. Protective orders: every surviving position gets correct
+        # protection before the first tick; orphaned orders are retired
+        if self.protective_orders is not None:
+            await self.protective_orders.sync()
 
         # 6. Compute health
         health = await self._compute_health(recon_result)
@@ -153,7 +168,12 @@ class StartupOrchestrator:
         return len(cleanup_result.cancelled)
 
     async def _replay_missed_events(self) -> int:
-        """Replay missed order events from the last cursor. Returns count."""
+        """Replay per-symbol trades since the last cursor through the consumer path.
+
+        Replayed fills flow through the same report/fill/high-water-mark logic
+        as live WS events — the previous audit-only replay left position legs
+        stale after downtime and relied entirely on reconciliation.
+        """
         if self.order_stream is None:
             return 0
 
@@ -165,32 +185,19 @@ class StartupOrchestrator:
         if cursor_record.last_event_time is not None:
             timestamp_ms = int(cursor_record.last_event_time.timestamp() * 1000)
 
-        cursor = StreamCursor(
-            stream_name=self.order_stream.stream_name,
-            sequence=0,
-            timestamp_ms=timestamp_ms,
-        )
-
-        events = [e async for e in self.order_stream.replay_from(cursor)]
-        if not events:
-            return 0
-
-        reports = await self.order_report_repo.get_by_exchange_order_ids(
-            [e.exchange_order_id for e in events],
-        )
-
+        consumer = self._build_consumer()
         count = 0
-        for event in events:
-            report = reports.get(event.exchange_order_id)
-            if report is None:
-                log.warning("replay: unknown exchange_order_id=%s — skipping", event.exchange_order_id)
-                continue
-            corrected = replace(event, order_id=report.order_request_id)
-            await self.order_event_repo.record_event(corrected)
-            count += 1
+        for symbol in self.pair_symbols:
+            updates = await self.order_stream.replay_trades(symbol, timestamp_ms)
+            for update in updates:
+                try:
+                    await consumer.process_update(update)
+                    count += 1
+                except Exception:
+                    log.exception("replay: failed to process %s trade %s", symbol, update.trade_id)
 
         if count > 0:
-            log.info("replayed %d missed order events", count)
+            log.info("replayed %d missed trades", count)
 
         return count
 
@@ -218,12 +225,9 @@ class StartupOrchestrator:
         await self.bot_state_repository.update_state(state)
         return new_hs
 
-    async def _start_consumer(self) -> asyncio.Task[None] | None:
-        """Start the order event consumer background task."""
-        if self.order_stream is None:
-            return None
-
-        consumer = OrderEventConsumer(
+    def _build_consumer(self) -> OrderEventConsumer:
+        assert self.order_stream is not None
+        return OrderEventConsumer(
             stream=self.order_stream,
             order_request_repo=self.order_request_repo,
             order_report_repo=self.order_report_repo,
@@ -232,7 +236,16 @@ class StartupOrchestrator:
             position_tracker=self.position_tracker,
             cursor_repo=self.cursor_repo,
             clock=self.clock,
+            protective_orders=self.protective_orders,
+            reconnect_base_delay_sec=self.consumer_reconnect_base_delay_sec,
+            reconnect_max_delay_sec=self.consumer_reconnect_max_delay_sec,
         )
-        task = asyncio.create_task(consumer.run())
+
+    async def _start_consumer(self) -> asyncio.Task[None] | None:
+        """Start the order event consumer background task."""
+        if self.order_stream is None:
+            return None
+
+        task = asyncio.create_task(self._build_consumer().run())
         log.info("order event consumer started")
         return task

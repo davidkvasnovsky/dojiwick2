@@ -97,6 +97,7 @@ def _build_consumer(
         instrument_repo=instrument_repo,
         position_leg_repo=pos_leg_repo,
         position_event_repo=pos_event_repo,
+        order_request_repo=req_repo,
         clock=clock,
     )
 
@@ -131,6 +132,19 @@ async def _seed_order_request(repo: FakeOrderRequestRepo, client_order_id: str =
     )
 
 
+async def _drain(consumer: OrderEventConsumer) -> None:
+    """Feed the fake stream's updates through the processing path once.
+
+    run() is a reconnect-forever supervisor now; unit tests drive processing
+    directly and the supervisor behavior is covered separately.
+    """
+    try:
+        async for update in consumer.stream.raw_updates():
+            await consumer.process_update(update)
+    finally:
+        await consumer._flush_cursor()  # pyright: ignore[reportPrivateUsage] # noqa: SLF001
+
+
 async def test_consumer_processes_filled_trade() -> None:
     """Filled TRADE: report upserted, fill inserted, event recorded, cursor set."""
     stream = InMemoryOrderEventStream(_stream_name="test_orders")
@@ -140,7 +154,7 @@ async def test_consumer_processes_filled_trade() -> None:
     )
     await _seed_order_request(req_repo)
 
-    await consumer.run()
+    await _drain(consumer)
 
     assert len(report_repo.reports) == 1
     assert report_repo.reports[0].status is OrderStatus.FILLED
@@ -156,37 +170,21 @@ async def test_consumer_processes_filled_trade() -> None:
     assert "test_orders" in cursor_repo.cursors
 
 
-async def test_consumer_fill_dedup_skips_position_update() -> None:
-    """When insert_fill returns None (dedup), position is NOT updated."""
-    update = _make_update(trade_id=8888)
+async def test_consumer_duplicate_delivery_applies_position_once() -> None:
+    """The same trade delivered twice advances the high-water mark only once."""
+    update = _make_update()
     stream = InMemoryOrderEventStream(_stream_name="test_orders")
     stream.push_raw_update(update)
-    req_repo = FakeOrderRequestRepo()
-    fill_repo = FakeFillRepo()
-    consumer, req_repo, _, fill_repo, _, pos_leg_repo, pos_event_repo, _ = _build_consumer(
-        stream, order_request_repo=req_repo, fill_repo=fill_repo
-    )
+    stream.push_raw_update(update)
+    consumer, req_repo, _, _fill_repo, _, pos_leg_repo, pos_event_repo, _ = _build_consumer(stream)
     await _seed_order_request(req_repo)
 
-    # Pre-insert the fill so the consumer's insert returns None (dedup)
-    from dojiwick.domain.models.value_objects.order_request import Fill
+    await _drain(consumer)
 
-    await fill_repo.insert_fill(
-        Fill(
-            order_request_id=1,
-            price=Decimal("95000"),
-            quantity=Decimal("0.01"),
-            fill_id="8888",
-        )
-    )
-
-    await consumer.run()
-
-    # Fill was dedup'd — no new fills added beyond the pre-seeded one
-    assert len(fill_repo.fills) == 1
-    # No position leg created (dedup path skips position update)
-    assert len(pos_leg_repo.legs) == 0
-    assert len(pos_event_repo.events) == 0
+    assert len(pos_leg_repo.legs) == 1
+    leg = next(iter(pos_leg_repo.legs.values()))
+    assert leg.quantity == Decimal("0.01")
+    assert len(pos_event_repo.events) == 1
 
 
 async def test_consumer_partial_fill_updates_report() -> None:
@@ -201,7 +199,7 @@ async def test_consumer_partial_fill_updates_report() -> None:
     consumer, req_repo, report_repo, fill_repo, event_repo, *_ = _build_consumer(stream, cursor_flush_interval=1)
     await _seed_order_request(req_repo)
 
-    await consumer.run()
+    await _drain(consumer)
 
     assert report_repo.reports[0].status is OrderStatus.PARTIALLY_FILLED
     assert report_repo.reports[0].filled_qty == Decimal("0.005")
@@ -227,7 +225,7 @@ async def test_consumer_cancel_event_no_fill() -> None:
     )
     await _seed_order_request(req_repo)
 
-    await consumer.run()
+    await _drain(consumer)
 
     assert report_repo.reports[0].status is OrderStatus.CANCELED
     assert len(fill_repo.fills) == 0
@@ -242,7 +240,7 @@ async def test_consumer_unknown_order_skipped() -> None:
     stream.push_raw_update(update)
     consumer, _, report_repo, fill_repo, event_repo, _, _, cursor_repo = _build_consumer(stream)
 
-    await consumer.run()
+    await _drain(consumer)
 
     assert len(report_repo.reports) == 0
     assert len(fill_repo.fills) == 0
@@ -257,7 +255,7 @@ async def test_consumer_cursor_checkpointed() -> None:
     consumer, req_repo, *_, cursor_repo = _build_consumer(stream)
     await _seed_order_request(req_repo)
 
-    await consumer.run()
+    await _drain(consumer)
 
     cursor = cursor_repo.cursors.get("test_orders")
     assert cursor is not None
@@ -280,7 +278,7 @@ async def test_consumer_new_order_event() -> None:
     consumer, req_repo, report_repo, fill_repo, event_repo, *_ = _build_consumer(stream, cursor_flush_interval=1)
     await _seed_order_request(req_repo)
 
-    await consumer.run()
+    await _drain(consumer)
 
     assert report_repo.reports[0].status is OrderStatus.NEW
     assert len(fill_repo.fills) == 0  # execution_type != "TRADE"
@@ -296,7 +294,7 @@ async def test_cursor_batching_flushes_at_interval() -> None:
     consumer, req_repo, *_, cursor_repo = _build_consumer(stream, cursor_flush_interval=2)
     await _seed_order_request(req_repo)
 
-    await consumer.run()
+    await _drain(consumer)
 
     # After 3 events with interval=2: flush at event 2 (mid-stream), flush at finally (event 3)
     cursor = cursor_repo.cursors.get("test_orders")
@@ -337,7 +335,7 @@ async def test_consumer_passes_realized_pnl_to_fill_and_event() -> None:
     consumer, req_repo, _, fill_repo, event_repo, *_ = _build_consumer(stream, cursor_flush_interval=1)
     await _seed_order_request(req_repo)
 
-    await consumer.run()
+    await _drain(consumer)
 
     assert fill_repo.fills[0].realized_pnl_exchange == Decimal("12.50")
     assert event_repo.events[0].realized_pnl_exchange == Decimal("12.50")
@@ -354,8 +352,33 @@ async def test_consumer_propagates_stream_error() -> None:
     await _seed_order_request(req_repo)
 
     with pytest.raises(RuntimeError, match="ws disconnect"):
-        await consumer.run()
+        await _drain(consumer)
 
     # Cursor was still flushed in the finally block
     cursor = cursor_repo.cursors.get("test_orders")
     assert cursor is not None
+
+
+async def test_supervisor_reconnects_after_stream_error() -> None:
+    """run() survives a stream error: reconnects with backoff instead of dying."""
+    import asyncio
+
+    stream = InMemoryOrderEventStream(_stream_name="test_orders")
+    stream.push_raw_update(_make_update())
+    stream.set_error_after(1, RuntimeError("ws disconnect"))
+    consumer, req_repo, report_repo, *_ = _build_consumer(stream, cursor_flush_interval=1)
+    consumer.reconnect_base_delay_sec = 0.01
+    consumer.reconnect_max_delay_sec = 0.02
+    await _seed_order_request(req_repo)
+
+    task = asyncio.create_task(consumer.run())
+    await asyncio.sleep(0.1)
+    assert not task.done(), "supervisor must keep running through stream errors"
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+    # The event before the error was still processed
+    assert len(report_repo.reports) >= 1

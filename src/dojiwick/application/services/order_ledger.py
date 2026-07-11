@@ -5,17 +5,16 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from dojiwick.domain.contracts.gateways.clock import ClockPort
-from dojiwick.domain.contracts.repositories.fill import FillRepositoryPort
 from dojiwick.domain.contracts.repositories.instrument import InstrumentRepositoryPort
 from dojiwick.domain.contracts.repositories.order_event import OrderEventRepositoryPort
 from dojiwick.domain.contracts.repositories.order_report import OrderReportRepositoryPort
 from dojiwick.domain.contracts.repositories.order_request import OrderRequestRepositoryPort
-from dojiwick.domain.enums import ExecutionStatus, OrderEventType, OrderStatus
+from dojiwick.domain.enums import OrderKind, ExecutionStatus, OrderEventType, OrderStatus
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.hashing import compute_client_order_id
 from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan
 from dojiwick.domain.models.value_objects.order_event import OrderEvent
-from dojiwick.domain.models.value_objects.order_request import Fill, OrderReport, OrderRequest
+from dojiwick.domain.models.value_objects.order_request import OrderReport, OrderRequest
 from dojiwick.domain.models.value_objects.outcome_models import ExecutionReceipt
 
 log = logging.getLogger(__name__)
@@ -44,39 +43,40 @@ class OrderLedgerService:
     instrument_repo: InstrumentRepositoryPort
     order_request_repo: OrderRequestRepositoryPort
     order_report_repo: OrderReportRepositoryPort
-    fill_repo: FillRepositoryPort
     order_event_repo: OrderEventRepositoryPort
     clock: ClockPort
 
-    async def record_execution(
+    async def record_requests(
         self,
         plan: ExecutionPlan,
-        plan_receipts: tuple[ExecutionReceipt, ...],
         *,
         tick_id: str,
-    ) -> None:
-        """Record all order lifecycle data from an execution plan and its receipts."""
+    ) -> dict[int, int]:
+        """Pre-persist order requests BEFORE execution, keyed by delta index.
+
+        The WS ORDER_TRADE_UPDATE usually arrives before the tick's
+        post-execution transaction commits; without the request row the
+        consumer drops the event as unknown and the fill is lost. Committing
+        the intent first also closes the placed-but-crash window: startup
+        finds a request with no report and reconciles it against the exchange.
+        """
         indexed_deltas = sorted(enumerate(plan.deltas), key=lambda p: p[1].sequence)
         resolved_ids: dict[tuple[str, str, str], int | None] = {}
+        request_ids: dict[int, int] = {}
 
         for leg_seq, (original_index, delta) in enumerate(indexed_deltas):
-            receipt = (
-                plan_receipts[original_index]
-                if original_index < len(plan_receipts)
-                else ExecutionReceipt(status=ExecutionStatus.ERROR, reason="missing_receipt")
-            )
             iid = delta.instrument_id
             cache_key = (iid.venue, iid.product, iid.symbol)
             if cache_key not in resolved_ids:
                 resolved_ids[cache_key] = await self.instrument_repo.resolve_id(iid.venue, iid.product, iid.symbol)
             instrument_id_int = resolved_ids[cache_key]
             if instrument_id_int is None:
-                raise AdapterError(f"unknown instrument {iid.venue}/{iid.product}/{iid.symbol} for executed order")
+                raise AdapterError(f"unknown instrument {iid.venue}/{iid.product}/{iid.symbol} for planned order")
 
             client_order_id = compute_client_order_id(
                 tick_id, iid.symbol, delta.side, delta.position_side, leg_seq, delta.order_type
             )
-
+            kind = OrderKind.EXIT if (delta.reduce_only or delta.close_position) else OrderKind.ENTRY
             request = OrderRequest(
                 client_order_id=client_order_id,
                 instrument_id=instrument_id_int,
@@ -93,11 +93,36 @@ class OrderLedgerService:
                 close_position=delta.close_position,
                 time_in_force=delta.time_in_force,
                 working_type=delta.working_type,
+                order_kind=kind,
             )
-            request_id = await self.order_request_repo.insert_request(request)
+            request_ids[original_index] = await self.order_request_repo.insert_request(request)
+
+        return request_ids
+
+    async def record_results(
+        self,
+        plan: ExecutionPlan,
+        plan_receipts: tuple[ExecutionReceipt, ...],
+        request_ids: dict[int, int],
+    ) -> None:
+        """Record reports and lifecycle events for executed deltas.
+
+        Fill rows are written exclusively by the WS consumer (trade-id keyed);
+        writing them here too created undeduplicatable blank-id duplicates.
+        """
+        for original_index, delta in enumerate(plan.deltas):
+            _ = delta
+            request_id = request_ids.get(original_index)
+            if request_id is None:
+                continue
+            receipt = (
+                plan_receipts[original_index]
+                if original_index < len(plan_receipts)
+                else ExecutionReceipt(status=ExecutionStatus.ERROR, reason="missing_receipt")
+            )
 
             order_status = _STATUS_MAP.get(receipt.status, OrderStatus.REJECTED)
-            exchange_order_id = receipt.order_id or f"none_{client_order_id}"
+            exchange_order_id = receipt.order_id or f"none_{request_id}"
             now = self.clock.now_utc()
 
             report = OrderReport(
@@ -109,17 +134,6 @@ class OrderLedgerService:
                 reported_at=receipt.exchange_timestamp or now,
             )
             await self.order_report_repo.upsert_report(report)
-
-            if receipt.status is ExecutionStatus.FILLED and receipt.fill_price is not None:
-                fill = Fill(
-                    order_request_id=request_id,
-                    price=receipt.fill_price,
-                    quantity=receipt.filled_quantity,
-                    commission=receipt.native_fee_amount if receipt.native_fee_amount else receipt.fees_usd,
-                    commission_asset=receipt.fee_asset,
-                    filled_at=receipt.exchange_timestamp or now,
-                )
-                await self.fill_repo.insert_fill(fill)
 
             event_type = _EVENT_MAP.get(receipt.status, OrderEventType.REJECTED)
             is_filled = receipt.status is ExecutionStatus.FILLED

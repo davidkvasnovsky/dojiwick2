@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from dojiwick.domain.models.value_objects.exchange_order_update import ExchangeOrderUpdate
-from dojiwick.domain.models.value_objects.order_event import OrderEvent
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)
@@ -33,10 +32,6 @@ class OrderEventStreamPort(Protocol):
         """Close the event stream connection."""
         ...
 
-    def events(self) -> AsyncIterator[OrderEvent]:
-        """Yield order events as they arrive."""
-        ...
-
     def raw_updates(self) -> AsyncIterator[ExchangeOrderUpdate]:
         """Yield raw exchange order updates with full lifecycle data."""
         ...
@@ -46,8 +41,8 @@ class OrderEventStreamPort(Protocol):
         """Return True if the stream is currently connected."""
         ...
 
-    def replay_from(self, cursor: StreamCursor) -> AsyncIterator[OrderEvent]:
-        """Resume event delivery from the given cursor position."""
+    async def replay_trades(self, symbol: str, start_time_ms: int) -> tuple[ExchangeOrderUpdate, ...]:
+        """REST recovery sweep: replay this symbol's trades since *start_time_ms*."""
         ...
 
     async def get_cursor(self) -> StreamCursor:

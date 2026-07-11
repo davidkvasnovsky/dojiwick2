@@ -13,6 +13,7 @@ from dojiwick.domain.enums import (
     ObjectiveMode,
     PositionMode,
     WFMode,
+    WorkingType,
 )
 from dojiwick.domain.type_aliases import ProductCode, VenueCode
 from dojiwick.domain.errors import ConfigurationError
@@ -564,6 +565,12 @@ class ExchangeSettings(BaseModel):
     retry_base_delay_sec: float
     backoff_factor: float
     rate_limit_per_sec: int
+    metadata_refresh_sec: float
+    ws_reconnect_base_delay_sec: float
+    ws_reconnect_max_delay_sec: float
+    keepalive_failure_threshold: int
+    protective_working_type: WorkingType
+    protective_price_protect: bool
 
     @model_validator(mode="after")
     def _validate(self) -> Self:
@@ -581,6 +588,14 @@ class ExchangeSettings(BaseModel):
             raise ValueError("exchange.backoff_factor must be >= 1.0")
         if self.rate_limit_per_sec < 1:
             raise ValueError("exchange.rate_limit_per_sec must be >= 1")
+        if self.metadata_refresh_sec <= 0:
+            raise ValueError("exchange.metadata_refresh_sec must be > 0")
+        if self.ws_reconnect_base_delay_sec <= 0:
+            raise ValueError("exchange.ws_reconnect_base_delay_sec must be > 0")
+        if self.ws_reconnect_max_delay_sec < self.ws_reconnect_base_delay_sec:
+            raise ValueError("exchange.ws_reconnect_max_delay_sec must be >= base delay")
+        if self.keepalive_failure_threshold < 1:
+            raise ValueError("exchange.keepalive_failure_threshold must be >= 1")
         return self
 
 

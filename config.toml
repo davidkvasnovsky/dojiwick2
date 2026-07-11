@@ -256,6 +256,15 @@ venue = "binance"
 product = "usd_c"
 position_mode = "one_way"
 testnet = false
+# Instrument filter refresh (6h) — filters change on exchange maintenance
+metadata_refresh_sec = 21600.0
+# WS user-data stream supervisor
+ws_reconnect_base_delay_sec = 1.0
+ws_reconnect_max_delay_sec = 60.0
+keepalive_failure_threshold = 2
+# Protective exit orders (mark price avoids wick-hunt triggers on last price)
+protective_working_type = "mark_price"
+protective_price_protect = true
 recv_window_ms = 5000
 connect_timeout_sec = 10.0
 read_timeout_sec = 10.0

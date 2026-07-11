@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from dojiwick.domain.enums import OrderSide, OrderTimeInForce, OrderType, PositionSide, WorkingType
+from dojiwick.domain.enums import OrderKind, OrderSide, OrderTimeInForce, OrderType, PositionSide, WorkingType
 from dojiwick.domain.errors import AdapterError
 from dojiwick.domain.models.value_objects.order_request import OrderRequest
 
@@ -15,15 +15,15 @@ INSERT INTO order_requests (
     venue, product,
     client_order_id, instrument_id, account, tick_id, side, order_type, quantity, price,
     position_side, reduce_only, close_position, time_in_force,
-    working_type, price_protect, recv_window_ms
-) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    working_type, price_protect, recv_window_ms, order_kind, position_leg_id
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 RETURNING id
 """
 
 _SELECT_BY_CLIENT_ORDER_ID_SQL = """
 SELECT id, venue, product, client_order_id, instrument_id, account, tick_id, side, order_type,
        quantity, price, position_side, reduce_only, close_position, time_in_force,
-       working_type, price_protect, recv_window_ms, created_at
+       working_type, price_protect, recv_window_ms, order_kind, position_leg_id, created_at
 FROM order_requests
 WHERE client_order_id = %s
 """
@@ -50,6 +50,8 @@ def _row_to_request(row: tuple[object, ...]) -> OrderRequest:
         working_type,
         price_protect,
         recv_window_ms,
+        order_kind,
+        position_leg_id,
         created_at,
     ) = row
     if isinstance(created_at, str):
@@ -75,6 +77,8 @@ def _row_to_request(row: tuple[object, ...]) -> OrderRequest:
         working_type=WorkingType(str(working_type)),
         price_protect=bool(price_protect),
         recv_window_ms=int(str(recv_window_ms)) if recv_window_ms is not None else None,
+        order_kind=OrderKind(str(order_kind)),
+        position_leg_id=int(str(position_leg_id)) if position_leg_id is not None else None,
         created_at=created_at if isinstance(created_at, datetime) else None,
     )
 
@@ -105,6 +109,8 @@ class PgOrderRequestRepository:
             request.working_type.value,
             request.price_protect,
             request.recv_window_ms,
+            request.order_kind.value,
+            request.position_leg_id,
         )
         try:
             async with self.connection.cursor() as cursor:
@@ -130,3 +136,35 @@ class PgOrderRequestRepository:
         if row is None:
             return None
         return _row_to_request(row)
+
+    async def advance_applied_qty(self, order_request_id: int, cumulative_qty: Decimal) -> Decimal:
+        """Advance the position-applied high-water mark, returning the unapplied delta.
+
+        FOR UPDATE serializes the tick (REST receipt) and consumer (WS event)
+        paths: whichever arrives second sees the mark already advanced and
+        gets a zero delta instead of double-applying the fill.
+        """
+        try:
+            async with self.connection.cursor() as cursor:
+                await cursor.execute(
+                    "SELECT position_applied_qty FROM order_requests WHERE id = %s FOR UPDATE",
+                    (order_request_id,),
+                )
+                row = await cursor.fetchone()
+                if row is None:
+                    raise AdapterError(f"order request {order_request_id} not found")
+                applied = Decimal(str(row[0]))
+                delta = cumulative_qty - applied
+                if delta > 0:
+                    await cursor.execute(
+                        "UPDATE order_requests SET position_applied_qty = %s WHERE id = %s",
+                        (cumulative_qty, order_request_id),
+                    )
+            await self.connection.commit()
+        except AdapterError:
+            await self.connection.rollback()
+            raise
+        except Exception as exc:
+            await self.connection.rollback()
+            raise AdapterError(f"failed to advance applied qty: {exc}") from exc
+        return delta if delta > 0 else Decimal(0)

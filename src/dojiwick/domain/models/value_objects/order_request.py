@@ -5,6 +5,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from dojiwick.domain.enums import (
+    OrderKind,
     OrderSide,
     OrderStatus,
     OrderTimeInForce,
@@ -36,6 +37,8 @@ class OrderRequest:
     working_type: WorkingType = WorkingType.CONTRACT_PRICE
     price_protect: bool = False
     recv_window_ms: int | None = None
+    order_kind: OrderKind = OrderKind.ENTRY
+    position_leg_id: int | None = None
     created_at: datetime | None = None
     id: int | None = None
 

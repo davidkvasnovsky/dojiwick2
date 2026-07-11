@@ -26,6 +26,7 @@ from dojiwick.domain.enums import (
     ObjectiveMode,
     PositionMode,
     WFMode,
+    WorkingType,
 )
 from dojiwick.domain.enums import RegimeExitProfile
 from dojiwick.domain.models.value_objects.params import RegimeParams, RiskParams, StrategyParams
@@ -292,6 +293,12 @@ def default_exchange_settings(**overrides: Any) -> ExchangeSettings:
         "retry_max_attempts": 3,
         "retry_base_delay_sec": 0.5,
         "backoff_factor": 2.0,
+        "metadata_refresh_sec": 21600.0,
+        "ws_reconnect_base_delay_sec": 0.1,
+        "ws_reconnect_max_delay_sec": 1.0,
+        "keepalive_failure_threshold": 2,
+        "protective_working_type": WorkingType.MARK_PRICE,
+        "protective_price_protect": True,
         "rate_limit_per_sec": 10,
     }
     defaults.update(overrides)

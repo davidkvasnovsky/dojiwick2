@@ -18,9 +18,11 @@ from dojiwick.domain.enums import (
 from dojiwick.infrastructure.exchange.binance.constants import BINANCE_USD_C, BINANCE_VENUE
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.models.value_objects.execution_plan import ExecutionPlan, LegDelta
+from dojiwick.domain.models.value_objects.order_request import OrderRequest
 from dojiwick.domain.models.value_objects.outcome_models import ExecutionReceipt
 from fixtures.fakes.clock import FixedClock
 from fixtures.fakes.instrument_repository import FakeInstrumentRepo
+from fixtures.fakes.order_request_repository import FakeOrderRequestRepo
 from fixtures.fakes.position_event_repository import FakePositionEventRepo
 from fixtures.fakes.position_leg_repository import FakePositionLegRepo
 
@@ -45,9 +47,32 @@ def _make_tracker() -> tuple[PositionTracker, FakeInstrumentRepo, FakePositionLe
         instrument_repo=instrument_repo,
         position_leg_repo=leg_repo,
         position_event_repo=event_repo,
+        order_request_repo=FakeOrderRequestRepo(),
         clock=FixedClock(_NOW),
     )
     return tracker, instrument_repo, leg_repo, event_repo
+
+
+async def _apply(
+    tracker: PositionTracker,
+    plan: ExecutionPlan,
+    receipts: tuple[ExecutionReceipt, ...],
+) -> None:
+    """Pre-persist a request per delta (as the tick path now does) and apply."""
+    request_ids: dict[int, int] = {}
+    for i, delta in enumerate(plan.deltas):
+        request = OrderRequest(
+            client_order_id=f"c{i}_{id(plan)}",
+            instrument_id=_INSTRUMENT_DB_ID,
+            account=plan.account,
+            venue=str(BINANCE_VENUE),
+            product=str(BINANCE_USD_C),
+            side=delta.side,
+            order_type=delta.order_type,
+            quantity=delta.quantity,
+        )
+        request_ids[i] = await tracker.order_request_repo.insert_request(request)
+    await tracker.apply_fills(plan, receipts, request_ids)
 
 
 def _plan(*deltas: LegDelta) -> ExecutionPlan:
@@ -99,7 +124,7 @@ async def test_open_new_position_from_flat() -> None:
     plan = _plan(_delta())
     receipts = (_filled(),)
 
-    await tracker.apply_fills(plan, receipts)
+    await _apply(tracker, plan, receipts)
 
     assert len(leg_repo.legs) == 1
     leg = next(iter(leg_repo.legs.values()))
@@ -116,11 +141,11 @@ async def test_add_to_existing_weighted_avg() -> None:
 
     # Open initial position
     plan1 = _plan(_delta(qty=Decimal("0.1"), price=Decimal("50000")))
-    await tracker.apply_fills(plan1, (_filled(price=Decimal("50000"), qty=Decimal("0.1")),))
+    await _apply(tracker, plan1, (_filled(price=Decimal("50000"), qty=Decimal("0.1")),))
 
     # Add to position at a different price
     plan2 = _plan(_delta(qty=Decimal("0.1"), price=Decimal("52000")))
-    await tracker.apply_fills(plan2, (_filled(price=Decimal("52000"), qty=Decimal("0.1")),))
+    await _apply(tracker, plan2, (_filled(price=Decimal("52000"), qty=Decimal("0.1")),))
 
     assert len(leg_repo.legs) == 1
     leg = next(iter(leg_repo.legs.values()))
@@ -136,13 +161,15 @@ async def test_reduce_existing_partial_close() -> None:
     tracker, _, leg_repo, event_repo = _make_tracker()
 
     # Open
-    await tracker.apply_fills(
+    await _apply(
+        tracker,
         _plan(_delta(qty=Decimal("0.2"))),
         (_filled(price=Decimal("50000"), qty=Decimal("0.2")),),
     )
 
     # Partial reduce
-    await tracker.apply_fills(
+    await _apply(
+        tracker,
         _plan(_delta(side=OrderSide.SELL, qty=Decimal("0.1"), reduce_only=True)),
         (_filled(price=Decimal("52000"), qty=Decimal("0.1")),),
     )
@@ -161,13 +188,15 @@ async def test_close_to_zero_full_close() -> None:
     tracker, _, leg_repo, event_repo = _make_tracker()
 
     # Open
-    await tracker.apply_fills(
+    await _apply(
+        tracker,
         _plan(_delta(qty=Decimal("0.1"))),
         (_filled(price=Decimal("50000"), qty=Decimal("0.1")),),
     )
 
     # Full close
-    await tracker.apply_fills(
+    await _apply(
+        tracker,
         _plan(_delta(side=OrderSide.SELL, qty=Decimal("0.1"), close_position=True)),
         (_filled(price=Decimal("55000"), qty=Decimal("0.1")),),
     )
@@ -185,7 +214,8 @@ async def test_flip_close_plus_open() -> None:
     tracker, _, leg_repo, event_repo = _make_tracker()
 
     # Open long
-    await tracker.apply_fills(
+    await _apply(
+        tracker,
         _plan(_delta(qty=Decimal("0.1"), position_side=PositionSide.LONG)),
         (_filled(price=Decimal("50000"), qty=Decimal("0.1")),),
     )
@@ -204,7 +234,8 @@ async def test_flip_close_plus_open() -> None:
         position_side=PositionSide.SHORT,
         sequence=1,
     )
-    await tracker.apply_fills(
+    await _apply(
+        tracker,
         _plan(close_delta, open_delta),
         (
             _filled(price=Decimal("48000"), qty=Decimal("0.1")),
@@ -227,13 +258,15 @@ async def test_short_position_pnl() -> None:
     tracker, _, _leg_repo, event_repo = _make_tracker()
 
     # Open short
-    await tracker.apply_fills(
+    await _apply(
+        tracker,
         _plan(_delta(side=OrderSide.SELL, qty=Decimal("0.1"), position_side=PositionSide.SHORT)),
         (_filled(price=Decimal("50000"), qty=Decimal("0.1")),),
     )
 
     # Close short at lower price (profit)
-    await tracker.apply_fills(
+    await _apply(
+        tracker,
         _plan(_delta(side=OrderSide.BUY, qty=Decimal("0.1"), position_side=PositionSide.SHORT, close_position=True)),
         (_filled(price=Decimal("48000"), qty=Decimal("0.1")),),
     )
@@ -256,7 +289,7 @@ async def test_skipped_and_error_receipts_ignored() -> None:
         ExecutionReceipt(status=ExecutionStatus.ERROR, reason="err"),
     )
 
-    await tracker.apply_fills(plan, receipts)
+    await _apply(tracker, plan, receipts)
 
     assert len(leg_repo.legs) == 0
     assert len(event_repo.events) == 0
@@ -287,7 +320,7 @@ async def test_unknown_instrument_raises() -> None:
     # Our own filled order on an unknown instrument is a broken invariant —
     # silently skipping would drop a real fill from position state
     with pytest.raises(AdapterError, match="unknown instrument"):
-        await tracker.apply_fills(plan, receipts)
+        await _apply(tracker, plan, receipts)
 
     assert len(leg_repo.legs) == 0
     assert len(event_repo.events) == 0

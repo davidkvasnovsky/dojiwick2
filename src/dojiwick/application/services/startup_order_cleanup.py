@@ -68,16 +68,16 @@ class StartupOrderCleanupService:
         errors: list[str] = []
 
         open_orders = await self.open_order_port.get_open_orders(symbol)
+        # Protective exit orders (dw_p prefix) are EXPECTED to rest across
+        # restarts; the protective sync pass reconciles them against open legs
+        open_orders = tuple(o for o in open_orders if not o.client_order_id.startswith("dw_p"))
         if not open_orders:
             return cancelled, errors
 
-        log.warning(
-            "startup: found %d open orders for %s (abnormal for market-only engine)",
-            len(open_orders),
-            symbol,
-        )
+        log.warning("startup: found %d stale non-protective orders for %s", len(open_orders), symbol)
 
-        await self.open_order_port.cancel_all_open_orders(symbol)
+        for order in open_orders:
+            await self.open_order_port.cancel_order(symbol, order.exchange_order_id)
 
         now = self.clock.now_utc()
         for order in open_orders:

@@ -31,12 +31,18 @@ _BINANCE_ORDER_SIDE: dict[str, OrderSide] = {
     "SELL": OrderSide.SELL,
 }
 
+# Types this engine never places (TAKE_PROFIT limit, trailing, liquidation)
+# degrade to MARKET rather than KeyError — a liquidation/ADL
+# ORDER_TRADE_UPDATE dropped as unparseable would hide a position change
 _BINANCE_ORDER_TYPE: dict[str, OrderType] = {
     "LIMIT": OrderType.LIMIT,
     "MARKET": OrderType.MARKET,
     "STOP_MARKET": OrderType.STOP_MARKET,
     "STOP": OrderType.STOP_LIMIT,
     "TAKE_PROFIT_MARKET": OrderType.TAKE_PROFIT_MARKET,
+    "TAKE_PROFIT": OrderType.STOP_LIMIT,
+    "TRAILING_STOP_MARKET": OrderType.STOP_MARKET,
+    "LIQUIDATION": OrderType.MARKET,
 }
 
 _BINANCE_ORDER_STATUS: dict[str, OrderStatus] = {
@@ -73,7 +79,15 @@ _BINANCE_WORKING_TYPE: dict[str, WorkingType] = {
 
 # Reverse maps: domain -> Binance string
 _DOMAIN_TO_BINANCE_SIDE: dict[OrderSide, str] = {v: k for k, v in _BINANCE_ORDER_SIDE.items()}
-_DOMAIN_TO_BINANCE_TYPE: dict[OrderType, str] = {v: k for k, v in _BINANCE_ORDER_TYPE.items()}
+# Explicit — inverting _BINANCE_ORDER_TYPE would let its parse-tolerance
+# aliases (TRAILING_STOP_MARKET/LIQUIDATION -> MARKET-ish) leak into output
+_DOMAIN_TO_BINANCE_TYPE: dict[OrderType, str] = {
+    OrderType.LIMIT: "LIMIT",
+    OrderType.MARKET: "MARKET",
+    OrderType.STOP_MARKET: "STOP_MARKET",
+    OrderType.STOP_LIMIT: "STOP",
+    OrderType.TAKE_PROFIT_MARKET: "TAKE_PROFIT_MARKET",
+}
 _DOMAIN_TO_BINANCE_POS_SIDE: dict[PositionSide, str] = {
     PositionSide.NET: "BOTH",
     PositionSide.LONG: "LONG",
@@ -92,8 +106,8 @@ def parse_order_side(raw: str) -> OrderSide:
 
 
 def parse_order_type(raw: str) -> OrderType:
-    """Convert a Binance order type string to domain enum."""
-    return _BINANCE_ORDER_TYPE[raw.upper()]
+    """Convert a Binance order type string to domain enum (MARKET for unknown)."""
+    return _BINANCE_ORDER_TYPE.get(raw.upper(), OrderType.MARKET)
 
 
 def parse_order_status(raw: str) -> OrderStatus:

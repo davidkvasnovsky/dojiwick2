@@ -87,3 +87,14 @@ def compute_client_order_id(
     payload = f"{tick_id}|{symbol}|{side}|{position_side}|{leg_seq}|{op_type}"
     suffix = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
     return f"dw_{tick_id[:8]}_{suffix}"
+
+
+def compute_protective_client_order_id(position_leg_id: int, kind: str, revision: int) -> str:
+    """Deterministic client order ID for protective orders.
+
+    Encodes the leg and revision so an amended stop gets a fresh id while
+    re-placing an unchanged one stays idempotent on the exchange.
+    """
+    payload = f"prot|{position_leg_id}|{kind}|{revision}"
+    suffix = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
+    return f"dw_p{position_leg_id}_{revision}_{suffix}"[:36]

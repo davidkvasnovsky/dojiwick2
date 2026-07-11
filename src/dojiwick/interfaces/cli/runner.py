@@ -15,6 +15,8 @@ from dojiwick.application.registry.strategy_registry import build_default_strate
 from dojiwick.application.policies.risk.defaults import build_default_risk_engine
 from dojiwick.application.services.order_ledger import OrderLedgerService
 from dojiwick.application.services.position_tracker import PositionTracker
+from dojiwick.application.services.instrument_sync import InstrumentSyncService
+from dojiwick.application.services.protective_orders import ProtectiveOrderService
 from dojiwick.application.services.startup_orchestrator import StartupOrchestrator
 from dojiwick.application.use_cases.run_reconciliation import ReconciliationService
 from dojiwick.application.use_cases.run_tick import TickService
@@ -25,9 +27,11 @@ from dojiwick.config.loader import load_settings
 from dojiwick.config.logging import configure_logging
 from dojiwick.domain.contracts.gateways.clock import ClockPort
 from dojiwick.domain.contracts.gateways.market_data_feed import MarketDataFeedPort
+from dojiwick.domain.contracts.gateways.open_order import OpenOrderPort
 from dojiwick.domain.models.value_objects.exchange_types import InstrumentId
 from dojiwick.domain.enums import DecisionStatus, ReconciliationHealth
 from dojiwick.domain.errors import (
+    ConfigurationError,
     AdapterError,
     AuthenticationError,
     CircuitBreakerTrippedError,
@@ -55,6 +59,7 @@ from dojiwick.infrastructure.exchange.reconciliation import ExchangeReconciliati
 from dojiwick.infrastructure.postgres.gateways.audit_log import PgAuditLog
 from dojiwick.infrastructure.postgres.repositories.bot_config_snapshot import PgBotConfigSnapshotRepository
 from dojiwick.infrastructure.postgres.repositories.model_cost import PgModelCostRepository
+from dojiwick.infrastructure.postgres.repositories.position_exit_state import PgPositionExitStateRepository
 from dojiwick.infrastructure.postgres.repositories.decision_trace import PgDecisionTraceRepository
 from dojiwick.infrastructure.postgres.repositories.instrument import PgInstrumentRepository
 from dojiwick.infrastructure.postgres.repositories.fill import PgFillRepository
@@ -75,6 +80,13 @@ if TYPE_CHECKING:
     from psycopg_pool import AsyncConnectionPool
 
 log = logging.getLogger(__name__)
+
+
+def _require_open_orders(adapters: ComposedAdapters) -> OpenOrderPort:
+    if adapters.open_order_port is None:
+        raise ConfigurationError("protective orders require an open-order adapter")
+    return adapters.open_order_port
+
 
 # Delay after an interval boundary before ticking: lets the exchange finalize
 # the just-closed candle so the enricher fetches it as a confirmed bar
@@ -134,14 +146,12 @@ async def _wire_services(
 
     order_request_repo = PgOrderRequestRepository(connection=main_conn)
     order_report_repo = PgOrderReportRepository(connection=main_conn)
-    fill_repo = PgFillRepository(connection=main_conn)
     order_event_repo = PgOrderEventRepository(connection=main_conn)
 
     order_ledger = OrderLedgerService(
         instrument_repo=instrument_repository,
         order_request_repo=order_request_repo,
         order_report_repo=order_report_repo,
-        fill_repo=fill_repo,
         order_event_repo=order_event_repo,
         clock=clock,
     )
@@ -151,6 +161,7 @@ async def _wire_services(
             instrument_repo=PgInstrumentRepository(connection=conn),
             position_leg_repo=PgPositionLegRepository(connection=conn),
             position_event_repo=PgPositionEventRepository(connection=conn),
+            order_request_repo=PgOrderRequestRepository(connection=conn),
             clock=clock,
         )
 
@@ -166,6 +177,24 @@ async def _wire_services(
     # Cost persistence: without a repository the daily AI budget resets on
     # every restart, making the cap circumventable via crash loops
     model_cost_repo = PgModelCostRepository(connection=main_conn)
+
+    def _build_protective(conn: TransactionAwareConnection) -> ProtectiveOrderService:
+        return ProtectiveOrderService(
+            settings=settings,
+            execution_gateway=adapters.execution_gateway,
+            open_order_port=_require_open_orders(adapters),
+            exchange_metadata=adapters.exchange_metadata,
+            order_request_repo=PgOrderRequestRepository(connection=conn),
+            position_leg_repo=PgPositionLegRepository(connection=conn),
+            exit_state_repo=PgPositionExitStateRepository(connection=conn),
+            instrument_repo=PgInstrumentRepository(connection=conn),
+            clock=clock,
+            account=settings.universe.account,
+        )
+
+    protective_orders = _build_protective(main_conn)
+    consumer_protective_orders = _build_protective(consumer_conn)
+
     ai_services = build_ai_services(settings.ai, clock=clock, cost_repository=model_cost_repo)
     if ai_services.cost_tracker is not None:
         await ai_services.cost_tracker.restore_day_spend()
@@ -192,6 +221,7 @@ async def _wire_services(
         decision_trace_repository=PgDecisionTraceRepository(connection=main_conn),
         order_ledger=order_ledger,
         position_tracker=position_tracker,
+        protective_orders=protective_orders,
         pending_order_provider=PgPendingOrderProvider(connection=main_conn),
         config_hash=fingerprint.sha256,
         target_ids=target_ids,
@@ -227,6 +257,14 @@ async def _wire_services(
         pair_symbols=pair_symbols,
         degraded_timeout_sec=settings.system.recon_degraded_timeout_sec,
         uncertain_timeout_sec=settings.system.recon_uncertain_timeout_sec,
+        instrument_sync=InstrumentSyncService(
+            exchange_metadata=adapters.exchange_metadata,
+            instrument_repo=instrument_repository,
+        ),
+        instrument_ids=tuple(instrument_map.values()),
+        protective_orders=consumer_protective_orders,
+        consumer_reconnect_base_delay_sec=settings.exchange.ws_reconnect_base_delay_sec,
+        consumer_reconnect_max_delay_sec=settings.exchange.ws_reconnect_max_delay_sec,
     )
 
     async def _do_cleanup() -> None:

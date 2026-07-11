@@ -47,6 +47,7 @@ async def _table_exists(db_cursor: Any, table: str) -> bool:
         "decision_traces",
         "position_legs",
         "position_events",
+        "position_exit_state",
         "order_requests",
         "order_reports",
         "fills",

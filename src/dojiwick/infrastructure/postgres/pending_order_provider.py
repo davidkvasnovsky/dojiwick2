@@ -9,6 +9,8 @@ from dojiwick.domain.numerics import Quantity
 
 from dojiwick.infrastructure.postgres.connection import DbConnection
 
+# Entry orders only: resting protective (reduce-only) orders are expected to
+# stay open for the whole position lifetime and must not suppress new entries
 _PENDING_QTY_SQL = """
 SELECT i.symbol, req.position_side,
        SUM(req.quantity - COALESCE(rpt.filled_qty, 0)) AS pending_qty
@@ -17,6 +19,8 @@ JOIN order_reports rpt ON rpt.order_request_id = req.id
 JOIN instruments i ON i.id = req.instrument_id
 WHERE req.account = %s
   AND rpt.status IN ('new', 'partially_filled')
+  AND req.order_kind = 'entry'
+  AND NOT req.reduce_only
 GROUP BY i.symbol, req.position_side
 HAVING SUM(req.quantity - COALESCE(rpt.filled_qty, 0)) > 0
 """

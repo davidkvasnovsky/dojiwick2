@@ -97,23 +97,21 @@ class BinanceHttpClient:
             self._session = _aiohttp.ClientSession(timeout=timeout)
         return self._session
 
-    def _prepare_request(
-        self,
-        path: str,
-        params: dict[str, str] | None,
-        signed: bool,
-    ) -> tuple[str, dict[str, str], dict[str, str]]:
-        """Build URL, query params, and headers for a Binance API request."""
-        query_params = dict(params) if params else {}
-        headers: dict[str, str] = {}
-        if signed:
-            query_params["timestamp"] = str(self.clock.epoch_ms())
-            query_params["recvWindow"] = str(self.recv_window_ms)
-            qs = "&".join(f"{k}={v}" for k, v in query_params.items())
-            query_params["signature"] = self.sign(qs)
-            headers["X-MBX-APIKEY"] = self.api_key
-        url = f"{self.base_url}{path}"
-        return url, query_params, headers
+    def _build_signed_url(self, path: str, params: dict[str, str]) -> str:
+        """URL with a fresh timestamp and a signature over the exact encoded query.
+
+        Signing must happen per attempt (a slow retry with a stale timestamp
+        exceeds recvWindow, -1021) and over the urlencoded string that is
+        actually sent — signing raw values while aiohttp percent-encodes them
+        yields -1022 for any value needing encoding.
+        """
+        from urllib.parse import urlencode
+
+        query = dict(params)
+        query["timestamp"] = str(self.clock.epoch_ms())
+        query["recvWindow"] = str(self.recv_window_ms)
+        encoded = urlencode(query)
+        return f"{self.base_url}{path}?{encoded}&signature={self.sign(encoded)}"
 
     @staticmethod
     def _parse_error_body(raw: object) -> tuple[AdapterError, RetryPolicy, int] | None:
@@ -131,19 +129,28 @@ class BinanceHttpClient:
     async def _with_retry(
         self,
         method: str,
-        url: str,
-        query_params: dict[str, str],
-        headers: dict[str, str],
+        path: str,
+        params: dict[str, str],
+        signed: bool,
     ) -> object:
-        """Execute HTTP request with retry and exponential backoff."""
+        """Execute HTTP request with per-category retry and exponential backoff."""
         import aiohttp as _aiohttp
 
         session = await self.ensure_session()
         last_exc: Exception | None = None
+        headers = {"X-MBX-APIKEY": self.api_key} if signed else {}
 
-        for attempt in range(1, self.retry_max_attempts + 1):
+        attempt = 0
+        while True:
+            attempt += 1
+            if signed:
+                url = self._build_signed_url(path, params)
+                request_params = None
+            else:
+                url = f"{self.base_url}{path}"
+                request_params = params or None
             try:
-                resp = await session.request(method, url, params=query_params, headers=headers)
+                resp = await session.request(method, url, params=request_params, headers=headers)
                 raw: object = await resp.json()
 
                 if resp.ok:
@@ -152,25 +159,32 @@ class BinanceHttpClient:
                 result = self._parse_error_body(raw)
                 if result is not None:
                     exc, policy, code = result
-                    if policy.category == RetryCategory.NO_RETRY:
+                    # retry_max_attempts is the TOTAL attempt cap; per-category
+                    # policies can only tighten it
+                    max_attempts = min(policy.max_retries + 1, self.retry_max_attempts)
+                    if policy.category == RetryCategory.NO_RETRY or attempt >= max_attempts:
                         raise exc
-                    if attempt < self.retry_max_attempts and policy.category in (
-                        RetryCategory.BACKOFF_RETRY,
-                        RetryCategory.RATE_LIMIT_BACKOFF,
-                        RetryCategory.IMMEDIATE_RETRY,
-                    ):
-                        delay = self.retry_base_delay_sec * (self.backoff_factor ** (attempt - 1))
-                        log.warning(
-                            "retryable error code=%d attempt=%d/%d delay=%.1fs",
-                            code,
-                            attempt,
-                            self.retry_max_attempts,
-                            delay,
+                    if policy.category == RetryCategory.IMMEDIATE_RETRY:
+                        delay = 0.0
+                    else:
+                        delay = min(
+                            policy.base_delay_ms / 1000.0 * (self.backoff_factor ** (attempt - 1)),
+                            policy.max_delay_ms / 1000.0,
                         )
-                        last_exc = exc
+                    # 429/418 carry Retry-After; the ban (418) escalates fast
+                    try:
+                        retry_after = float(resp.headers.get("Retry-After", ""))
+                        delay = max(delay, retry_after)
+                    except TypeError, ValueError:
+                        pass
+                    if resp.status == 418:
+                        log.critical("Binance IP ban (418) — backing off %.0fs", max(delay, 60.0))
+                        delay = max(delay, 60.0)
+                    log.warning("retryable error code=%d attempt=%d/%d delay=%.1fs", code, attempt, max_attempts, delay)
+                    last_exc = exc
+                    if delay > 0:
                         await asyncio.sleep(delay)
-                        continue
-                    raise exc
+                    continue
 
                 raise NetworkError(f"HTTP {resp.status}: {raw}")
 
@@ -179,13 +193,15 @@ class BinanceHttpClient:
                 if attempt < self.retry_max_attempts:
                     delay = self.retry_base_delay_sec * (self.backoff_factor ** (attempt - 1))
                     log.warning(
-                        "network error attempt=%d/%d delay=%.1fs: %s", attempt, self.retry_max_attempts, delay, exc
+                        "network error attempt=%d/%d delay=%.1fs: %s",
+                        attempt,
+                        self.retry_max_attempts,
+                        delay,
+                        exc,
                     )
                     await asyncio.sleep(delay)
                     continue
                 raise last_exc from exc
-
-        raise last_exc or NetworkError("request failed after retries")
 
     async def request(
         self,
@@ -200,8 +216,7 @@ class BinanceHttpClient:
         Returns the parsed JSON response dict.
         """
         await self._bucket.acquire()
-        url, query_params, headers = self._prepare_request(path, params, signed)
-        raw = await self._with_retry(method, url, query_params, headers)
+        raw = await self._with_retry(method, path, dict(params) if params else {}, signed)
         if not isinstance(raw, dict):
             raise NetworkError(f"unexpected response type: {type(raw).__name__}")
         return cast(dict[str, object], raw)
@@ -216,8 +231,7 @@ class BinanceHttpClient:
     ) -> list[object]:
         """Execute a request expecting a JSON array response."""
         await self._bucket.acquire()
-        url, query_params, headers = self._prepare_request(path, params, signed)
-        raw = await self._with_retry(method, url, query_params, headers)
+        raw = await self._with_retry(method, path, dict(params) if params else {}, signed)
         if not isinstance(raw, list):
             raise NetworkError(f"expected list response, got {type(raw).__name__}")
         return cast(list[object], raw)
